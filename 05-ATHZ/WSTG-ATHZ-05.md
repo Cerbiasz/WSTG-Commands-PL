@@ -1,0 +1,67 @@
+# WSTG-ATHZ-05 — Testing for OAuth Weaknesses
+
+## Cele
+
+- Determine if OAuth2 implementation is vulnerable or using a deprecated or custom implementation
+
+## KOMENDY
+
+### Analiza OAuth flow
+
+```bash
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://TARGET/callback&response_type=code&scope=openid" 2>&1
+
+```
+
+### Test redirect_uri manipulation
+
+```bash
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://evil.com/callback&response_type=code" 2>&1
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://TARGET.evil.com/callback&response_type=code" 2>&1
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://TARGET/callback/../evil&response_type=code" 2>&1
+
+```
+
+### Test state parameter
+
+```bash
+# Sprawdz czy state jest obecny i walidowany
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://TARGET/callback&response_type=code" 2>&1 | grep "state"
+
+```
+
+### Test token leakage
+
+```bash
+# Sprawdz Referer header po przekierowaniu
+# Sprawdz czy token jest w URL (fragment vs query)
+
+```
+
+### Test scope escalation
+
+```bash
+curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https://TARGET/callback&response_type=code&scope=admin" 2>&1
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+### PayloadsAllTheThings OAuth
+
+```bash
+# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/OAuth Misconfiguration/README.md
+
+```
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. Zmapuj caly OAuth flow w Burp (authorize -> callback -> token)
+2. Testuj open redirect via redirect_uri
+3. Sprawdz czy state parameter jest uzywany i walidowany (CSRF)
+4. Testuj token reuse i token leakage (Referer, URL)
+5. Sprawdz scope escalation
+6. Testuj PKCE implementation (code_challenge)
+7. Sprawdz czy implicit flow jest uzywany (mniej bezpieczny)
+8. Testuj client_secret exposure w frontend code
+

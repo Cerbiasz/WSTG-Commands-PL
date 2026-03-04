@@ -1,0 +1,126 @@
+# WSTG-CONF-06 — Test HTTP Methods
+
+## Cele
+
+- Enumerate HTTP methods supported by the web server
+- Test access control bypass via HTTP method overriding
+- Identify dangerous methods (PUT, DELETE, TRACE, CONNECT)
+
+## KOMENDY
+
+### cURL - sprawdzenie OPTIONS
+
+```bash
+curl -sI -X OPTIONS https://TARGET | tee output_options.txt
+curl -sI -X OPTIONS https://TARGET -H "Access-Control-Request-Method: PUT" | tee output_options_put.txt
+
+```
+
+### Nmap - skrypty HTTP methods
+
+```bash
+nmap --script http-methods -p 80,443 TARGET -oN output_nmap_methods.txt
+nmap --script http-methods --script-args http-methods.url-path='/admin/' -p 80,443 TARGET -oN output_nmap_methods_admin.txt
+nmap --script http-trace -p 80,443 TARGET -oN output_nmap_trace.txt
+
+```
+
+### Testowanie roznych metod HTTP
+
+```bash
+curl -sI -X GET https://TARGET | head -1
+curl -sI -X POST https://TARGET | head -1
+curl -sI -X PUT https://TARGET | head -1
+curl -sI -X DELETE https://TARGET | head -1
+curl -sI -X PATCH https://TARGET | head -1
+curl -sI -X HEAD https://TARGET | head -1
+curl -sI -X OPTIONS https://TARGET | head -1
+curl -sI -X TRACE https://TARGET | head -1
+curl -sI -X CONNECT https://TARGET | head -1
+
+```
+
+### TRACE method - Cross-Site Tracing test
+
+```bash
+curl -sI -X TRACE https://TARGET | tee output_trace.txt
+curl -s -X TRACE https://TARGET -H "Cookie: test=xst_test" | tee output_trace_xst.txt
+
+```
+
+### PUT method test
+
+```bash
+curl -sI -X PUT https://TARGET/test_put_file.txt -d "test content" | tee output_put_test.txt
+
+```
+
+### DELETE method test
+
+```bash
+curl -sI -X DELETE https://TARGET/test_put_file.txt | tee output_delete_test.txt
+
+```
+
+### HTTP Method Override headers
+
+```bash
+curl -sI https://TARGET -H "X-HTTP-Method-Override: PUT" | head -5
+curl -sI https://TARGET -H "X-HTTP-Method: PUT" | head -5
+curl -sI https://TARGET -H "X-Method-Override: PUT" | head -5
+
+```
+
+### Access control bypass via method change
+
+```bash
+# Jesli GET na /admin daje 403, sprobuj inne metody
+curl -sI -X POST https://TARGET/admin | head -1
+curl -sI -X PUT https://TARGET/admin | head -1
+curl -sI -X PATCH https://TARGET/admin | head -1
+curl -sI -X HEAD https://TARGET/admin | head -1
+
+```
+
+### Testowanie niestandardowych metod
+
+```bash
+curl -sI -X PROPFIND https://TARGET | head -5
+curl -sI -X MOVE https://TARGET | head -5
+curl -sI -X COPY https://TARGET | head -5
+curl -sI -X MKCOL https://TARGET | head -5
+curl -sI -X LOCK https://TARGET | head -5
+
+```
+
+### WebDAV detection
+
+```bash
+curl -sI -X PROPFIND https://TARGET -H "Depth: 0" | tee output_webdav.txt
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+### fuzzdb common methods
+
+```bash
+# Uzyj listy metod z fuzzdb
+ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-methods/common-methods.txt -mc all -o output_ffuf_methods.json
+
+# Brak dodatkowych wordlist - test polega na sprawdzeniu konkretnych metod HTTP
+
+```
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. W Burp Repeater: wyslij zapytanie OPTIONS i sprawdz naglowek Allow
+2. Zmien metode HTTP w Burp Repeater na PUT, DELETE, TRACE i obserwuj odpowiedz
+3. Testuj HTTP Method Override: dodaj naglowek X-HTTP-Method-Override
+4. Sprawdz czy TRACE jest wlaczony - ryzyko Cross-Site Tracing (XST)
+5. Sprawdz czy PUT pozwala na upload plikow na serwer
+6. Testuj access control bypass: jesli GET daje 403, sprobuj POST/PUT/PATCH
+7. Sprawdz WebDAV methods (PROPFIND, MKCOL, MOVE, COPY)
+8. Porownaj odpowiedzi na rozne metody dla roznych endpointow
+9. Sprawdz czy metoda HEAD ujawnia informacje bez zwracania body
+

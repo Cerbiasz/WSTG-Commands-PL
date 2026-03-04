@@ -1,0 +1,134 @@
+# WSTG-BUSL-10 — Test Payment Functionality
+
+## Cele
+
+- Przetestowac odpornosc logiki platnosci
+- Zweryfikowac bezpieczenstwo procesu platniczego
+
+## KOMENDY
+
+### Testowanie modyfikacji ceny
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 0.01, "quantity": 1}'
+
+```
+
+### Testowanie negatywnej ceny
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": -100, "quantity": 1}'
+
+```
+
+### Testowanie negatywnej ilosci
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 100, "quantity": -1}'
+
+```
+
+### Testowanie zerowej ceny
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 0, "quantity": 1}'
+
+```
+
+### Testowanie manipulacji waluta
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 100, "currency": "KRW"}'
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 100, "currency": "XXX"}'
+
+```
+
+### Testowanie modyfikacji kodu rabatowego
+
+```bash
+curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50&amount=100"
+curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50&discount_percent=100"
+
+```
+
+### Testowanie podwojnego naliczenia rabatu
+
+```bash
+curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50" -H "Cookie: session=SESSION"
+curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50" -H "Cookie: session=SESSION"
+
+```
+
+### Testowanie race condition na platnosci
+
+```bash
+for i in $(seq 1 10); do
+    curl -s -X POST TARGET/api/pay -d "order_id=123&amount=100" -H "Cookie: session=SESSION" &
+done
+wait
+
+```
+
+### Testowanie modyfikacji parametrow po stronie klienta
+
+```bash
+# Zmiana calkowitej kwoty:
+curl -v -X POST TARGET/api/payment/process -d "order_id=123&total=0.01&items=5"
+
+```
+
+### Testowanie pominiecia kroku platnosci
+
+```bash
+curl -v -X POST TARGET/api/order/confirm -d "order_id=123&payment_status=completed"
+
+```
+
+### Testowanie modyfikacji callback platnosci
+
+```bash
+curl -v -X POST TARGET/api/payment/callback -H "Content-Type: application/json" \
+  -d '{"order_id": "123", "status": "success", "amount": "0.01"}'
+
+```
+
+### Testowanie modyfikacji ilosci po platnosci
+
+```bash
+curl -v -X POST TARGET/api/order/update -d "order_id=123&quantity=100" -H "Cookie: session=SESSION"
+
+```
+
+### Testowanie integer overflow na kwocie
+
+```bash
+curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
+  -d '{"item_id": 1, "price": 99999999999, "quantity": 99999999999}'
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+### Brak dedykowanych wordlist - test oparty na logice platnosci
+
+```bash
+
+```
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. W Burp Suite -> Proxy: przechwytuj request platnosci i modyfikuj cene/ilosc
+2. Testuj caly flow: koszyk -> platnosc -> potwierdzenie - szukaj punktow modyfikacji
+3. Sprawdz czy cena jest przeliczana po stronie serwera (nie ufaj klientowi)
+4. Testuj manipulacje walut (zmiana z USD na tansza walute)
+5. Testuj race condition na platnosci (wielokrotne uzycie jednorazowego kodu)
+6. Sprawdz czy callback platnosci weryfikuje podpis/HMAC bramki platniczej
+7. Testuj cofanie platnosci i sprawdz czy towar jest nadal dostepny
+8. Sprawdz czy historia zamowien poprawnie odzwierciedla zmiany
+

@@ -1,0 +1,92 @@
+# WSTG-SESS-04 — Testing for Exposed Session Variables
+
+## Cele
+
+- Sprawdzenie czy tokeny sesji sa przesylane szyfrowanym kanalem
+- Sprawdzenie czy tokeny sesji wyciekaja przez URL, Referer, cache
+- Ocena czy tokeny sa przesylane przez GET czy POST
+
+## KOMENDY
+
+### Sprawdzenie czy session ID jest w URL
+
+```bash
+curl -v -L TARGET/login -d "user=test&pass=test" 2>&1 | grep -iE "location|set-cookie"
+# Jezeli session ID pojawia sie w URL (np. ?PHPSESSID=xxx) - to podatnosc
+
+```
+
+### Sprawdzenie naglowka Referer - wyciek sesji
+
+```bash
+curl -v -H "Referer: TARGET/page?SESSIONID=abc123" TARGET/external-link 2>&1
+
+```
+
+### Sprawdzenie czy aplikacja uzywa HTTPS dla tokenow
+
+```bash
+curl -v http://TARGET/ 2>&1 | grep -i "set-cookie"
+# Jezeli cookie ustawiane przez HTTP (bez Secure flag) - podatnosc
+
+```
+
+### Sprawdzenie cache headers
+
+```bash
+curl -s -I TARGET/dashboard | grep -iE "cache-control|pragma|expires"
+# Strony z sesja powinny miec: Cache-Control: no-store, no-cache
+
+```
+
+### Sprawdzenie czy token jest w ukrytych polach formularza
+
+```bash
+curl -s TARGET/form-page | grep -i "hidden" | grep -i "session"
+
+```
+
+### Sprawdzenie czy token jest w logach serwera (URL)
+
+```bash
+curl -v "TARGET/page?token=SESSION_TOKEN_HERE" 2>&1
+
+```
+
+### Sprawdzenie przesylania tokenu GET vs POST
+
+```bash
+curl -v "TARGET/action?sessionid=TOKEN" 2>&1
+curl -v -d "sessionid=TOKEN" TARGET/action 2>&1
+
+```
+
+### Sprawdzenie Cross-Origin Resource Sharing wycieku sesji
+
+```bash
+curl -s -I -H "Origin: https://evil.com" TARGET/api/data | grep -iE "access-control|set-cookie"
+
+```
+
+### Sprawdzenie czy ETag moze byc uzywany do trackowania sesji
+
+```bash
+curl -s -I TARGET/page | grep -i "etag"
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+# Brak specyficznych wordlist dla tego testu.
+# Test opiera sie na analizie transportu i ekspozycji tokenow sesji.
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. W Burp Proxy sprawdz czy session ID pojawia sie w URL requestow
+2. Sprawdz naglowek Referer - czy wyciekaja tokeny do stron zewnetrznych
+3. DevTools -> Network -> sprawdz czy tokeny sa przesylane przez HTTPS
+4. Sprawdz naglowki Cache-Control na stronach wymagajacych sesji
+5. Sprawdz czy tokeny sa widoczne w historii przegladarki (bo byly w URL)
+6. W Burp sprawdz czy tokeny sa w parametrach GET zamiast POST
+7. Sprawdz logi serwera pod katem zapisanych tokenow sesji
+

