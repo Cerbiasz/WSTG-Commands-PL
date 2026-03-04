@@ -1,0 +1,62 @@
+================================================================================
+WSTG-CONF-07 — Test HTTP Strict Transport Security
+================================================================================
+CELE:
+- Review HSTS header presence and configuration
+- Verify that HTTPS is enforced and HTTP redirects properly
+- Check HSTS preload list inclusion
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- cURL - sprawdzenie naglowka HSTS ---
+curl -sI https://TARGET | grep -i "Strict-Transport-Security" | tee output_hsts.txt
+curl -sI http://TARGET | tee output_http_redirect.txt
+
+# --- Sprawdzenie parametrow HSTS ---
+curl -sI https://TARGET | grep -i "Strict-Transport-Security"
+# Oczekiwany: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+# Minimalny max-age: 31536000 (1 rok)
+
+# --- Sprawdzenie czy HTTP przekierowuje na HTTPS ---
+curl -sIL http://TARGET | tee output_http_to_https.txt
+curl -sI http://TARGET | grep -i "Location:"
+
+# --- SSLyze - sprawdzenie HSTS ---
+sslyze TARGET --regular | grep -iA 5 "HSTS" | tee output_sslyze_hsts.txt
+
+# --- testssl.sh - sprawdzenie HSTS ---
+testssl.sh --headers TARGET | tee output_testssl_headers.txt
+
+# --- Nmap - sprawdzenie naglowkow bezpieczenstwa ---
+nmap --script http-security-headers -p 443 TARGET -oN output_nmap_sec_headers.txt
+
+# --- Sprawdzenie HSTS na subdomenach ---
+curl -sI https://www.TARGET | grep -i "Strict-Transport-Security"
+curl -sI https://mail.TARGET | grep -i "Strict-Transport-Security"
+curl -sI https://api.TARGET | grep -i "Strict-Transport-Security"
+
+# --- Sprawdzenie HSTS preload ---
+# Sprawdz recznie: https://hstspreload.org/?domain=TARGET
+
+# --- Sprawdzenie mixed content ---
+curl -s https://TARGET | grep -iE "http://" | grep -v "https://" | tee output_mixed_content.txt
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# Brak dedykowanych wordlist - test polega na analizie naglowkow HTTP
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Otworz TARGET przez HTTP (http://TARGET) - sprawdz czy przekierowuje na HTTPS
+2. W DevTools > Network: sprawdz naglowek Strict-Transport-Security
+3. Zweryfikuj parametry HSTS: max-age >= 31536000, includeSubDomains, preload
+4. Sprawdz hstspreload.org czy domena jest na liscie preload
+5. Przetestuj mixed content - czy strona HTTPS laduje zasoby przez HTTP
+6. Sprawdz czy naglowek HSTS jest ustawiony na wszystkich subdomenach
+7. W Burp Suite: sprawdz czy mozna wykonac SSL stripping
+8. Zweryfikuj czy cookie maja flage Secure

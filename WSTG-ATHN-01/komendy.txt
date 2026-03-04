@@ -1,0 +1,82 @@
+================================================================================
+WSTG-ATHN-01 — Testing for Credentials Transported over an Encrypted Channel
+================================================================================
+CELE:
+- Ocenic czy dane uwierzytelniajace sa przesylane bez szyfrowania
+- Zweryfikowac konfiguracje SSL/TLS
+- Sprawdzic czy formularze logowania wymuszaja HTTPS
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Sprawdzenie czy strona logowania uzywa HTTPS ---
+curl -s -v "http://TARGET/login" 2>&1 | grep -iE "Location|HTTP/"
+curl -s -v "https://TARGET/login" 2>&1 | grep -iE "Location|HTTP/"
+
+# --- Testssl.sh - kompleksowy test SSL/TLS ---
+testssl.sh https://TARGET
+testssl.sh --starttls smtp TARGET:25
+testssl.sh -U --sneaky https://TARGET
+
+# --- sslyze - analiza konfiguracji SSL ---
+sslyze TARGET
+sslyze --regular TARGET
+sslyze --certinfo TARGET
+sslyze --tlsv1 --tlsv1_1 --tlsv1_2 --tlsv1_3 TARGET
+
+# --- curl - sprawdzenie certyfikatu i wersji TLS ---
+curl -vI "https://TARGET" 2>&1 | grep -iE "SSL|TLS|subject|issuer|expire"
+
+# --- Sprawdzenie czy formularz logowania wysyla POST przez HTTP ---
+curl -s "https://TARGET/login" | grep -iE "action=.*http://"
+
+# --- Nmap SSL scripts ---
+nmap --script ssl-enum-ciphers -p 443 TARGET
+nmap --script ssl-cert -p 443 TARGET
+nmap --script ssl-known-key -p 443 TARGET
+nmap --script ssl-heartbleed -p 443 TARGET
+nmap --script ssl-poodle -p 443 TARGET
+nmap --script ssl-dh-params -p 443 TARGET
+
+# --- Sprawdzenie naglowkow bezpieczenstwa ---
+curl -s -I "https://TARGET/" | grep -iE "Strict-Transport|Content-Security|X-Frame|X-Content"
+
+# --- Sprawdzenie HSTS ---
+curl -s -I "https://TARGET/" | grep -i "Strict-Transport-Security"
+
+# --- Sprawdzenie mixed content (HTTP resources na HTTPS) ---
+curl -s "https://TARGET/login" | grep -iE "src=.http://"
+
+# --- Sprawdzenie przekierowania HTTP -> HTTPS ---
+curl -s -o /dev/null -w "%{redirect_url}" "http://TARGET/login"
+
+# --- Sprawdzenie czy API akceptuje HTTP ---
+curl -s -X POST "http://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"test","password":"test"}' -v 2>&1
+
+# --- Sprawdzenie slabych cipher suites ---
+openssl s_client -connect TARGET:443 -cipher NULL,EXPORT,LOW,DES,RC4,MD5,aNULL,eNULL 2>&1
+
+# --- Sprawdzenie obslugi TLS 1.0/1.1 (przestarzale) ---
+openssl s_client -connect TARGET:443 -tls1 2>&1 | grep -i "protocol"
+openssl s_client -connect TARGET:443 -tls1_1 2>&1 | grep -i "protocol"
+openssl s_client -connect TARGET:443 -tls1_2 2>&1 | grep -i "protocol"
+openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# Brak wordlist - test konfiguracji SSL/TLS i szyfrowania transportu
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. W przegladarce sprawdz ikone klodki i szczegoly certyfikatu na stronie logowania
+2. W DevTools (Security tab) sprawdz konfiguracje TLS i certyfikat
+3. W Burp Suite sprawdz czy requesty logowania ida przez HTTPS
+4. Uzyj Wireshark do przechwycenia ruchu i sprawdzenia czy credentials sa widoczne
+5. Sprawdz czy formularz logowania nie wysyla danych przez HTTP (action URL)
+6. Przetestuj czy mozna uzyskac dostep do strony logowania przez HTTP (bez S)
+7. Sprawdz czy cookies maja flage Secure
+8. Zweryfikuj naglowek HSTS i jego wartosc max-age

@@ -1,0 +1,79 @@
+================================================================================
+WSTG-IDNT-02 — Test User Registration Process
+================================================================================
+CELE:
+- Zweryfikowac wymagania tozsamosci przy rejestracji
+- Sprawdzic walidacje procesu rejestracji
+- Przetestowac odpornosc na duplikaty i zlosliwe dane wejsciowe
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Rejestracja nowego uzytkownika - standardowy test ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser1","password":"Test@1234","email":"test1@example.com"}' -v
+
+# --- Proba rejestracji z duplikatem nazwy uzytkownika ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"admin","password":"Test@1234","email":"test2@example.com"}' -v
+
+# --- Proba rejestracji z duplikatem emaila ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser2","password":"Test@1234","email":"admin@TARGET"}' -v
+
+# --- SQL Injection w polu rejestracji ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"test'\'' OR 1=1--","password":"Test@1234","email":"sqli@test.com"}' -v
+
+# --- XSS w polu nazwy uzytkownika ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"<script>alert(1)</script>","password":"Test@1234","email":"xss@test.com"}' -v
+
+# --- Rejestracja z bardzo dluga nazwa uzytkownika (buffer overflow test) ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","password":"Test@1234","email":"overflow@test.com"}' -v
+
+# --- Rejestracja z pustymi polami ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"","password":"","email":""}' -v
+
+# --- Rejestracja ze slabym haslem ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weakuser","password":"123","email":"weak@test.com"}' -v
+
+# --- Rejestracja bez wymaganego pola ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"nopass"}' -v
+
+# --- Rejestracja z dodatkowym polem role ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"roletest","password":"Test@1234","email":"role@test.com","role":"admin"}' -v
+
+# --- Proba masowej rejestracji (rate limiting test) ---
+for i in $(seq 1 20); do curl -s -o /dev/null -w "Attempt $i: %{http_code}\n" -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d "{\"username\":\"massuser$i\",\"password\":\"Test@1234\",\"email\":\"mass$i@test.com\"}"; done
+
+# --- Testowanie case sensitivity nazwy uzytkownika ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"Admin","password":"Test@1234","email":"case@test.com"}' -v
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"ADMIN","password":"Test@1234","email":"case2@test.com"}' -v
+
+# --- Rejestracja ze znakami specjalnymi w emailu ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"specialemail","password":"Test@1234","email":"test+admin@test.com"}' -v
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Enumeracja istniejacych uzytkownikow przez rejestracje (ffuf) ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
+
+# --- Enumeracja uzytkownikow - pelna lista ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Usernames/xato-net-10-million-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200 -t 10
+
+# --- Enumeracja uzytkownikow - lista cirt default ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Usernames/cirt-default-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
+
+# --- Enumeracja z lista imion ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Usernames/Names/names.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zarejestruj nowe konto i przeanalizuj caly przeplyw w Burp Suite (requesty/response)
+2. Sprawdz czy formularz rejestracji posiada ochrone CAPTCHA lub rate limiting
+3. W Burp Repeater przetestuj manipulacje parametrow rejestracji (dodanie pola isAdmin, role)
+4. Sprawdz czy wiadomosc bledu przy duplikacie ujawnia informacje o istniejacych uzytkownikach
+5. Przetestuj rejestracje z tymczasowymi adresami email (mailinator, guerrillamail)
+6. Sprawdz czy weryfikacja email jest wymagana do aktywacji konta
+7. Przeanalizuj token weryfikacyjny pod katem przewidywalnosci
+8. Sprawdz w DevTools czy formularz nie wysyla ukrytych pol

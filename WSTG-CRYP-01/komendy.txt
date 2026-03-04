@@ -1,0 +1,104 @@
+================================================================================
+WSTG-CRYP-01 — Testing for Weak Transport Layer Security
+================================================================================
+CELE:
+- Zwalidowac konfiguracje TLS
+- Przegladnac sile kryptograficzna certyfikatu
+- Upewnic sie ze TLS nie moze byc ominiete
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- testssl.sh - kompleksowe skanowanie TLS ---
+testssl.sh TARGET
+testssl.sh --full TARGET
+testssl.sh --vulnerable TARGET
+testssl.sh --headers TARGET
+
+# --- testssl.sh - szczegolowe testy ---
+testssl.sh --protocols TARGET
+testssl.sh --ciphers TARGET
+testssl.sh --server-defaults TARGET
+testssl.sh --heartbleed TARGET
+testssl.sh --poodle TARGET
+testssl.sh --beast TARGET
+testssl.sh --lucky13 TARGET
+testssl.sh --freak TARGET
+testssl.sh --logjam TARGET
+testssl.sh --drown TARGET
+
+# --- sslyze - analiza TLS ---
+sslyze TARGET
+sslyze --regular TARGET
+sslyze --certinfo TARGET
+sslyze --tlsv1 TARGET
+sslyze --tlsv1_1 TARGET
+sslyze --tlsv1_2 TARGET
+sslyze --tlsv1_3 TARGET
+sslyze --sslv2 TARGET
+sslyze --sslv3 TARGET
+
+# --- sslscan - szybkie skanowanie ---
+sslscan TARGET
+sslscan --no-fallback TARGET
+
+# --- nmap ssl-enum-ciphers ---
+nmap --script ssl-enum-ciphers -p 443 TARGET
+nmap --script ssl-cert -p 443 TARGET
+nmap --script ssl-known-key -p 443 TARGET
+nmap --script ssl-heartbleed -p 443 TARGET
+nmap --script ssl-poodle -p 443 TARGET
+nmap --script ssl-ccs-injection -p 443 TARGET
+nmap --script ssl-dh-params -p 443 TARGET
+
+# --- curl verbose - sprawdzenie TLS ---
+curl -vvI https://TARGET 2>&1 | grep -E "SSL|TLS|certificate|cipher|issuer|subject"
+
+# --- curl wymuszenie starych protokolow ---
+curl -v --tlsv1.0 --tls-max 1.0 https://TARGET 2>&1
+curl -v --tlsv1.1 --tls-max 1.1 https://TARGET 2>&1
+curl -v --sslv2 https://TARGET 2>&1
+curl -v --sslv3 https://TARGET 2>&1
+
+# --- openssl s_client - manualne testowanie ---
+openssl s_client -connect TARGET:443 -tls1
+openssl s_client -connect TARGET:443 -tls1_1
+openssl s_client -connect TARGET:443 -tls1_2
+openssl s_client -connect TARGET:443 -tls1_3
+
+# --- Sprawdzenie certyfikatu ---
+openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noout -text
+
+# --- Sprawdzenie daty waznosci certyfikatu ---
+openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noout -dates
+
+# --- Sprawdzenie lancucha certyfikatow ---
+openssl s_client -connect TARGET:443 -showcerts < /dev/null
+
+# --- Sprawdzenie HSTS ---
+curl -sI https://TARGET | grep -i strict-transport-security
+
+# --- Sprawdzenie HTTP -> HTTPS redirect ---
+curl -sI http://TARGET | grep -i location
+
+# --- Sprawdzenie mixed content ---
+curl -s https://TARGET | grep -iE "http://" | head -20
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Brak dedykowanych wordlist - testy oparte na narzdziach kryptograficznych ---
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. W przegladarce kliknij ikone kludki -> Szczegoly certyfikatu: sprawdz waznosc,
+   wystawce, algorytm podpisu (RSA >= 2048, unikaj SHA-1)
+2. Sprawdz w DevTools -> Security tab: szczegoly polaczenia TLS
+3. Zweryfikuj ze HTTP zawsze przekierowuje na HTTPS
+4. Sprawdz naglowek HSTS (Strict-Transport-Security) i jego parametry (max-age, includeSubDomains)
+5. Uzyj Burp Suite -> Scanner do automatycznego wykrycia slabych szyfrow
+6. Sprawdz czy SSL/TLS Certificate Pinning jest zaimplementowany (mobile app)
+7. Zweryfikuj ze nie ma wsparcia dla SSLv2, SSLv3, TLS 1.0, TLS 1.1

