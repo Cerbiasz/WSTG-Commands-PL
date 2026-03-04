@@ -1,0 +1,115 @@
+================================================================================
+WSTG-CONF-04 — Review Old Backup and Unreferenced Files
+================================================================================
+CELE:
+- Find unreferenced files with sensitive information
+- Discover backup files, old versions, archives left on the server
+- Identify development/staging artifacts accessible in production
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- ffuf - brute-force plikow i katalogow ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -mc 200,301,302,403 -o output_ffuf_common.json
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/big.txt -mc 200,301,302,403 -o output_ffuf_big.json
+
+# --- gobuster ---
+gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x bak,old,zip,tar,tar.gz,gz,7z,rar,sql,db,conf,config,log,txt -o output_gobuster_backup.txt
+
+# --- dirsearch ---
+dirsearch -u https://TARGET -e bak,old,zip,tar,gz,sql,log,conf -o output_dirsearch_backup.txt
+
+# --- feroxbuster - rekursywny brute-force ---
+feroxbuster -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x bak,old,zip,tar.gz,sql,conf --depth 3 -o output_feroxbuster.txt
+
+# --- Sprawdzenie typowych plikow backupowych ---
+curl -sI https://TARGET/backup.zip | head -1
+curl -sI https://TARGET/backup.tar.gz | head -1
+curl -sI https://TARGET/backup.sql | head -1
+curl -sI https://TARGET/db.sql | head -1
+curl -sI https://TARGET/database.sql | head -1
+curl -sI https://TARGET/dump.sql | head -1
+curl -sI https://TARGET/site.zip | head -1
+curl -sI https://TARGET/www.zip | head -1
+curl -sI https://TARGET/TARGET.zip | head -1
+curl -sI https://TARGET/TARGET.tar.gz | head -1
+curl -sI https://TARGET/old/ | head -1
+curl -sI https://TARGET/backup/ | head -1
+curl -sI https://TARGET/bak/ | head -1
+curl -sI https://TARGET/temp/ | head -1
+curl -sI https://TARGET/tmp/ | head -1
+curl -sI https://TARGET/test/ | head -1
+
+# --- Sprawdzenie plikow konfiguracyjnych ---
+curl -sI https://TARGET/.env | head -1
+curl -sI https://TARGET/.git/config | head -1
+curl -sI https://TARGET/.git/HEAD | head -1
+curl -sI https://TARGET/.svn/entries | head -1
+curl -sI https://TARGET/.DS_Store | head -1
+curl -sI https://TARGET/.htaccess | head -1
+curl -sI https://TARGET/web.config | head -1
+curl -sI https://TARGET/wp-config.php.bak | head -1
+curl -sI https://TARGET/config.php.bak | head -1
+
+# --- Sprawdzenie Common DB backups ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/Common-DB-Backups.txt -mc 200 -o output_ffuf_db_backups.json
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- SecLists raft-large-files ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-files.txt -mc 200 -o output_ffuf_raft_files.json
+
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-files-lowercase.txt -mc 200 -o output_ffuf_raft_files_lower.json
+
+# --- SecLists Common-DB-Backups ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/Common-DB-Backups.txt -mc 200 -o output_ffuf_db_backup.json
+
+# --- Bug-Bounty-Wordlists backup files ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/backup_files_only.txt -mc 200 -o output_ffuf_bbw_backup_only.json
+
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/backup_files_with_path.txt -mc 200 -o output_ffuf_bbw_backup_path.json
+
+# --- Bug-Bounty-Wordlists all leaked files ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/all-files-leaked.txt -mc 200 -o output_ffuf_bbw_leaked.json
+
+# --- fuzzdb predictable filepaths ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/raft-large-files.txt -mc 200 -o output_ffuf_fuzzdb_raft_files.json
+
+# --- fuzzdb backup extensions ---
+ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Backup.txt -mc 200 -o output_ffuf_fuzzdb_backup_ext.json
+
+# --- fuzzdb password file locations ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/password-file-locations/Passwords.txt -mc 200 -o output_ffuf_fuzzdb_passwords.json
+
+# --- fuzzdb UnixDotfiles ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/UnixDotfiles.txt -mc 200 -o output_ffuf_fuzzdb_dotfiles.json
+
+# --- Bug-Bounty-Wordlists dotfiles ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/dotfiles.txt -mc 200 -o output_ffuf_bbw_dotfiles.json
+
+# --- Bug-Bounty-Wordlists env ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/env.txt -mc 200 -o output_ffuf_bbw_env.json
+
+# --- Bug-Bounty-Wordlists log ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/log.txt -mc 200 -o output_ffuf_bbw_log.json
+
+# --- Duza wordlista ogolna ---
+gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/DirBuster-2007_directory-list-2.3-medium.txt -x bak,old,zip,sql -o output_gobuster_dirbuster.txt
+
+# --- OneListForAll ---
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshort.txt -mc 200 -o output_ffuf_onelistforall.json
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Sprawdz typowe nazwy backupow: backup, bak, old, temp, test, dev, staging
+2. Sprawdz rozszerzenia: .bak, .old, .orig, .save, .swp, .zip, .tar.gz, .sql
+3. Szukaj plikow .git/, .svn/, .DS_Store, .env
+4. Sprawdz czy istnieje kopia strony z data w nazwie (backup_2024, site_old)
+5. W Burp Suite: przejrzyj odpowiedzi 403 - moze mozna ominac ograniczenie
+6. Sprawdz directory listing na znalezionych katalogach
+7. Szukaj plikow archiwum z nazwa domeny (TARGET.zip, TARGET.tar.gz)
+8. Sprawdz WebDAV i metody PUT/MOVE jesli aktywne

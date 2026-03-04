@@ -1,0 +1,50 @@
+================================================================================
+WSTG-INPV-13 — Testing for Buffer Overflow
+================================================================================
+CELE:
+- Test for buffer overflow vulnerabilities
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Wysylanie dlugich stringow ---
+python3 -c "print('A'*5000)" | xargs -I {} curl -s "https://TARGET/page?input={}" -o /dev/null -w "%{http_code}\n"
+python3 -c "print('A'*10000)" | xargs -I {} curl -s "https://TARGET/page?input={}" -o /dev/null -w "%{http_code}\n"
+python3 -c "print('A'*100000)" | xargs -I {} curl -s "https://TARGET/page?input={}" -o /dev/null -w "%{http_code}\n"
+
+# --- Format string testing ---
+curl -s "https://TARGET/page?input=%s%s%s%s%s%s%s%s%s%s"
+curl -s "https://TARGET/page?input=%x%x%x%x%x%x%x%x%x%x"
+curl -s "https://TARGET/page?input=%n%n%n%n%n%n"
+
+# --- Integer overflow ---
+curl -s "https://TARGET/page?id=2147483647"
+curl -s "https://TARGET/page?id=2147483648"
+curl -s "https://TARGET/page?id=-1"
+curl -s "https://TARGET/page?id=99999999999999999999"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- SecLists naughty strings ---
+ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/big-list-of-naughty-strings.txt -mc all -o output_ffuf_naughty.json
+
+# --- SecLists format strings ---
+ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/FormatString-Jhaddix.txt -mc all -o output_ffuf_formatstr.json
+
+# --- fuzzdb integer overflow ---
+ffuf -u "https://TARGET/page?id=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/integer-overflow/integer-overflow.txt -mc all -o output_ffuf_intoverflow.json
+
+# --- fuzzdb format strings ---
+ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/format-strings/format-strings.txt -mc all -o output_ffuf_fuzzdb_fmt.json
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Wyslij bardzo dlugie stringi (1000, 5000, 10000, 100000 znakow) do kazdego pola
+2. Sprawdz czy aplikacja sie zawiesi lub zwroci 500
+3. Testuj format string specifiers (%s, %x, %n)
+4. Testuj wartosci graniczne integer (MAX_INT, MIN_INT, 0, -1)
+5. Monitoruj zuzycie pamieci i CPU serwera jesli to mozliwe

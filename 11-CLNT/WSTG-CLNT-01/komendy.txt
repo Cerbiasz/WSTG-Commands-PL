@@ -1,0 +1,52 @@
+================================================================================
+WSTG-CLNT-01 — Testing for DOM-Based Cross Site Scripting
+================================================================================
+CELE:
+- Identify DOM sinks
+- Build payloads that pertain to every sink type
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Identyfikacja sinkow DOM ---
+# Pobierz JS i szukaj niebezpiecznych sinkow
+curl -s "https://TARGET/" | grep -oP 'src="[^"]*\.js"' | sed 's/src="//;s/"//'
+# Pobierz kazdy JS file i szukaj:
+# document.write, innerHTML, outerHTML, eval, setTimeout, setInterval
+# location.href, location.assign, location.replace, window.open
+# jQuery: .html(), .append(), .prepend(), .after(), .before()
+
+# --- dalfox DOM XSS ---
+dalfox url "https://TARGET/page#payload" -o output_dalfox_dom.txt
+
+# --- Testowanie zrodel DOM ---
+curl -s "https://TARGET/page?input=<img src=x onerror=alert(1)>#<img src=x onerror=alert(1)>"
+
+# --- Retire.js - wyszukiwanie podatnych bibliotek JS ---
+retire --js --jspath /sciezka/do/pobranych/js/
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings XSS DOM payloads ---
+# Desktop/WSTG/PayloadsAllTheThings-master/XSS Injection/Intruders/xss_alert.txt
+# Desktop/WSTG/PayloadsAllTheThings-master/XSS Injection/Intruders/JHADDIX_XSS.txt
+
+# --- SecLists XSS ---
+# Desktop/WSTG/SecLists-master/Fuzzing/XSS/robot-friendly/XSS-BruteLogic.txt
+# Desktop/WSTG/SecLists-master/Fuzzing/XSS/robot-friendly/XSS-Cheat-Sheet-PortSwigger.txt
+
+# --- fuzzdb XSS event handlers ---
+# Desktop/WSTG/fuzzdb-master/attack/xss/html-event-attributes.txt
+# Desktop/WSTG/fuzzdb-master/attack/xss/default-javascript-event-attributes.txt
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Otworz DevTools > Sources i szukaj sinkow DOM w kodzie JS
+2. Uzyj DOM Invader w Burp embedded browser
+3. Testuj payloady w URL hash (#), query params, postMessage
+4. Monitoruj console.log na bledy i wykonanie kodu
+5. Uzyj Sources tab do breakpointow na sinkach DOM

