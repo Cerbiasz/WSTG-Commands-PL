@@ -1,4 +1,3 @@
-# info disclosure payload fuzzfile for pgsql
 select version();	
 select current_database();
 select current_user;

