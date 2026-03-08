@@ -70,3 +70,19 @@ curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com" -H "H
 7. Testuj CSRF na formularzu zmiany hasla
 8. Sprawdz politykę nowego hasła (dlugosc, zlozonosc)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Forgot_Password_Cheat_Sheet.md
+
+- Uzywaj tokenow resetowania z ograniczonym czasem waznosci (15-60 min)
+- Nie ujawniaj czy konto/email istnieje w odpowiedzi na zadanie resetu
+- Wymagaj aktualnego hasla przy zmianie hasla (nie przy resetowaniu)
+- Token resetowania powinien byc jednorazowy i o wysokiej entropii
+- Uniwaznij wszystkie sesje po zmianie hasla
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -167,3 +167,22 @@ ffuf -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/big.txt:PATH -u "http
 7. Przetestuj manipulacje sciezka (/..;/ , /%2e%2e/ , /admin;/)
 8. Sprawdz czy wylogowanie rzeczywiscie uniewaznaia sesje
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+
+- Waliduj stan uwierzytelnienia po stronie serwera przy kazdym uzyciu
+- Wymagaj ponownego uwierzytelnienia dla wrazliwych operacji (zmiana hasla, platnosci)
+- Nie polegaj na ukrytych polach formularza lub cookies do kontroli dostepu
+- Sprawdz czy zmiana roli/sesji wymaga ponownej weryfikacji
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Autorize | Automatyczne testowanie bledow autoryzacji i uwierzytelnienia | [GitHub](https://github.com/Quitten/Autorize) |
+| AuthMatrix | Macierz testow autoryzacji uzytkownik vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
+| Auth Analyzer | Porownywanie odpowiedzi miedzy sesjami roznych uzytkownikow | [GitHub](https://github.com/simioni87/auth_analyzer) |

@@ -80,3 +80,12 @@ curl -sI https://TARGET/api/v1/ -H "Origin: https://evil.com" | grep -iE "^Acces
 7. Przetestuj CORS bypass: subdomena, null origin, regex bypass
 8. W DevTools > Console: sprobuj fetch() z innej domeny do TARGET
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| CSP Auditor | Analiza naglowkow Content-Security-Policy | [GitHub](https://github.com/GoSecure/csp-auditor) |
+| Headers Analyzer | Analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |

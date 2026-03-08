@@ -125,3 +125,12 @@ whois -h whois.radb.net -- "-i origin $(whois TARGET | grep -i origin | awk '{pr
 9. Sprawdz headery Set-Cookie - flagi Secure, HttpOnly, SameSite
 10. Zidentyfikuj backend database na podstawie bledow lub naglowkow
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Collaborator Everywhere | Wstrzykiwanie naglowkow do wykrywania backendowych systemow | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
+| Reverse Proxy Detector | Wykrywanie serwerow reverse proxy | [BApp Store](https://portswigger.net/bappstore/a112997070354d249b64b4cf68eabc04) |

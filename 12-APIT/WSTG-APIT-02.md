@@ -64,3 +64,24 @@ ffuf -u "https://TARGET/api/users/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/
 4. Testuj rozne formaty ID
 5. Sprawdz nested resources: /api/users/1/orders/1
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — REST_Security_Cheat_Sheet.md, REST_Assessment_Cheat_Sheet.md
+
+- Waliduj Content-Type requestu — odrzucaj nieoczekiwane typy
+- Uzywaj API keys + OAuth 2.0 do uwierzytelnienia — nie sesji cookie
+- Rate limituj wszystkie endpointy — szczegolnie auth i wyszukiwanie
+- Waliduj wszystkie input parametry — typy, zakresy, dlugosci
+- Zwracaj prawidlowe kody HTTP (401 vs 403 vs 404) — ale nie ujawniaj zbyt wiele
+- Wymuszaj HTTPS — nie akceptuj HTTP requestow do API
+- Implementuj CORS prawidlowo — nie uzywaj wildcard Origin
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Swurg | Parsowanie i testowanie API na podstawie Swagger/OpenAPI | [GitHub](https://github.com/AresS31/swurg) |
+| SwaggerParser | Import definicji Swagger do Burp | [GitHub](https://github.com/AresS31/SwaggerParser-BurpExtension) |

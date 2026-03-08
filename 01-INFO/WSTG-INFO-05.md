@@ -149,3 +149,13 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt -m
 8. Sprawdz czy pliki JS maja source mapy (.js.map) - moga ujawnic oryginalny kod
 9. Szukaj hardcoded credentials w plikach JavaScript
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Burp JS Miner | Automatyczne wyciaganie interesujacych danych z plikow JS i JSON | [GitHub](https://github.com/minamo7sen/burp-JS-Miner) |
+| Secret Finder | Odkrywanie kluczy API, tokenow i wrazliwych danych w odpowiedziach | [GitHub](https://github.com/m4ll0k/BurpSuite-Secret_Finder) |
+| Sensitive Discoverer | Wykrywanie wrazliwych informacji w wiadomosciach HTTP | [GitHub](https://github.com/CYS4srl/SensitiveDiscoverer) |

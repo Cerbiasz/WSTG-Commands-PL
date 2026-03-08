@@ -87,3 +87,12 @@ zap-cli report -o output_zap_spider.html -f html
 9. Zwroc uwage na przekierowania i lancuchy przekierowan
 10. Sprawdz workflow dla roznych stanow sesji (zalogowany vs niezalogowany)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Burp DOM Scanner | Rekursywny crawling i skanowanie Single Page Applications | [GitHub](https://github.com/fcavallarin/burp-dom-scanner) |
+| JSpector | Pasywne wyciaganie URL-i, endpointow i niebezpiecznych metod z JS | [GitHub](https://github.com/hisxo/JSpector) |

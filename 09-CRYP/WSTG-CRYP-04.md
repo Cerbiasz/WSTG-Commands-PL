@@ -129,3 +129,22 @@ openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noo
 7. Sprawdz czy dane wrazliwe w bazie sa szyfrowane (nie zakodowane)
 8. Zweryfikuj dlugosc kluczy: RSA >= 2048bit, AES >= 128bit
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md, Key_Management_Cheat_Sheet.md
+
+- Uzywaj silnych algorytmow: AES-256, RSA-2048+, SHA-256+ — unikaj MD5, SHA1, DES
+- Rotuj klucze regularnie — implementuj mechanizm rotacji bez przerwy serwisu
+- Przechowuj klucze oddzielnie od danych — uzywaj HSM lub dedicated key vault
+- Nie hardkoduj kluczy w kodzie zrodlowym — uzywaj zmiennych srodowiskowych lub secret manager
+- Uzywaj roznych kluczy do roznych celow (szyfrowanie, podpis, MAC)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AES Killer | Deszyfrowanie i analiza komunikacji AES | [GitHub](https://github.com/Ebryx/AES-Killer) |
+| BurpCrypto | Operacje kryptograficzne na payloadach w Burp | [GitHub](https://github.com/whwlsfb/BurpCrypto) |

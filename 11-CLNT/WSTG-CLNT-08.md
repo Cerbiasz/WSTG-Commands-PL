@@ -40,3 +40,9 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 3. Szukaj niebezpiecznych funkcji w zdekompilowanym kodzie
 4. Testuj flashvars pod katem injection
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

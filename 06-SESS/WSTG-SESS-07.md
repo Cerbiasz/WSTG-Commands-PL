@@ -90,3 +90,20 @@ curl -v -b "SESSIONID=EXPIRED_SESSION_VALUE" TARGET/dashboard 2>&1
 7. Sprawdz czy po wygasnieciu sesji uzytkownik jest przekierowywany na strone logowania
 8. Rekomendacja: idle timeout 15-30min, absolute timeout 4-8h
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Idle timeout: 15-30 minut nieaktywnosci (krotszy dla wrazliwych aplikacji)
+- Absolute timeout: 4-8 godzin — sesja wygasa niezaleznie od aktywnosci
+- Wymagaj ponownego uwierzytelnienia dla operacji wrazliwych (platnosci, zmiana hasla)
+- Informuj uzytkownika o zbliajacym sie wygasnieciu sesji
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Timeinator | Testowanie atakow opartych na czasie | [GitHub](https://github.com/FSecureLABS/timeinator) |

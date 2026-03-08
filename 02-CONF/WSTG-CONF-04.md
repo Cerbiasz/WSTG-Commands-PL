@@ -189,3 +189,13 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 7. Szukaj plikow archiwum z nazwa domeny (TARGET.zip, TARGET.tar.gz)
 8. Sprawdz WebDAV i metody PUT/MOVE jesli aktywne
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Backup Finder | Wyszukiwanie plikow backup, starych i tymczasowych | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| CTFHelper | Skanowanie wrazliwych plikow (.swp, .git) na serwerze | [GitHub](https://github.com/unamer/CTFHelper) |
+| Interesting Files Scanner | Wykrywanie interesujacych plikow i katalogow | [GitHub](https://github.com/modzero/interestingFileScanner) |

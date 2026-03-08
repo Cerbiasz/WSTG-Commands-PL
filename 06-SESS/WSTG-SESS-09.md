@@ -98,3 +98,18 @@ curl -s -b cookies.txt -H "User-Agent: Suspicious" -H "Accept-Language: xx" TARG
 7. Przetestuj czy zmiana IP/User-Agent powoduje uniewaznnienie sesji
 8. Sprawdz czy aplikacja implementuje re-autentykacje dla wrazliwych akcji
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Cookie_Theft_Mitigation_Cheat_Sheet.md
+
+- Flagi HttpOnly i Secure na wszystkich cookies sesyjnych — klucz do ochrony przed kradziezy
+- Wymuszaj TLS wszedzie — session ID nigdy nie moze leciec plaintext
+- Powiaz sesje z IP/User-Agent jako dodatkowe zabezpieczenie (uwaga na zmienne IP)
+- Wykrywaj anomalie: dwie aktywne sesje z roznych lokalizacji
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -159,3 +159,19 @@ hashcat -m 0 -a 0 hashes.txt Desktop/WSTG/SecLists-master/Passwords/Leaked-Datab
 7. Przetestuj HTTP Basic/Digest authentication jesli jest uzywane
 8. Sprawdz czy tokeny sesji sa wystarczajaco losowe i dlugie
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Password_Storage_Cheat_Sheet.md
+
+- Minimalna dlugosc hasla: 8 znakow (NIST 800-63B zaleca do 64 znakow max)
+- Sprawdzaj hasla przeciw bazom wycieknietych hasel (HaveIBeenPwned)
+- Nie wymuszaj skomplikowanych regul kompozycji (duze/male/cyfry) — NIST odradza
+- Hashuj hasla algorytmem Argon2id (preferowany), bcrypt lub scrypt
+- Nigdy nie przechowuj hasel w plaintext, MD5 lub SHA1
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

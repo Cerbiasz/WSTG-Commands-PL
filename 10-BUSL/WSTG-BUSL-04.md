@@ -98,3 +98,11 @@ seq 1 5 | parallel -j5 "curl -s -X POST TARGET/api/register -d 'username=testuse
 6. Sprawdz czy limity sa egzekwowane poprawnie przy rownoczesnych requestach
 7. Testuj race condition na procesie platnosci (double spending)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Timeinator | Testowanie atakow timing-based i race conditions | [GitHub](https://github.com/FSecureLABS/timeinator) |

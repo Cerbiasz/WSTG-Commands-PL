@@ -83,3 +83,23 @@ wfuzz -c -z file,Desktop/WSTG/fuzzdb-master/attack/xss/xss-rsnake.txt -X POST -d
 7. Testuj file upload z XSS w nazwie pliku lub metadanych (EXIF)
 8. Sprawdz rich text editors i markdown parsery
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, XSS_Filter_Evasion_Cheat_Sheet.md
+
+- Enkoduj dane na wyjsciu (output), nie na wejsciu — dane sa uzywane w roznych kontekstach
+- Sanityzuj HTML allowlista tagow/atrybutow (DOMPurify) — nie blacklista
+- Sprawdz uploady plikow pod katem XSS (SVG, HTML, XML z paylodem)
+- Wdroz CSP jako dodatkowa warstwe obrony
+- Stored XSS jest groźniejszy niz reflected — payload wykonuje sie dla kazdego odwiedzajacego
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| XSS Validator | Automatyczna walidacja XSS z Phantomjs | [GitHub](https://github.com/nVisium/xssValidator) |
+| Burp Hunter | Plugin XSS Hunter do Burp | [GitHub](https://github.com/mystech7/Burp-Hunter) |
+| feminda | Automatyczne wyszukiwanie blind XSS | [GitHub](https://github.com/wish-i-was/femida) |

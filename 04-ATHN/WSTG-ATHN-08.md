@@ -48,3 +48,18 @@ ffuf -u "https://TARGET/forgot-password" -X POST -d "username=admin&answer=FUZZ"
 4. Sprawdz czy jest lockout po blednych odpowiedziach
 5. Testuj czy mozna zmienic pytanie na prostsze
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Choosing_and_Using_Security_Questions_Cheat_Sheet.md
+
+- Unikaj pytań z latwo odgadnialnymi odpowiedziami (nazwisko panienskie matki, miasto urodzenia)
+- Pozwol uzytkownikowi na definiowanie wlasnych pytan
+- Hashuj odpowiedzi na pytania bezpieczenstwa tak jak hasla
+- Uzywaj pytan bezpieczenstwa jako dodatkowego czynnika, nie jedynego mechanizmu odzyskiwania
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

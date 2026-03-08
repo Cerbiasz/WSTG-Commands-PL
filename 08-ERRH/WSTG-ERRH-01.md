@@ -165,3 +165,21 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 5. Sprawdz naglowki odpowiedzi pod katem Server, X-Powered-By, X-AspNet-Version
 6. Zrob screenshot kazdej unikalnej strony bledu jako dowod
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md
+
+- Uzywaj generycznych stron bledow dla uzytkownikow — nie ujawniaj stack trace, sciezek, wersji DB
+- Loguj szczegolowe bledy TYLKO po stronie serwera — nigdy w odpowiedzi HTTP
+- Obsluz WSZYSTKIE typy wyjatkow — nieobsluzony wyjatek moze ujawnic wrazliwe dane
+- Wdroz globalny error handler w frameworku — zapobiegaj niespojnym odpowiedziom
+- Zwracaj standardowe kody HTTP (500, 403, 404) bez dodatkowych szczegolow
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Error Message Checks | Pasywne wykrywanie komunikatow bledow ujawniajacych informacje | [GitHub](https://github.com/augustd/burp-suite-error-message-checks) |

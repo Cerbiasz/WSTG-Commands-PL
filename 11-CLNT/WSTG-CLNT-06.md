@@ -39,3 +39,9 @@ curl -s "https://TARGET/page?link=http://evil.com/style.css"
 3. Monitoruj postMessage w DevTools console
 4. Sprawdz czy event handlery postMessage waliduja origin
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

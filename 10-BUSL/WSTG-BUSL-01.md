@@ -120,3 +120,21 @@ ffuf -u "TARGET/api/FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/Co
 6. Testuj podwojne parametry: ?id=1&id=2 (HTTP Parameter Pollution)
 7. Sprawdz czy filtrowanie/sanityzacja dziala na backendzie a nie tylko na frontendzie
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md
+
+- Waliduj dane po stronie serwera — walidacja kliencka to UX, nie bezpieczenstwo
+- Uzywaj allowlist (dozwolone wartosci) zamiast denylist (zakazane)
+- Waliduj typ danych, zakres, dlugosc i format — nie tylko obecnosc
+- Sprawdzaj reguly biznesowe: czy cena jest dodatnia, czy ilosc nie przekracza stanu magazynowego
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Agartha | Generowanie payloadow i testowanie logiki biznesowej | [GitHub](https://github.com/volkandindar/agartha) |
+| Active Scan++ | Rozszerzony skaner z dodatkowymi checkami | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |

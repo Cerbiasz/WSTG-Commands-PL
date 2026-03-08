@@ -62,3 +62,11 @@ ffuf -u "https://TARGET/admin" -w Desktop/WSTG/SecLists-master/Fuzzing/http-requ
 4. Testuj method override headers w polaczeniu z POST
 5. Sprawdz TRACE method pod katem XST (Cross-Site Tracing)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Identity Crisis | Testowanie roznych odpowiedzi na rozne metody HTTP i User-Agenty | [GitHub](https://github.com/EnableSecurity/Identity-Crisis) |

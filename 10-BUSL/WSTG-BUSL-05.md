@@ -109,3 +109,11 @@ curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "X-Forwarded-For: 2.
 6. Sprawdz czy limit jest po stronie serwera (nie tylko frontend/cookie)
 7. Testuj race condition na limitach (wiele requestow jednoczesnie)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Turbo Intruder | Masowe wysylanie requestow do testowania limitow | [BApp Store](https://portswigger.net/bappstore/9abfe09175d74b16842a3bbb0aa6a42c) |

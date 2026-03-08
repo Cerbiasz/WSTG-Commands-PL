@@ -83,3 +83,19 @@ curl -s "https://TARGET/settings/mfa/backup-codes" -H "Cookie: session=TOKEN"
 7. Testuj dezaktywacje MFA bez weryfikacji
 8. Sprawdz czy MFA jest wymagane na wszystkich kanalach
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md
+
+- Preferuj TOTP (Google Authenticator) lub FIDO2/WebAuthn zamiast SMS (podatne na SIM swap)
+- Wymuszaj MFA dla kont administracyjnych i operacji wrazliwych
+- Zapobiegaj obejsciu MFA przez ponowne uzycie sesji — wymuszaj MFA po wygasnieciu
+- Implementuj kody zapasowe (recovery codes) jako alternatywa gdy glowny czynnik niedostepny
+- Nie pozwalaj na wylaczenie MFA bez dodatkowej weryfikacji tozsamosci
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

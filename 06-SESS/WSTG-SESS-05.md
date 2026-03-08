@@ -133,3 +133,24 @@ ls Desktop/WSTG/PayloadsAllTheThings-master/Cross-Site\ Request\ Forgery/Images/
 7. Sprawdz czy token CSRF jest unikalny per sesja i per request
 8. Przetestuj czy token z jednej sesji dziala w innej
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md
+
+- Uzywaj synchronizer token pattern — unikalny token per sesja/request w ukrytym polu formularza
+- Ustaw cookies z SameSite=Strict lub Lax jako dodatkowa warstwa ochrony
+- Weryfikuj naglowki Origin i Referer po stronie serwera
+- Uzywaj custom request headers (np. X-Requested-With) dla AJAX
+- Nie polegaj na samych cookies SameSite — uzywaj tokenow CSRF jako primary defense
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| CSRF Scanner | Skaner podatnosci CSRF | [GitHub](https://github.com/ah8r/csrf) |
+| EasyCSRF | Wykrywanie slabej ochrony CSRF | [GitHub](https://github.com/0ang3el/EasyCSRF) |
+| Token Rewrite | Wyszukiwanie i ponowne uzycie tokenow CSRF | [GitHub](https://github.com/hvqzao/burp-token-rewrite) |
+| CSurfer | Sledzenie i aktualizacja tokenow CSRF | [GitHub](https://github.com/asaafan/CSurfer) |

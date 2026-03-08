@@ -124,3 +124,12 @@ ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-me
 8. Porownaj odpowiedzi na rozne metody dla roznych endpointow
 9. Sprawdz czy metoda HEAD ujawnia informacje bez zwracania body
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Identity Crisis | Testowanie roznych odpowiedzi serwera na rozne User-Agenty i metody | [GitHub](https://github.com/EnableSecurity/Identity-Crisis) |
+| Bypass WAF | Obchodzenie regul Web Application Firewall | [GitHub](https://github.com/codewatchorg/bypasswaf) |

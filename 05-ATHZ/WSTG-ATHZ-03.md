@@ -56,3 +56,22 @@ curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "u
 4. Testuj dostep do endpointow wyzszego poziomu
 5. Uzyj Burp Match/Replace do automatycznej podmiany parametrow
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authorization_Cheat_Sheet.md, Access_Control_Cheat_Sheet.md
+
+- Waliduj role na kazdym uzyciu — nie zakladaj ze uzytkownik nie zmieni parametrow
+- Separuj funkcje administracyjne od zwyklych uzytkownikow na poziomie kodu
+- Loguj wszystkie zmiany uprawnien i proby eskalacji
+- Testuj zmiane parametrow roli w requestach (role=admin, isAdmin=true)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Autorize | Automatyczne testowanie eskalacji uprawnien | [GitHub](https://github.com/Quitten/Autorize) |
+| AuthMatrix | Macierz testow autoryzacji | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
+| Burp SessionAuth | Wykrywanie podatnosci eskalacji uprawnien | [GitHub](https://github.com/thomaspatzke/Burp-SessionAuthTool) |

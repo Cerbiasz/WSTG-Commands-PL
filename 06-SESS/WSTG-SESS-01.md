@@ -108,3 +108,21 @@ curl -v -b "SESSIONID=$(python3 -c 'print("A"*500)')" TARGET/dashboard
 6. Sprawdz czy token zmienia sie po zalogowaniu/wylogowaniu
 7. Przetestuj modyfikacje poszczegolnych czesci tokenu w Burp Repeater
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Uzywaj wbudowanego zarzadzania sesjami frameworka — nie twórz wlasnego
+- Session ID musi miec wysoka entropie (min 128 bitow losowosci)
+- Regeneruj session ID po zalogowaniu i zmianie uprawnien
+- Ustaw odpowiednie atrybuty cookies: Secure, HttpOnly, SameSite, Path, Domain
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AuthHeader Updater | Automatyczne aktualizowanie tokenow uwierzytelnienia | [GitHub](https://github.com/sampsonc/AuthHeaderUpdater) |
+| Cookie Decrypter | Deszyfrowanie i dekodowanie roznych typow cookies | [GitHub](https://github.com/SolomonSklash/cookie-decrypter) |

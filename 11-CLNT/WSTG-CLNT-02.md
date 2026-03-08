@@ -54,3 +54,12 @@ curl -s "https://TARGET/api/data?callback=alert" # JSONP
 3. Sprawdz JSONP endpointy pod katem callback injection
 4. Analizuj kod JS pod katem eval(), Function(), setTimeout() z user input
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| ESLinter | Lintowanie JS z regulami bezpieczenstwa w Burp | [GitHub](https://github.com/parsiya/eslinter) |
+| JSpector | Wyciaganie endpointow i niebezpiecznych metod z plikow JS | [GitHub](https://github.com/hisxo/JSpector) |

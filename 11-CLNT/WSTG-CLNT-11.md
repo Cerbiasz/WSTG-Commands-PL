@@ -46,3 +46,18 @@ curl -s "https://TARGET/" | grep -i "postMessage\|addEventListener.*message"
 4. Testuj wstrzykiwanie HTML/JS przez postMessage
 5. Szukaj sinkow w handlerach message (innerHTML, eval, location)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md
+
+- Waliduj origin wiadomosci w event.origin przy postMessage
+- Uzywaj parametru targetOrigin — nie uzywaj '*' w postMessage
+- Nie ufaj danym z postMessage — waliduj format i zawartosc
+- Sprawdz czy aplikacja nie nasluchuje na wiadomosci z dowolnego origin
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

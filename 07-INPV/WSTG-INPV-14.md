@@ -57,3 +57,9 @@ curl -s "https://TARGET/" -H "Referer: <script>alert('XSS')</script>"
 4. Sprawdz log viewer / admin panel pod katem renderowania payloadow
 5. Testuj second-order SQL injection
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

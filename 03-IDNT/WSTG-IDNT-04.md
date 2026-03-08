@@ -130,3 +130,19 @@ ffuf -w Desktop/WSTG/Bug-Bounty-Wordlists-main/user_field_names.txt:USER -u "htt
 7. Przeanalizuj kod JavaScript pod katem endpointow sprawdzajacych dostepnosc nazwy uzytkownika
 8. Sprawdz sitemapy, robots.txt i publiczne profile pod katem listy uzytkownikow
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+
+- Uzywaj generycznych komunikatow bledu przy logowaniu — nie ujawniaj czy konto istnieje
+- Zapewnij staly czas odpowiedzi niezaleznie od tego czy uzytkownik istnieje (timing-safe)
+- Implementuj rate limiting i CAPTCHA po serii nieudanych prob
+- Zwracaj ten sam kod HTTP (np. 200) dla istniejacych i nieistniejacych kont
+- Monitoruj i alertuj na masowe proby enumeracji
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

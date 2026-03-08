@@ -128,3 +128,22 @@ openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
 7. Sprawdz czy cookies maja flage Secure
 8. Zweryfikuj naglowek HSTS i jego wartosc max-age
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Transport_Layer_Security_Cheat_Sheet.md, HTTP_Strict_Transport_Security_Cheat_Sheet.md
+
+- Wymuszaj TLS 1.2+ dla wszystkich polaczen — wylacz TLS 1.0/1.1
+- Wlacz HSTS z max-age >= 31536000, includeSubDomains i preload
+- Upewnij sie ze formularz logowania i endpoint POST sa na HTTPS
+- Wylacz slabe cipher suites (RC4, DES, NULL, EXPORT)
+- Sprawdz czy nie ma mixed content — zasoby HTTP na stronach HTTPS
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| TLS-Attacker-BurpExtension | Testowanie konfiguracji TLS serwera | [GitHub](https://github.com/RUB-NDS/TLS-Attacker-BurpExtension) |
+| Headers Analyzer | Analiza naglowkow bezpieczenstwa (HSTS, CSP) | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |

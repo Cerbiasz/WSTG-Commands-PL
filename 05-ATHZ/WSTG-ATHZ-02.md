@@ -88,3 +88,24 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/403/403_ur
 5. Testuj HTTP method switching (GET vs POST vs PUT)
 6. Testuj header-based bypass (X-Original-URL, X-Forwarded-For)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authorization_Cheat_Sheet.md, Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.md
+
+- Wymuszaj autoryzacje po stronie serwera przy kazdym uzyciu — deny by default
+- Uzywaj niebezposrednich referencji do obiektow (UUID zamiast sekwencyjnych ID)
+- Waliduj uprawnienia na poziomie obiektu (object-level authorization)
+- Centralizuj logike autoryzacji — unikaj rozproszonych checkow
+- Testuj dostep horyzontalny (inny uzytkownik) i wertykalny (wyzsza rola)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Autorize | Automatyczne wykrywanie bledow autoryzacji | [GitHub](https://github.com/Quitten/Autorize) |
+| AuthMatrix | Macierz testow autoryzacji uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
+| AutoRepeater | Automatyczne powtarzanie requestow z roznymi sesjami | [GitHub](https://github.com/nccgroup/AutoRepeater) |
+| Auth Analyzer | Porownywanie odpowiedzi miedzy sesjami | [GitHub](https://github.com/simioni87/auth_analyzer) |

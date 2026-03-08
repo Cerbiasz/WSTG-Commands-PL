@@ -74,3 +74,22 @@ ffuf -u "https://TARGET/api/user/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/4
 5. Uzyj Burp Autorize do automatycznego testowania
 6. Testuj IDOR w operacjach CRUD (Create, Read, Update, Delete)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.md
+
+- Uzywaj niebezposrednich referencji (UUID/hash) zamiast sekwencyjnych ID
+- Waliduj wlasnosc obiektu po stronie serwera przy kazdym dostepie
+- Implementuj per-object access control — sprawdzaj czy uzytkownik ma prawo do konkretnego zasobu
+- Nie polegaj na ukryciu URL-a lub parametru jako mechanizmie ochrony
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Autorize | Automatyczne testowanie IDOR przez porownywanie sesji | [GitHub](https://github.com/Quitten/Autorize) |
+| AutoRepeater | Powtarzanie requestow z podmienionymi sesjami/ID | [GitHub](https://github.com/nccgroup/AutoRepeater) |
+| Auth Analyzer | Analiza roznic w odpowiedziach miedzy uzytkownikami | [GitHub](https://github.com/simioni87/auth_analyzer) |

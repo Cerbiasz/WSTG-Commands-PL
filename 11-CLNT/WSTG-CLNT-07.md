@@ -50,3 +50,11 @@ curl -sI "https://TARGET/api/data" -X OPTIONS -H "Origin: https://evil.com" -H "
 4. Stworz PoC HTML z fetch() do testowania exfiltracji danych
 5. Sprawdz czy pre-flight requests sa poprawnie obslugiwane
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Additional CORS Checks | Testowanie blednych konfiguracji CORS | [GitHub](https://github.com/ybieri/Additional_CORS_Checks) |

@@ -78,3 +78,17 @@ wait
 6. Szukaj zmiennych sesji o tych samych nazwach w roznych kontekstach
 7. Testuj wielokrotne logowanie/wylogowanie z roznymi rolami w jednej sesji
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Izoluj zmienne sesji per funkcjonalnosc — nie dziel zmiennych miedzy modulami
+- Waliduj przejscia stanow sesji — sprawdzaj czy uzytkownik przeszedl wymagane kroki
+- Unikaj przechowywania danych autoryzacji w zmiennych sesji modyfikowalnych przez uzytkownika
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

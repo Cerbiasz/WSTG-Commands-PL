@@ -89,3 +89,22 @@ ffuf -u "https://TARGET/ping?host=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/os-
 5. Testuj bypass blacklist: us%65rname, /b??/cat, \w\h\o\a\m\i
 6. Uzyj Burp Collaborator do detekcji blind command injection
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — OS_Command_Injection_Defense_Cheat_Sheet.md
+
+- UNIKAJ wywolan systemowych calkowicie — uzywaj natywnych API jezyka programowania
+- Jesli musisz: NIGDY nie konkatenuj user input do komend — uzywaj parameterized APIs
+- Allowlist validation: ogranicz dopuszczalne znaki (alfanumeryczne, bez ; | & ` $ > < itd.)
+- Uzywaj bibliotek/wrapperow ktore nie uruchamiaja shella (np. subprocess z list args w Python)
+- Uruchamiaj procesy z minimalnymi uprawnieniami (principle of least privilege)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Command Injection Attacker | Generator payloadow OS command injection | [GitHub](https://github.com/portswigger/command-injection-attacker) |
+| Argument Injection Hammer | Wykrywanie argument injection | [GitHub](https://github.com/nccgroup/argumentinjectionhammer) |

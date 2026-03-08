@@ -149,3 +149,12 @@ gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Con
 7. Sprawdz czy serwer IIS obsluguje ::$DATA trick
 8. Szukaj edytor backup files (.swp, .swo, ~, .save)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Upload Scanner | Testy bezpieczenstwa uploadu plikow HTTP | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
+| Backup Finder | Wyszukiwanie plikow kopii zapasowych na serwerze | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |

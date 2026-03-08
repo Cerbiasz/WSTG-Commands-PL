@@ -99,3 +99,9 @@ for endpoint in /api/profile /api/account /api/billing /api/settings /api/users 
 7. Sprawdz czy naglowek Pragma: no-cache jest ustawiony
 8. Przetestuj czy po wylogowaniu dane sa usuwane z pamieci przegladarki (Clear-Site-Data)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

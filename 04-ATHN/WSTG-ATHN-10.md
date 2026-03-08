@@ -64,3 +64,17 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt 
 4. Testuj rate limiting na kazdym kanale osobno
 5. Sprawdz czy stare wersje API sa nadal dostepne
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md
+
+- Zapewnij rowny poziom bezpieczenstwa we wszystkich kanalach (web, mobile, API)
+- Nie pozwalaj na obejscie MFA przez przejscie na slabszy kanal uwierzytelnienia
+- Sprawdz czy API endpointy wymagaja takiego samego poziomu uwierzytelnienia co interfejs webowy
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

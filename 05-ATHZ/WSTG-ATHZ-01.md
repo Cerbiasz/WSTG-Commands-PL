@@ -95,3 +95,12 @@ ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/lfi
 5. Testuj bypass filtrow: podwojne kodowanie, null byte, sciezki UNC
 6. Sprawdz PayloadsAllTheThings File Inclusion/README.md dla wrapperow
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| off-by-slash | Wykrywanie alias traversal przez bledna konfiguracje NGINX | [GitHub](https://github.com/bayotop/off-by-slash) |
+| 403Bypasser | Automatyczne techniki omijania restrykcji 403 | [GitHub](https://github.com/sting8k/BurpSuite_403Bypasser) |

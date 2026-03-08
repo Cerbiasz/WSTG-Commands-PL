@@ -117,3 +117,12 @@ cat output_gobuster_dns_5k.txt | awk '{print $2}' | while read sub; do cname=$(d
 7. Przetestuj rejestracje na platformach wskazywanych przez CNAME (S3, Heroku, GitHub)
 8. Dokumentuj wszystkie znalezione dangling DNS records
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Broken Link Hijacking | Pasywne wykrywanie zepsutych linkow do potencjalnego subdomain takeover | [GitHub](https://github.com/arbazkiraak/BurpBLH) |
+| Domain Hunter | Wyszukiwanie powiazanych domen i subdomen | [GitHub](https://github.com/bit4woo/domain_hunter) |

@@ -182,3 +182,12 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/leaky-misc
 7. Przetestuj verbose error messages wysylajac zle sformatowane dane
 8. Sprawdz czy tryb debug jest wylaczony w produkcji
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| J2EEScan | Skaner podatnosci specyficznych dla aplikacji J2EE | [GitHub](https://github.com/ilmila/J2EEScan) |
+| Software Version Reporter | Pasywne wykrywanie wersji oprogramowania | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |

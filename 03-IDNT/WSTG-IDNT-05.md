@@ -129,3 +129,18 @@ ffuf -w Desktop/WSTG/SecLists-master/Usernames/sap-default-usernames.txt:USER -u
 7. Przeanalizuj komunikaty bledow pod katem ujawniania polityki nazewnictwa
 8. Sprawdz czy mozna odgadnac schemat nadawania nazw wewnetrznych kont (np. user001, user002)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+
+- Nazwy uzytkownikow powinny byc case-insensitive i unikalne
+- Ogranicz dozwolone znaki w nazwie uzytkownika (alfanumeryczne + ograniczone znaki specjalne)
+- Nie uzywaj adresow email jako jedynego identyfikatora — umozliwiaj zmiane maila bez zmiany konta
+- Nie ujawniaj polityki nazw uzytkownikow atakujacym
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

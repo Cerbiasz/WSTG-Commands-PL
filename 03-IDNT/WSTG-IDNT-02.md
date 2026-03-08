@@ -141,3 +141,9 @@ ffuf -w Desktop/WSTG/SecLists-master/Usernames/Names/names.txt:USER -u "https://
 7. Przeanalizuj token weryfikacyjny pod katem przewidywalnosci
 8. Sprawdz w DevTools czy formularz nie wysyla ukrytych pol
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -193,3 +193,20 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 7. Sprawdz Content-Type odpowiedzi przy pobieraniu przeslanych plikow
 8. Testuj czy mozna nadpisac istniejace pliki przez upload
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — File_Upload_Cheat_Sheet.md
+
+- Waliduj przetwarzanie obrazow — re-enkoduj uploaded images aby usunac payloady
+- Usun metadane (EXIF) z uploadowanych plikow
+- Sandboxuj przetwarzanie plikow — izoluj procesy konwersji/parsowania
+- Testuj upload plikow z podwojnymi rozszerzeniami (file.php.jpg) i null bytes (file.php%00.jpg)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Upload Scanner | Testy bezpieczenstwa uploadu z roznymi payloadami | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |

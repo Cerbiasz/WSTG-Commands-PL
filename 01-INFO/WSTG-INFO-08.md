@@ -119,3 +119,12 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 7. Sprawdz strony bledow - czesto zdradzaja framework i wersje
 8. Porownaj domyslne pliki frameworkow z tym co jest na serwerze
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Software Version Reporter | Pasywne wykrywanie wersji oprogramowania serwera | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+| Burp Retire JS | Identyfikacja podatnych wersji bibliotek JavaScript | [GitHub](https://github.com/h3xstream/burp-retire-js) |

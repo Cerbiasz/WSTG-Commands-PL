@@ -45,3 +45,18 @@ curl -sI "https://TARGET/" | grep -i "frame-ancestors"
 4. Testuj czy krytyczne akcje (zmiana hasla, przelew) mozna osadzic w iframe
 5. Sprawdz czy JavaScript frame-busting jest uzywany (i czy mozna go ominac)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Clickjacking_Defense_Cheat_Sheet.md
+
+- Ustaw `X-Frame-Options: DENY` lub `SAMEORIGIN` na wszystkich odpowiedziach
+- Uzywaj CSP `frame-ancestors 'none'` lub `'self'` (silniejsze niz X-Frame-Options)
+- Implementuj framebusting JavaScript jako fallback dla starszych przegladarek
+- Ustaw cookies z SameSite=Strict jako dodatkowa warstwa ochrony
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

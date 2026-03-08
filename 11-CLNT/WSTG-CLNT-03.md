@@ -40,3 +40,17 @@ curl -X POST "https://TARGET/comment" -d "body=<marquee>HTML Injected</marquee>"
 3. Testuj phishing via HTML injection (fałszywe formularze)
 4. Sprawdz Content-Type i encoding odpowiedzi
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md
+
+- Output encode dla kontekstu HTML — uzywaj HTML entity encoding
+- Uzywaj frameworkowego auto-escaping — nie wylaczaj go
+- Sanityzuj user HTML allowlista tagow/atrybutow (DOMPurify)
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

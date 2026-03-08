@@ -79,3 +79,12 @@ curl -s "https://TARGET/static/page" -H "Host: evil.com" -H "X-Forwarded-Host: e
 5. Sprawdz SSRF via Host header
 6. Uzyj Burp Repeater do testowania roznych wariantow
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Host Header Inchecktion | Aktywne testowanie host header injection | [GitHub](https://github.com/fabianbinna/host_header_inchecktion) |
+| Collaborator Everywhere | Wstrzykiwanie naglowkow do wykrywania SSRF/pingbackow | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |

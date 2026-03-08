@@ -90,3 +90,12 @@ nmap --script ssh2-enum-algos -p 22 TARGET -oN output_nmap_ssh_algos.txt
 7. Sprawdz czy serwer obsluguje stare wersje protokolow (SSLv3, TLS 1.0)
 8. Zweryfikuj separacje srodowisk (dev/staging/prod)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Active Scan++ | Rozszerzony skaner z dodatkowymi checkami infrastruktury | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
+| Collaborator Everywhere | Wykrywanie ukrytych backendowych systemow przez pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |

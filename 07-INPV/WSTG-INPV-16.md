@@ -63,3 +63,11 @@ curl --http2 -X PRI "https://TARGET/" -H "Upgrade: h2c"
 5. Sprawdz czy mozna zatruć cache przez smuggling
 6. Uzyj Burp Turbo Intruder do zaawansowanych testow
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Collaborator Everywhere | Wstrzykiwanie naglowkow do odkrywania backendow przez pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |

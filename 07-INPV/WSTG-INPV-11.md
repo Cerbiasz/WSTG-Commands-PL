@@ -70,3 +70,20 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 4. Testuj rozne enkodowania do obejscia filtrow
 5. Uzyj Burp Intruder z listami payloadow
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+
+- Unikaj eval(), exec(), system() i podobnych funkcji dynamicznego wykonywania kodu
+- Uzywaj sandboxed execution environments jesli dynamiczny kod jest wymagany
+- Waliduj typy danych scisle — nie akceptuj stringow gdzie oczekiwane sa liczby/bool
+- Uzywaj allowlist dopuszczalnych wartosci zamiast blacklist
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Backslash Powered Scanner | Wykrywanie nieznanych klas injection przez analize odpowiedzi | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |

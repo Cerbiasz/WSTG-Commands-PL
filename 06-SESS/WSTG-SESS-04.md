@@ -90,3 +90,20 @@ curl -s -I TARGET/page | grep -i "etag"
 6. W Burp sprawdz czy tokeny sa w parametrach GET zamiast POST
 7. Sprawdz logi serwera pod katem zapisanych tokenow sesji
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Nigdy nie umieszczaj session ID w URL-u (ryzyko wycieku przez Referer, logi, historia)
+- Uzywaj POST dla przesylania danych wrazliwych — nie GET
+- Szyfruj dane sesji przechowywane po stronie serwera
+- Nie przechowuj wrazliwych danych w zmiennych sesji bez potrzeby
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Sensitive Discoverer | Wykrywanie wrazliwych danych w odpowiedziach HTTP | [GitHub](https://github.com/CYS4srl/SensitiveDiscoverer) |

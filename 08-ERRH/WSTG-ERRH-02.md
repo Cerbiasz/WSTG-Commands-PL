@@ -136,3 +136,20 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 6. Sprawdz naglowki odpowiedzi pod katem X-Debug-Token, X-Debug-Token-Link
 7. Zrob screenshot kazdego znalezionego stack trace jako dowod
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md
+
+- Wylacz tryb debug/verbose na produkcji — konfiguracja frameworka
+- Usun szczegolowe komunikaty bledow: stack trace, nazwy klas, zapytania SQL
+- Skonfiguruj custom error pages (404, 500) bez informacji o technologii
+- Monitoruj logi po stronie serwera zamiast ujawniac je uzytkownikowi
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Error Message Checks | Pasywne skanowanie pod katem ujawnionych komunikatow bledow | [GitHub](https://github.com/augustd/burp-suite-error-message-checks) |

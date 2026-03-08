@@ -101,3 +101,22 @@ done
 6. Sprawdz czy istnieje ViewState (ASP.NET) - czesty cel padding oracle
 7. Testuj rozne pozycje bitow w ciphertekscie dla potwierdzenia podatnosci
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md
+
+- Uzywaj authenticated encryption (AES-GCM) — chroni przed padding oracle
+- Unikaj trybu CBC bez HMAC — podatny na padding oracle attack
+- Nie ujawniaj bledow padding w odpowiedziach — uzywaj generycznych komunikatow bledow
+- Uzywaj constant-time comparison dla weryfikacji MAC/HMAC
+- Rozważ migracje na AES-GCM lub ChaCha20-Poly1305 zamiast CBC
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Padding Oracle Hunter | Wykrywanie i eksploatacja podatnosci Padding Oracle | [GitHub](https://github.com/AresS31/padding-oracle-hunter) |
+| Crypto Attacker | Narzedzie do atakow kryptograficznych | [GitHub](https://github.com/PortSwigger/crypto-attacker) |

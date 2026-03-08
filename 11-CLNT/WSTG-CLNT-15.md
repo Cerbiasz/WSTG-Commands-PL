@@ -56,3 +56,20 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 4. Sprawdz CSP - CSTI wymaga unsafe-eval do eksploitacji w nowszych frameworkach
 5. Testuj sandbox bypass dla danej wersji frameworka
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Third_Party_Javascript_Management_Cheat_Sheet.md
+
+- Uzywaj atrybutu integrity (SRI) na tagach script i link dla zasobow third-party
+- Pinuj wersje zasobow third-party — nie uzywaj latest/dynamic URL
+- Wdroz CSP aby wymusic SRI (`require-sri-for script style`)
+- Monitoruj zmiany w zasobach third-party — wykrywaj supply chain attacks
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| SRI Check | Wykrywanie brakujacych atrybutow Subresource Integrity | [GitHub](https://github.com/SolomonSklash/sri-check) |

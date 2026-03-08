@@ -109,3 +109,9 @@ curl -s "https://TARGET/api/profile" -H "Authorization: Bearer DELETED_USER_TOKE
 7. Przetestuj czy po dezaktywacji konta sesje sa uniewazniane
 8. Sprawdz logi audytowe pod katem sciezki tworzenia kont
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

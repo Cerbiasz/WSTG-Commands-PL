@@ -92,3 +92,23 @@ curl -s https://TARGET | grep -iE "http://" | grep -v "https://" | tee output_mi
 7. W Burp Suite: sprawdz czy mozna wykonac SSL stripping
 8. Zweryfikuj czy cookie maja flage Secure
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — HTTP_Strict_Transport_Security_Cheat_Sheet.md, Transport_Layer_Security_Cheat_Sheet.md
+
+- Wlacz HSTS z dlugim max-age (minimum 31536000 = 1 rok) i includeSubDomains
+- Dodaj domene do HSTS preload list (hstspreload.org) dla pelnej ochrony
+- Uzyj wylacznie TLS 1.2+ (najlepiej TLS 1.3) — wylacz TLS 1.0/1.1
+- Wylacz slabe cipher suites: RC4, DES, 3DES, NULL, EXPORT
+- Preferuj AEAD cipher suites (AES-GCM, ChaCha20-Poly1305) z ECDHE (PFS)
+- Unikaj mixed content — wszystkie zasoby musza byc ladowane przez HTTPS
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Headers Analyzer | Analiza naglowkow bezpieczenstwa w odpowiedziach HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+| SRI Check | Wykrywanie brakujacych atrybutow Subresource Integrity | [GitHub](https://github.com/SolomonSklash/sri-check) |

@@ -74,3 +74,23 @@ retire --js --jspath /sciezka/do/pobranych/js/
 4. Monitoruj console.log na bledy i wykonanie kodu
 5. Uzyj Sources tab do breakpointow na sinkach DOM
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — DOM_based_XSS_Prevention_Cheat_Sheet.md, DOM_Clobbering_Prevention_Cheat_Sheet.md
+
+- Unikaj innerHTML, document.write, outerHTML — uzywaj textContent lub setAttribute
+- Sanityzuj HTML za pomoca DOMPurify przed wstawieniem do DOM
+- Waliduj wszystkie DOM sources: location.hash, location.search, document.referrer, window.name
+- Wdroz CSP z nonces jako dodatkowa warstwe obrony
+- Uwazaj na DOM Clobbering — atakujacy moze nadpisac globalne obiekty przez HTML id/name
+- Zamroz Object.prototype aby zapobiec prototype pollution w DOM
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Burp DOM Scanner | Rekursywne skanowanie DOM w Single Page Applications | [GitHub](https://github.com/fcavallarin/burp-dom-scanner) |
+| JavaScript Security | Sprawdzanie bezpieczenstwa DOM i walidacja SRI | [GitHub](https://github.com/phefley/burp-javascript-security-extension) |

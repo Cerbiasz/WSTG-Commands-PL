@@ -54,3 +54,18 @@ curl -X POST "https://TARGET/contact" -d "from=attacker%0ATo:victim@target.com&m
 4. Testuj IMAP komendy jesli aplikacja laczy sie z serwerem IMAP
 5. Sprawdz czy email jest renderowany jako HTML (XSS via email)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+
+- Waliduj i sanityzuj naglowki email — odrzuc input z CRLF (\r\n)
+- Uzywaj bibliotek z wbudowana ochrona przed header injection
+- Nie pozwalaj uzytkownikowi na kontrolowanie naglowkow From, To, CC, BCC
+- Ogranicz dozwolone znaki w polach email do [a-zA-Z0-9@._-]
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

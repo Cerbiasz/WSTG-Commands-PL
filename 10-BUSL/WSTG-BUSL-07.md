@@ -104,3 +104,18 @@ wfuzz -c --hc 404 -z range,1-1000 TARGET/api/item/FUZZ
 7. Testuj czy aplikacja blokuje agresywne skanowanie (wiele 404, szybkie requesty)
 8. Sprawdz odpowiedzi na abuse: czy sa informacyjne (ulatwiaja atakujacemu)?
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md
+
+- Definiuj abuse cases obok use cases — jak moze byc naduzona kazda funkcja
+- Implementuj rate limiting na wszystkich endpointach
+- Wykrywaj anomalne wzorce uzywania (nietypowe ilosci, czestotliwosci, sekwencje)
+- Loguj podejrzana aktywnosc i alertuj na potencjalne naduzycia
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -65,3 +65,22 @@ curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https:/
 7. Sprawdz czy implicit flow jest uzywany (mniej bezpieczny)
 8. Testuj client_secret exposure w frontend code
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — OAuth2_Cheat_Sheet.md
+
+- Waliduj redirect_uri scisle — uzyj dokladnego dopasowania, nie wzorcow
+- Uzywaj PKCE (Proof Key for Code Exchange) dla klientow publicznych
+- Waliduj parametr state aby zapobiec CSRF na OAuth flow
+- Uzywaj krotkoterminowych access tokenow i refresh tokenow z rotacja
+- Nie przechowuj tokenow w localStorage — uzywaj HttpOnly cookies lub secure storage
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| OAUTHScan | Skanowanie podatnosci w implementacjach OAuth | [GitHub](https://github.com/AresS31/OAUTHScan) |
+| EsPReSSO | Testowanie bezpieczenstwa SSO (OAuth, SAML, OpenID) | [GitHub](https://github.com/RUB-NDS/BurpSSOExtension) |

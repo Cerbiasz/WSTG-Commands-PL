@@ -95,3 +95,9 @@ curl -v TARGET/dashboard -H "Cookie: user=admin; role=superadmin; verified=true"
 7. Sprawdz czy checksumy plikow sa weryfikowane po stronie serwera
 8. Testuj modyfikacje danych miedzy krokami workflow (np. zmiana ceny miedzy koszykiem a platnoscia)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

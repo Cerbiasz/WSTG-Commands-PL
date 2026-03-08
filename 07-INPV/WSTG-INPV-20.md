@@ -69,3 +69,21 @@ ffuf -u "https://TARGET/api/user" -X POST -H "Content-Type: application/json" -d
 4. Porownaj odpowiedz z dodanymi polami vs bez
 5. Testuj na endpointach rejestracji i aktualizacji profilu
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Mass_Assignment_Cheat_Sheet.md
+
+- Uzywaj allowlist dozwolonych pol — jawnie okresl ktore pola moga byc modyfikowane
+- Uzywaj DTO (Data Transfer Objects) / View Models zamiast bezposredniego bindowania do entity
+- Framework-specific: Rails `strong_parameters`, .NET `[Bind]`, Spring `@JsonIgnore`
+- Testuj dodawanie nieoczekiwanych pol: role, isAdmin, price, balance, verified
+- Nigdy nie binduj user input bezposrednio do modelu bazy danych
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Agartha | Generowanie dynamicznych payloadow i testowanie injection/auth | [GitHub](https://github.com/volkandindar/agartha) |

@@ -104,3 +104,18 @@ curl -v -X POST TARGET/logout 2>&1
 7. W Burp Repeater wyslij request z tokenem sesji sprzed wylogowania
 8. Sprawdz czy opcja wylogowania jest dostepna na kazdej stronie
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Uniwaznij sesje po stronie serwera przy wylogowaniu — nie tylko usuwaj cookie
+- Wyczysc wszystkie cookies sesyjne po stronie klienta
+- Uniwaznij wszystkie powiazane tokeny (access, refresh, JWT)
+- Sprawdz czy przycisk wylogowania jest latwo dostepny i widoczny
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -92,3 +92,20 @@ ffuf -u "https://TARGET/api/xml" -X POST -d "FUZZ" -w Desktop/WSTG/SecLists-mast
 6. Testuj wstrzykiwanie w SOAP/WSDL endpointach
 7. Sprawdz czy Content-Type: application/json mozna zmienic na XML
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — XML_Security_Cheat_Sheet.md, XML_External_Entity_Prevention_Cheat_Sheet.md
+
+- Wylacz DTD (Document Type Definitions) calkowicie jesli mozliwe
+- Wylacz external entities i external DTDs w parserze XML
+- Uzywaj mniej zlozonego formatu (JSON) zamiast XML gdzie mozliwe
+- Waliduj XML przeciw schema (XSD) przed przetworzeniem
+- Uzywaj bezpiecznych parserow: w Java ustaw FEATURE_SECURE_PROCESSING
+- Uwazaj na XXE w formatach opartych na XML: SVG, DOCX, XLSX, SOAP
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

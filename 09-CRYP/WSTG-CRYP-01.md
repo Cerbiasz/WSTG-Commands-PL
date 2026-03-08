@@ -161,3 +161,22 @@ curl -s https://TARGET | grep -iE "http://" | head -20
 6. Sprawdz czy SSL/TLS Certificate Pinning jest zaimplementowany (mobile app)
 7. Zweryfikuj ze nie ma wsparcia dla SSLv2, SSLv3, TLS 1.0, TLS 1.1
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Transport_Layer_Security_Cheat_Sheet.md, TLS_Cipher_String_Cheat_Sheet.md
+
+- Uzywaj wylacznie TLS 1.2+ (preferuj TLS 1.3) — wylacz SSL 2/3, TLS 1.0/1.1
+- Preferuj AEAD cipher suites: AES-GCM, ChaCha20-Poly1305
+- Wlacz Perfect Forward Secrecy (PFS) z ECDHE key exchange
+- Wylacz slabe ciphers: RC4, DES, 3DES, NULL, EXPORT, CBC bez HMAC
+- Uzywaj certyfikatow z min RSA 2048-bit lub ECDSA P-256
+- Sprawdz caly lancuch certyfikatow i prawidlowosc CA
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| TLS-Attacker-BurpExtension | Kompleksowe testowanie konfiguracji TLS | [GitHub](https://github.com/RUB-NDS/TLS-Attacker-BurpExtension) |

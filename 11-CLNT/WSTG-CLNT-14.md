@@ -37,3 +37,17 @@ curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noreferre
 3. Jesli nie - stworz PoC: link prowadzi do strony ktora zmienia window.opener.location
 4. Sprawdz czy user-generated content moze zawierac linki z target="_blank"
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Browser_Extension_Vulnerabilities_Cheat_Sheet.md
+
+- Sprawdz uprawnienia rozszerzenia — czy nie zadaje nadmiernych permissions
+- Waliduj komunikacje rozszerzenia z aplikacja webowa
+- Sprawdz czy rozszerzenie nie wstrzykuje kodu na strone
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

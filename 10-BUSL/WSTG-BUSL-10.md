@@ -132,3 +132,9 @@ curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
 7. Testuj cofanie platnosci i sprawdz czy towar jest nadal dostepny
 8. Sprawdz czy historia zamowien poprawnie odzwierciedla zmiany
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

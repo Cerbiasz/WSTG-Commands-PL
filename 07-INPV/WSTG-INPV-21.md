@@ -45,3 +45,22 @@ cat export.csv | grep -E "^[=+\-@]"
 5. Testuj HYPERLINK i IMPORTXML do exfiltracji danych
 6. Sprawdz czy aplikacja sanityzuje dane przed eksportem
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — WebSocket_Security_Cheat_Sheet.md
+
+- Waliduj naglowek Origin przy handshake — zapobiegaj cross-site WebSocket hijacking
+- Uzywaj WSS (WebSocket Secure) zamiast WS — szyfruj ruch
+- Uwierzytelniaj polaczenia WebSocket — nie zakladaj ze handshake = autoryzacja
+- Waliduj WSZYSTKIE wiadomosci po stronie serwera — WebSocket to dwukierunkowy kanal
+- Implementuj rate limiting na wiadomosci WebSocket
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| SocketSleuth | Zaawansowane testowanie bezpieczenstwa WebSocket | [GitHub](https://github.com/snyk/socketsleuth) |
+| WebSocket Turbo Intruder | Fuzzowanie wiadomosci WebSocket z custom kodem | [GitHub](https://github.com/Hannah-PortSwigger/WebSocketTurboIntruder) |

@@ -55,3 +55,20 @@ ffuf -u "https://TARGET/page?name=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/ser
 3. Sprawdz ESI (Edge Side Includes) jesli jest CDN/Varnish
 4. Uzyj Burp Repeater do testowania roznych dyrektyw SSI
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+
+- Wylacz SSI (Server Side Includes) jesli nie sa wymagane
+- Waliduj input — nie pozwalaj na znaki specjalne SSI (<!-- # -->)
+- Uzywaj allowlist dozwolonych dyrektyw SSI jesli musza byc wlaczone
+- Ogranicz uprawnienia procesu serwera WWW
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Active Scan++ | Rozszerzony skaner z checkami SSI injection | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |

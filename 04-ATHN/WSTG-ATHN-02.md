@@ -137,3 +137,19 @@ hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P D
 7. Sprawdz pliki konfiguracyjne pod katem zakodowanych credentials
 8. Przetestuj domyslne credentials dla baz danych, serwerow pocztowych i innych uslug
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Credential_Stuffing_Prevention_Cheat_Sheet.md
+
+- Zmien wszystkie domyslne dane logowania przed wdrozeniem na produkcje
+- Wdroz ochrone przed credential stuffing: CAPTCHA, rate limiting, device fingerprinting
+- Uzyj listy znanych wycieknietych hasel (np. HaveIBeenPwned API) do blokowania
+- Implementuj wykrywanie anomalii: logowania z nowych lokalizacji, nietypowe user-agenty
+- Wdroz MFA jako druga warstwe ochrony przed przejecia kont
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

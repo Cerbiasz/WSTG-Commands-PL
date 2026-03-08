@@ -72,3 +72,9 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/fo
 4. Testuj wartosci graniczne integer (MAX_INT, MIN_INT, 0, -1)
 5. Monitoruj zuzycie pamieci i CPU serwera jesli to mozliwe
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

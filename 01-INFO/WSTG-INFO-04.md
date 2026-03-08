@@ -148,3 +148,12 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 7. Sprawdz czy subdomeny prowadza do roznych serwerow (rozne IP)
 8. Zweryfikuj reverse DNS lookup na znalezionych adresach IP
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Asset Discover | Odkrywanie powiazanych zasobow i domen aplikacji | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
+| Subdomain Extractor | Wyciaganie subdomen z odpowiedzi HTTP | [GitHub](https://github.com/AonCyberLabs/BurpSuite-Team-Extension) |

@@ -60,3 +60,22 @@ wscat -c "wss://TARGET/ws"
 4. Wyslij injection payloady (XSS, SQLi) przez WS
 5. Sprawdz czy dane z WS sa sanityzowane przed renderowaniem
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — WebSocket_Security_Cheat_Sheet.md
+
+- Waliduj Origin header przy WebSocket handshake
+- Uzywaj WSS (WebSocket Secure) zamiast WS
+- Uwierzytelniaj polaczenia WebSocket niezaleznie od HTTP session
+- Waliduj wszystkie wiadomosci po stronie serwera
+- Implementuj rate limiting na wiadomosci
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| SocketSleuth | Zaawansowane testowanie WebSocket w Burp | [GitHub](https://github.com/snyk/socketsleuth) |
+| WebSocket Turbo Intruder | Fuzzowanie WebSocket z custom kodem | [GitHub](https://github.com/Hannah-PortSwigger/WebSocketTurboIntruder) |

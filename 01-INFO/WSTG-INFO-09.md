@@ -93,3 +93,12 @@ curl -s https://TARGET/misc/drupal.js | md5sum
 7. Sprawdz strony bledow - mogą ujawnic framework i wersje
 8. W DevTools > Network - sprawdz wersje zaladowanych bibliotek JS
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| CMS Scanner | Wykrywanie podatnosci w popularnych systemach CMS | [BApp Store](https://portswigger.net/bappstore/1bf95d0be40c447b94981f5696b1a18e) |
+| Detect Dynamic JS | Porownywanie plikow JS w celu wykrycia dynamicznej zawartosci | [BApp Store](https://portswigger.net/bappstore/4a657674ebe3410b92280613aa512304) |

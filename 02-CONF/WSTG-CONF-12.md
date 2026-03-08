@@ -92,3 +92,23 @@ shcheck https://TARGET | tee output_shcheck.txt
 9. Sprawdz czy base-uri jest ustawiony (ochrona przed base tag injection)
 10. Zweryfikuj czy frame-ancestors jest ustawiony (ochrona przed clickjacking)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Content_Security_Policy_Cheat_Sheet.md
+
+- Uzyj strict CSP z nonces (`script-src 'nonce-{random}'`) zamiast allowlist domen
+- Unikaj `unsafe-inline` i `unsafe-eval` — otwieraja droge do XSS
+- Wdroz `frame-ancestors` zamiast X-Frame-Options (CSP L2 jest silniejszy)
+- Uzyj `report-uri` / `report-to` do monitorowania naruszen polityki
+- Nie uzywaj wildcard (*) w dyrektywach — ograniczaj do konkretnych domen
+- Zacznij od `Content-Security-Policy-Report-Only` aby przetestowac przed wdrozeniem
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| CSP Bypass | Wykrywanie slabosci w konfiguracji Content-Security-Policy | [GitHub](https://github.com/moloch--/CSP-Bypass) |
+| CSP Auditor | Analiza i audyt naglowkow CSP | [GitHub](https://github.com/GoSecure/csp-auditor) |

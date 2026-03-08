@@ -135,3 +135,22 @@ diff output_headers_http.txt output_headers_https.txt
 10. Porownaj naglowki na roznych endpointach - czy sa spojne
 11. Sprawdz czy naglowek Set-Cookie ma flagi: Secure, HttpOnly, SameSite
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — HTTP_Headers_Cheat_Sheet.md
+
+- Ustaw `X-Content-Type-Options: nosniff` aby zapobiec MIME sniffing
+- Ustaw `X-Frame-Options: DENY` lub `SAMEORIGIN` przeciw clickjacking
+- Wdroz naglowek CSP z restrykcyjna polityka
+- Ustaw `Referrer-Policy: strict-origin-when-cross-origin` lub bardziej restrykcyjna
+- Wdroz `Permissions-Policy` aby ograniczyc dostep do API przegladarki (kamera, mikrofon, geolokacja)
+- Usun naglowki ujawniajace: `Server`, `X-Powered-By`, `X-AspNet-Version`
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Headers Analyzer | Pasywna analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |

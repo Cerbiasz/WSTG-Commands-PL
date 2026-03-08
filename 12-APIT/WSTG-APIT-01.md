@@ -97,3 +97,23 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 5. Testuj rozne metody HTTP na kazdym endpoincie
 6. Uzyj Postman/Insomnia do interakcji z API
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — GraphQL_Cheat_Sheet.md
+
+- Wylacz introspection na produkcji — nie ujawniaj calego schematu API
+- Implementuj query depth limiting — zapobiegaj deeply nested queries (DoS)
+- Uzywaj query cost analysis — ogranicz zlozonosc zapytan
+- Waliduj i sanityzuj wszystkie inputy — GraphQL nie waliduje automatycznie
+- Implementuj autoryzacje per field/type — nie tylko na poziomie endpointu
+- Rozważ persisted queries — akceptuj tylko pre-approved query hashes
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| InQL Scanner | Kompleksowe testowanie bezpieczenstwa GraphQL | [GitHub](https://github.com/doyensec/inql) |
+| GraphQL Raider | Parsowanie i manipulacja zapytan GraphQL w Burp | [BApp Store](https://portswigger.net/bappstore/4841f0d78a554ca381c65b26d48571e2) |

@@ -95,3 +95,23 @@ curl -s -X PUT "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN
 7. Przetestuj kazdy endpoint z tokenami roznych rol i porownaj odpowiedzi HTTP
 8. Zainstaluj rozszerzenie Autorize w Burp Suite do automatycznego testowania autoryzacji miedzy rolami
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Access_Control_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
+
+- Wymuszaj autoryzacje po stronie serwera — nigdy nie polegaj na kontrolach klienckich
+- Stosuj zasade deny by default — dostep tylko jawnie przyznany
+- Implementuj RBAC (Role-Based Access Control) i waliduj role przy kazdym uzyciu
+- Centralyzuj logike autoryzacji — unikaj rozproszonych checkow w kodzie
+- Loguj wszystkie proby dostepu i zmiany uprawnien
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AuthMatrix | Testowanie autoryzacji w macierzy uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
+| Autorize | Automatyczne wykrywanie bledow autoryzacji | [GitHub](https://github.com/Quitten/Autorize) |
+| Auth Analyzer | Analiza bledow autoryzacji przez porownywanie sesji | [GitHub](https://github.com/simioni87/auth_analyzer) |

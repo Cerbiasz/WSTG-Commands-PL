@@ -114,3 +114,12 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 7. Poszukaj linkow do sitemap w robots.txt
 8. Sprawdz czy istnieja alternatywne sitemapy (sitemap-news.xml, sitemap-images.xml)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AdminPanelFinder | Enumeracja interfejsow administracyjnych aplikacji | [GitHub](https://github.com/moeinfatehi/Admin-Panel_Finder) |
+| Backup Finder | Wyszukiwanie plikow kopii zapasowych i tymczasowych na serwerze | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |

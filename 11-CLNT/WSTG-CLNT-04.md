@@ -45,3 +45,18 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 4. Sprawdz client-side redirect w JavaScript (location.href, location.assign)
 5. Testuj data: i javascript: URI schemes
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Unvalidated_Redirects_and_Forwards_Cheat_Sheet.md
+
+- Unikaj uzywania user input w URL-ach przekierowan
+- Uzywaj allowlist dozwolonych URL-ow/domen do przekierowania
+- Waliduj URL server-side — nie polegaj na kontrolach klienckich
+- Nie uzywaj parametrow URL do definiowania celu przekierowania (np. ?redirect=)
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

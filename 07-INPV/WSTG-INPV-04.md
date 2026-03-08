@@ -65,3 +65,12 @@ curl -s "https://TARGET/search?q=safe&q=<script>alert(1)</script>"
 5. Sprawdz czy HPP pozwala ominac filtrowanie wejscia (WAF bypass)
 6. Testuj rozne separatory (&, ;) w roznych kontekstach
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Backslash Powered Scanner | Wykrywanie nieznanych klas podatnosci injection | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |
+| Active Scan++ | Rozszerzony skaner aktywny z dodatkowymi checkami | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |

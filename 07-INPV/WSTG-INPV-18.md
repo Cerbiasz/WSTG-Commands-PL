@@ -91,3 +91,12 @@ ffuf -u "https://TARGET/page?name=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/
 4. Sprawdz PayloadsAllTheThings README dla danego silnika
 5. Testuj sandbox bypass jesli silnik jest ograniczony
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| tplmap | Wykrywanie i eksploatacja Server-Side Template Injection | [GitHub](https://github.com/epinna/tplmap) |
+| Backslash Powered Scanner | Wykrywanie nieznanych klas injection w tym SSTI | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |

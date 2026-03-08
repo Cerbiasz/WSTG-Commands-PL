@@ -130,3 +130,12 @@ cat /tmp/bucket_names.txt | while read bucket; do echo "Sprawdzam: $bucket"; aws
 7. Przejrzyj pliki w dostepnych bucketach pod katem wrazliwych danych
 8. Sprawdz SSRF do metadata endpoint (169.254.169.254) pod katem AWS credentials
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AWS Extender | Testowanie bezpieczenstwa uslug AWS (S3, IAM, EC2) | [GitHub](https://github.com/VirtueSecurity/aws-extender) |
+| Burp-AnonymousCloud | Wykrywanie publicznych zasobow chmurowych | [GitHub](https://github.com/initstring/cloud_enum) |

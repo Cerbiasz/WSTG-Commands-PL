@@ -91,3 +91,19 @@ curl -s "https://TARGET/graphql" -X POST -H "Content-Type: application/json" -d 
 7. Testuj field suggestions (nawet jesli introspection jest wylaczona)
 8. Uzyj InQL Burp extension do automatyzacji
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — gRPC_Security_Cheat_Sheet.md
+
+- Uzywaj TLS dla wszystkich kanalow gRPC — nie plain text
+- Waliduj wiadomosci protobuf — sprawdzaj typy i zakresy pol
+- Implementuj deadline/timeout na requestach — zapobiegaj wiszacym polaczeniom
+- Uwierzytelniaj przez mTLS lub JWT w metadata
+- Waliduj naglowki metadata — moga zawierac injection payloads
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

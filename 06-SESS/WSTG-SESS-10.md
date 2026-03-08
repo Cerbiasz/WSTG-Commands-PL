@@ -169,3 +169,24 @@ hashcat -a 0 -m 16500 JWT_TOKEN_HERE Desktop/WSTG/Bug-Bounty-Wordlists-main/jwt-
 8. Przetestuj uzycie wygaslego tokenu
 9. Zainstaluj rozszerzenie Burp "JSON Web Tokens" do automatycznej analizy
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — JSON_Web_Token_for_Java_Cheat_Sheet.md
+
+- Waliduj algorytm po stronie serwera — nigdy nie akceptuj "alg":"none"
+- Uzywaj silnych kluczy: HMAC min 256 bit, RSA min 2048 bit
+- Ustaw krotki czas wygasniecia (exp) — minuty, nie dni
+- Waliduj wszystkie claimy: iss, aud, exp, nbf
+- Nie przechowuj wrazliwych danych w payload JWT — jest zakodowany, nie zaszyfrowany
+- Implementuj mechanizm odwolywania tokenow (blacklist lub short-lived + refresh)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| JWT Editor | Edycja i testowanie tokenow JWT w Burp | [BApp Store](https://portswigger.net/bappstore/26aaa5ded2f74beea19e2ed8345a93dd) |
+| SignSaboteur | Testowanie podatnosci w podpisach JWT | [GitHub](https://github.com/d0ge/sign-saboteur) |
+| Session-Handler-Plus | Zaawansowane zarzadzanie sesjami JWT | [GitHub](https://github.com/V9Y1nf0S3C/Session-Handler-Plus) |

@@ -106,3 +106,18 @@ curl -s -b session3_cookies.txt TARGET/dashboard -o /dev/null -w "Session 3 afte
 7. Sprawdz czy po zmianie hasla stare sesje sa uniewazniane
 8. Dla kont krytycznych (admin) - powinno byc ograniczenie do 1 sesji
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Ogranicz Domain cookie do konkretnej domeny — nie ustawiaj na domene nadrzedna
+- Ogranicz Path cookie do wymaganego zakresu aplikacji
+- Uzywaj prefiksu `__Host-` dla cookies — wymusza Secure, Path=/, brak Domain
+- Sprawdz czy cookie sesji nie jest dostepne przez subdomeny (scope leak)
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

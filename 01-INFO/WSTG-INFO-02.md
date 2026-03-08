@@ -95,3 +95,13 @@ echo -e "JUNK / HTTP/1.0\r\n\r\n" | nc TARGET 80
 6. Uzyj rozszerzenia Wappalyzer w przegladarce do identyfikacji technologii
 7. Porownaj kolejnosc naglowkow odpowiedzi - rozne serwery zwracaja je w roznej kolejnosci
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Software Version Reporter | Pasywne wykrywanie wersji oprogramowania w odpowiedziach | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+| Active Scan++ | Rozszerzony skaner aktywny i pasywny z dodatkowymi checkami | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
+| Burp Retire JS | Wykrywanie podatnych wersji bibliotek JavaScript | [GitHub](https://github.com/h3xstream/burp-retire-js) |

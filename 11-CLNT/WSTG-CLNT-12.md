@@ -45,3 +45,18 @@
 5. Sprawdz cookies pod katem wrazliwych danych bez flagi Secure/HttpOnly
 6. Sprawdz czy dane sa szyfrowane w storage
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md
+
+- Nie przechowuj wrazliwych danych w localStorage/sessionStorage — dostepne dla JS (XSS)
+- Waliduj dane odczytane z storage — moga byc zmodyfikowane przez atakujacego
+- Czysc storage przy wylogowaniu
+- Uzywaj HttpOnly cookies zamiast storage dla tokenow sesji
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -118,3 +118,9 @@ curl -s -v "https://TARGET/api/login" -X POST -d '{"username":"testuser","passwo
 7. Sprawdz czas wygasniecia cookie (czy nie jest zbyt dlugi)
 8. Przetestuj czy token dziala po wylogowaniu z innej sesji
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

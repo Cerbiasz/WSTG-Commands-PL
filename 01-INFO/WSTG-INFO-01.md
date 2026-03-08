@@ -100,3 +100,24 @@ cat Desktop/WSTG/Bug-Bounty-Wordlists-main/shodan-dorks.txt
 7. Sprawdz GitHub/GitLab czy nie ma wyciekow kodu zrodlowego TARGET
 8. Zweryfikuj znalezione pliki i strony pod katem wrazliwych danych
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
+
+- Zmapuj wszystkie punkty wejscia/wyjscia danych: formularze, API, pliki, cookies, naglowki HTTP
+- Pogrupuj punkty ataku wg ryzyka: zewnetrzne (internet-facing) vs wewnetrzne, anonimowe vs uwierzytelnione
+- Skup sie na zdalnych punktach wejscia — szczegolnie tych dostepnych bez uwierzytelnienia
+- Monitoruj zmiany attack surface przy kazdym nowym wdrozeniu — nowe endpointy = nowe ryzyko
+- Uzyj narzedzi do crawlowania (ZAP, Burp Spider) aby automatycznie zmapowac dostepne zasoby
+- Zidentyfikuj dane wrazliwe (PII, sekrety, klucze API) i sprawdz ich ochrone
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| GAP-Burp-Extension | Automatyczne wyciaganie parametrow, linkow i slow z odpowiedzi | [GitHub](https://github.com/xnl-h4ck3r/GAP-Burp-Extension) |
+| Asset Discover | Odkrywanie powiazanych zasobow i domen | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
+| Domain Hunter | Wyszukiwanie powiazanych domen i subdomen | [GitHub](https://github.com/bit4woo/domain_hunter) |

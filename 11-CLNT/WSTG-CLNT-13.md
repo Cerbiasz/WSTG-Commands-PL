@@ -48,3 +48,21 @@ curl -s "https://TARGET/js/config.js" | grep -i "api_key\|token\|secret\|passwor
 4. Stworz PoC HTML importujacy skrypt z TARGET
 5. Sprawdz Content-Type odpowiedzi (powinien byc application/json, nie text/javascript)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md
+
+- Synchronizer token pattern — CSRF token w ukrytym polu formularza
+- SameSite cookies jako dodatkowa warstwa (nie jedyna!)
+- Custom request headers (X-Requested-With) dla AJAX
+- Weryfikuj Origin i Referer headers server-side
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| CSRF Scanner | Automatyczne skanowanie podatnosci CSRF | [GitHub](https://github.com/ah8r/csrf) |
+| EasyCSRF | Wykrywanie slabej ochrony CSRF | [GitHub](https://github.com/0ang3el/EasyCSRF) |

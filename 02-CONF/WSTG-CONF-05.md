@@ -153,3 +153,11 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Conten
 7. Sprawdz czy panel admin jest chroniony (401/403) czy po prostu ukryty
 8. Testuj domyslne credentiale na znalezionych panelach
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| AdminPanelFinder | Enumeracja interfejsow administracyjnych | [GitHub](https://github.com/moeinfatehi/Admin-Panel_Finder) |

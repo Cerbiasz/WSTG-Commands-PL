@@ -115,3 +115,22 @@ nmap -p 443 --script http-cookie-flags TARGET
 7. Sprawdz czy cookie sesyjne nie ma atrybutu Expires (powinno wygasac z sesja przegladarki)
 8. W konsoli przegladarki wykonaj document.cookie - cookie z HttpOnly nie powinno byc widoczne
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Cookie_Theft_Mitigation_Cheat_Sheet.md
+
+- Ustaw flage `Secure` — cookie wysylane tylko przez HTTPS
+- Ustaw flage `HttpOnly` — cookie niedostepne dla JavaScript (ochrona przed XSS)
+- Ustaw `SameSite=Strict` lub `Lax` — ochrona przed CSRF
+- Ogranicz `Path` i `Domain` do minimum wymaganego zakresu
+- Ustaw krotki czas wygasniecia — unikaj sesji trwalych bez potrzeby
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| burp-samesite-reporter | Raportowanie flag SameSite w cookies | [GitHub](https://github.com/ldionmarcil/burp-samesite-reporter) |
+| Headers Analyzer | Analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |

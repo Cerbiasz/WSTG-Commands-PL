@@ -91,3 +91,18 @@ curl -v -b "SESSIONID=FIXED_VALUE; Domain=.example.com" TARGET/login -d "user=te
 6. Przetestuj czy mozna ustawic sesje przez parametr URL
 7. Sprawdz czy po wylogowaniu i ponownym zalogowaniu token jest nowy
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
+
+- Regeneruj session ID po kazdym zalogowaniu — klucz do ochrony przed session fixation
+- Uniwaznij stary session ID po regeneracji
+- Nie akceptuj session ID z parametrow URL — tylko z cookies
+- Powiaz sesje z wlasciwosciami klienta (IP, User-Agent) jako dodatkowa weryfikacja
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

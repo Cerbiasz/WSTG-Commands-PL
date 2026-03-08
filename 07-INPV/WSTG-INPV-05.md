@@ -127,3 +127,25 @@ ffuf -u "https://TARGET/login" -X POST -d "username=FUZZ&password=test" -w Deskt
 7. Testuj blind SQLi przez roznice w odpowiedziach
 8. Sprawdz second-order SQLi (payload zapisany i uruchomiony pozniej)
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — SQL_Injection_Prevention_Cheat_Sheet.md, Query_Parameterization_Cheat_Sheet.md
+
+- ZAWSZE uzywaj prepared statements / parameterized queries — to primary defense
+- Stored procedures jako secondary defense (tez moga byc podatne jesli uzywaja dynamicznego SQL)
+- Allowlist input validation jako dodatkowa warstwa — nie jako jedyna obrona
+- Escapowanie inputu to OSTATECZNOSC — tylko gdy inne metody niemozliwe
+- Zasada least privilege: konto DB aplikacji z minimalnymi uprawnieniami
+- Uzywaj ORM (Hibernate, SQLAlchemy) — ale uwazaj na raw queries i HQL injection
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| SQLiPy | Integracja SQLMap z Burp przez SQLMap API | [GitHub](https://github.com/codewatchorg/sqlipy) |
+| burp-xss-sql-plugin | Wykrywanie XSS i SQL Injection | [GitHub](https://github.com/attackercan/burp-xss-sql-plugin) |
+| Burptime | Pomiar czasu odpowiedzi dla time-based SQLi | [GitHub](https://github.com/virusdefender/burptime) |
+| SQLi Query Tampering | Generator payloadow SQLi z obfuskacja | [GitHub](https://github.com/xer0days/SQLi-Query-Tampering) |

@@ -120,3 +120,19 @@ hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -p "
 7. Przetestuj password spraying (jedno haslo na wielu uzytkownikach)
 8. Sprawdz czy komunikat bledu zmienia sie po zablokowaniu konta
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+
+- Implementuj progresywne opoznienia po nieudanych probach logowania
+- Zablokuj konto po N nieudanych probach (np. 5-10) z mozliwoscia odblokowania
+- Powiadom uzytkownika o zablokowaniu konta (email/SMS)
+- Loguj wszystkie nieudane proby logowania z adresem IP i timestampem
+- Nie ujawniaj dokladnej liczby pozostalych prob — unikaj information leakage
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

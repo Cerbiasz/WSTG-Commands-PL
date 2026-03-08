@@ -95,3 +95,11 @@ curl -v -X POST TARGET/api/order/status -d "order_id=123&payment_status=paid"
 6. Testuj modyfikacje hidden fields ktore sledza postep procesu
 7. Sprawdz czy mozna powtorzyc krok (np. dwukrotna platnosc -> dwukrotna dostawa)
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Stepper | Multi-step repeater do testowania wieloetapowych workflowow | [GitHub](https://github.com/CoreyD97/Stepper) |

@@ -142,3 +142,12 @@ ffuf -u "https://TARGET/?FUZZ=test" -w Desktop/WSTG/SecLists-master/Discovery/We
 8. Przeanalizuj mechanizm autentykacji i sesji
 9. Sprawdz API endpoints - metody GET, POST, PUT, DELETE
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| GAP-Burp-Extension | Automatyczne wyciaganie parametrow, endpointow i slow z odpowiedzi | [GitHub](https://github.com/xnl-h4ck3r/GAP-Burp-Extension) |
+| Attack Surface Detector | Identyfikacja endpointow przez statyczna analize kodu | [GitHub](https://github.com/secdec/attack-surface-detector-burp) |

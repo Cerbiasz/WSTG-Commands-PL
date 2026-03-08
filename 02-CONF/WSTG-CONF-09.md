@@ -144,3 +144,9 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 7. Sprawdz czy private keys, certyfikaty, credentials nie sa dostepne publicznie
 8. Przetestuj sciezki wzgledne (../) do uzyskania dostepu do plikow poza webroot
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp — test wymaga dostepu do systemu plikow serwera.

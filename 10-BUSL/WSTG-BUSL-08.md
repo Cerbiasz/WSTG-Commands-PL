@@ -183,3 +183,23 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 6. Testuj upload .html z JavaScript
 7. Sprawdz maksymalny rozmiar pliku i zachowanie przy jego przekroczeniu
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — File_Upload_Cheat_Sheet.md
+
+- Waliduj typ pliku po stronie serwera przez zawartosc (magic bytes), nie rozszerzenie
+- Ogranicz rozmiar pliku — zapobiegaj DoS przez duze uploady
+- Przechowuj pliki POZA webroot — nie pozwalaj na bezposredni dostep przez URL
+- Zmien nazwe uploadowanego pliku na losowa — zapobiegaj path traversal
+- Skanuj pliki pod katem malware przed zapisaniem
+- Uzywaj allowlist dozwolonych rozszerzen (.jpg, .png, .pdf)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Upload Scanner | Kompleksowe testy bezpieczenstwa uploadu plikow | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
+| ZIP File Raider | Testowanie podatnosci w przetwarzaniu plikow ZIP | [GitHub](https://github.com/destine21/ZIPFileRaider) |

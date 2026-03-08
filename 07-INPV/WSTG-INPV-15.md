@@ -50,3 +50,11 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 4. Sprawdz mozliwosc cache poisoning via CRLF
 5. Testuj XSS via response splitting
 
+
+---
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| HTTP Request Smuggler | Skanowanie i eksploatacja HTTP Request Smuggling (CL.TE, TE.CL) | [GitHub](https://github.com/portswigger/http-request-smuggler) |

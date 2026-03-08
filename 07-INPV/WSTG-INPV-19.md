@@ -88,3 +88,22 @@ curl -s "https://TARGET/fetch?url=http://COLLABORATOR_URL"
 6. Uzyj Burp Collaborator do detekcji blind SSRF
 7. Sprawdz czy SSRF pozwala na skanowanie portow wewnetrznych
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Server_Side_Request_Forgery_Prevention_Cheat_Sheet.md
+
+- Waliduj i uzywaj allowlist URL-ow/domen do ktorych aplikacja moze wysylac requesty
+- Blokuj dostep do wewnetrznych IP (127.0.0.1, 10.0.0.0/8, 169.254.169.254, 172.16.0.0/12, 192.168.0.0/16)
+- Blokuj dostep do endpointow metadanych chmury (169.254.169.254 — AWS/GCP/Azure)
+- Wylacz nieuzywane schematy URL (file://, gopher://, dict://)
+- Nie podazaj za redirectami slepо — waliduj kazdy URL po przekierowaniu
+- Implementuj kontrole na poziomie sieci (firewall rules) jako defense-in-depth
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Collaborator Everywhere | Wykrywanie SSRF przez out-of-band pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |

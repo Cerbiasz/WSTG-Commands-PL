@@ -115,3 +115,25 @@ ffuf -u "https://TARGET/search?q=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-mas
 7. Przetestuj w przegladarce czy payload sie wykonuje (alert/console.log)
 8. Sprawdz X-XSS-Protection i inne headery ochronne
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, XSS_Filter_Evasion_Cheat_Sheet.md
+
+- Output encoding musi byc dopasowany do kontekstu: HTML body, atrybuty, JavaScript, URL, CSS
+- Uzywaj frameworkowego auto-escaping (React, Angular, Vue) — ale uwazaj na escape hatches (dangerouslySetInnerHTML, bypassSecurityTrustAs*)
+- Sanityzuj HTML uzytkownika biblioteka DOMPurify — nigdy regexem
+- Wdroz Content-Security-Policy z nonces zamiast unsafe-inline
+- Uzywaj textContent/setAttribute zamiast innerHTML/document.write
+- Testuj rozne konteksty odbicia: HTML body, atrybuty, JS string, URL, CSS
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| XSS Validator | Automatyczna walidacja podatnosci XSS | [GitHub](https://github.com/nVisium/xssValidator) |
+| Reflector | Wykrywanie reflected XSS w czasie rzeczywistym | [GitHub](https://github.com/elkokc/reflector) |
+| BitBlinder | Wyszukiwanie blind XSS | [GitHub](https://github.com/BitTheByte/BitBlinder) |
+| Reflected Parameters | Monitorowanie odbitych parametrow w odpowiedziach | [GitHub](https://github.com/portswigger/reflected-parameters) |

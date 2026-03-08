@@ -121,3 +121,20 @@ curl -v http://TARGET/api/login -X POST -d "user=test&pass=test"
 7. Sprawdz czy tokeny sesji/API sa przesylane wylacznie przez HTTPS
 8. Sprawdz czy linki do zasobow zewnetrznych uzywaja HTTPS
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Transport_Layer_Protection_Cheat_Sheet.md
+
+- Szyfruj wszystkie dane wrazliwe w transmisji — HTTPS wszedzie
+- Wlacz HSTS aby zapobiec downgrade do HTTP
+- Nie pozwalaj na mixed content — zasoby HTTP na stronach HTTPS
+- Przekieruj HTTP na HTTPS na poziomie serwera (301 redirect)
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Headers Analyzer | Weryfikacja naglowkow HSTS i bezpieczenstwa transportu | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |

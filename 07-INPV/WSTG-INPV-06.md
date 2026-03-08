@@ -66,3 +66,21 @@ ffuf -u "https://TARGET/search?user=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/l
 4. Sprawdz error messages pod katem LDAP errors
 5. Testuj blind LDAP injection porownujac rozmiary odpowiedzi
 
+
+---
+
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — LDAP_Injection_Prevention_Cheat_Sheet.md
+
+- Escapuj znaki specjalne DN: \ , + " < > ; (backslash-encoding)
+- Escapuj znaki specjalne search filtra: * ( ) \ NUL
+- Uzywaj frameworkow z wbudowanym LDAP encoding (np. Spring LDAP)
+- Waliduj input allowlista — ogranicz dozwolone znaki
+- Unikaj budowania zapytan LDAP przez konkatenacje stringow
+
+## ROZSZERZENIA BURP SUITE
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Active Scan++ | Rozszerzony skaner z checkami injection | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
