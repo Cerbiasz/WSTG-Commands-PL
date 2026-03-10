@@ -85,9 +85,36 @@ wait
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Izoluj zmienne sesji per funkcjonalnosc — nie dziel zmiennych miedzy modulami
-- Waliduj przejscia stanow sesji — sprawdzaj czy uzytkownik przeszedl wymagane kroki
-- Unikaj przechowywania danych autoryzacji w zmiennych sesji modyfikowalnych przez uzytkownika
+### Czym jest Session Puzzling
+
+- Ta sama zmienna sesji uzywana w ROZNYCH kontekstach (np. "user" w login i reset password)
+- Atakujacy: inicjuje flow A ktory ustawia zmienna → uzywa jej w flow B z innym znaczeniem
+- Przyklad: reset password ustawia `$_SESSION['user'] = 'admin'` → atakujacy przechodzi do dashboard
+
+### Izolacja zmiennych sesji
+
+- **Oddzielne namespace** per funkcjonalnosc — nie dziel zmiennych miedzy modulami
+- Uzywaj precyzyjnych nazw: `$_SESSION['auth_user']` zamiast `$_SESSION['user']`
+- Nie uzywaj tej samej zmiennej do roznych celow (autentykacja, autoryzacja, reset)
+
+### Walidacja stanow sesji
+
+- Implementuj **state machine** — sprawdzaj czy uzytkownik przeszedl WYMAGANE kroki
+- Przyklad: nie pozwalaj na dostep do dashboard bez przejscia przez login
+- Sprawdzaj ZAWSZE: `$_SESSION['authenticated'] === true` — nie polegaj na istnieniu `$_SESSION['user']`
+
+### Minimalizacja danych w sesji
+
+- Przechowuj MINIMUM informacji w sesji — ID uzytkownika, role, timestamp uwierzytelnienia
+- NIE przechowuj danych autoryzacji modyfikowalnych przez uzytkownika w zmiennych sesji
+- Dane tymczasowe (np. flow resetowania hasla) przechowuj w oddzielnym mechanizmie z krotkim TTL
+
+### Obrona przed session puzzling
+
+- Regeneruj session ID przy KAZDEJ zmianie kontekstu (login, reset, elevate privileges)
+- Czysc WSZYSTKIE zmienne sesji przy zmianie kontekstu — nie zostawiaj smieci z poprzedniego flow
+- Waliduj integralnosc sesji — sprawdzaj czy zmienne sesji sa spojne (np. user + role + timestamp)
+- Unikaj przechowywania istotnych danych w `$_SESSION` — pobieraj je z bazy przy kazdym request
 
 ## ROZSZERZENIA BURP SUITE
 

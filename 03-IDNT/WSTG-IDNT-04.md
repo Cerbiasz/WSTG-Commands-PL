@@ -137,11 +137,36 @@ ffuf -w Desktop/WSTG/Bug-Bounty-Wordlists-main/user_field_names.txt:USER -u "htt
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
 
-- Uzywaj generycznych komunikatow bledu przy logowaniu — nie ujawniaj czy konto istnieje
-- Zapewnij staly czas odpowiedzi niezaleznie od tego czy uzytkownik istnieje (timing-safe)
-- Implementuj rate limiting i CAPTCHA po serii nieudanych prob
-- Zwracaj ten sam kod HTTP (np. 200) dla istniejacych i nieistniejacych kont
-- Monitoruj i alertuj na masowe proby enumeracji
+### Enumeracja uzytkownikow — dlaczego jest groźna
+
+- Atakujacy uzyskuje liste istniejacych kont → moze przeprowadzic: brute force, credential stuffing, phishing
+- Enumeracja przez: login, rejestracja, forgot password, publiczne profile, API
+- Kazdy endpoint ktory odpowiada INACZEJ dla istniejacego vs nieistniejacego konta ujawnia informacje
+
+### Obrona — generyczne komunikaty
+
+- **Identyczny komunikat** dla istniejacego i nieistniejacego konta: "Invalid username or password"
+- **Identyczny kod HTTP** — np. 200 z JSON body (nie 404 vs 200)
+- **Identyczny czas odpowiedzi** — wykonaj hash hasla NAWET jesli konto nie istnieje (timing attack)
+- **Identyczna dlugosc odpowiedzi** — unikaj roznic ktore mozna wykryc w Burp Intruder
+
+### Typowe wektory enumeracji
+
+- **Login**: "User not found" vs "Wrong password" — rozne komunikaty
+- **Rejestracja**: "Username already taken" — ujawnia istniejace konta
+  - Obrona: "If this email is not registered, we'll send a confirmation"
+- **Forgot password**: "Email not found" vs "Reset link sent" — rozne komunikaty
+  - Obrona: ZAWSZE "If an account exists, a reset link has been sent"
+- **Timing**: sprawdzanie hasla trwa dluzej niz sprawdzanie czy user istnieje
+  - Obrona: constant-time response — hashuj dummy password jesli user nie istnieje
+
+### Dodatkowe obrony
+
+- **Rate limiting**: ogranicz proby logowania per IP/konto/globalnie
+- **CAPTCHA**: po N nieudanych probach
+- **Account lockout**: po N probach (z auto-odblokowaniem)
+- **Monitoring**: alertuj na masowe proby enumeracji (wiele roznych username z jednego IP)
+- **GraphQL introspection**: wylacz na produkcji — moze ujawniac typy i pola uzytkownikow
 
 ## ROZSZERZENIA BURP SUITE
 

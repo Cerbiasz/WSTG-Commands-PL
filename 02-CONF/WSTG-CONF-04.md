@@ -192,6 +192,39 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Pliki backup i artefakty — co szukac
+
+| Wzorzec nazwy | Przyklad | Opis |
+|--------------|---------|------|
+| `file.ext.bak` | `config.php.bak` | Kopia zapasowa z kodem zrodlowym |
+| `file.ext~` | `index.php~` | Backup edytora (vim, emacs) |
+| `file.ext.old` | `web.config.old` | Stara wersja |
+| `#file.ext#` | `#config.py#` | Emacs auto-save |
+| `.file.ext.swp` | `.config.php.swp` | Vim swap file |
+| `file.ext.YYYYMMDD` | `db.sql.20240101` | Backup z data |
+| `file.ext.orig` | `settings.py.orig` | Oryginal przed zmiana |
+| `Copy of file.ext` | `Copy of web.config` | Windows copy |
+| `file.ext.dist` | `config.yml.dist` | Dystrybucyjny szablon |
+
+### Niereferencjonowane zasoby
+
+- `/backup/`, `/old/`, `/archive/`, `/tmp/` — katalogi z backupami
+- `/.git/`, `/.svn/`, `/.hg/` — systemy kontroli wersji
+- `/phpinfo.php`, `/info.php`, `/test.php` — pliki diagnostyczne
+- `/README.md`, `/CHANGELOG.md`, `/TODO` — dokumentacja developerska
+- `/.env`, `/wp-config.php.bak` — konfiguracja z credentials
+
+### Obrona
+
+- Nigdy nie tworzonych backupow w katalogach webowych
+- Dodaj do `.gitignore` pliki tymczasowe i backup
+- Regularnie skanuj katalogu webowe pod katem niepotrzebnych plikow
+- Blokuj dostep do katalogow VCS (`.git`, `.svn`) na serwerze
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

@@ -53,10 +53,37 @@ curl -s "https://TARGET/" | grep -i "postMessage\|addEventListener.*message"
 
 > Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md
 
-- Waliduj origin wiadomosci w event.origin przy postMessage
-- Uzywaj parametru targetOrigin — nie uzywaj '*' w postMessage
-- Nie ufaj danym z postMessage — waliduj format i zawartosc
-- Sprawdz czy aplikacja nie nasluchuje na wiadomosci z dowolnego origin
+### postMessage — ryzyka
+
+- `window.postMessage()` pozwala na cross-origin komunikacje miedzy oknami/iframe
+- Jesli listener nie waliduje `event.origin` — dowolna strona moze wyslac wiadomosc
+- Dane z postMessage moga trafic do: `innerHTML` (XSS), `eval()`, `location.href` (redirect)
+
+### Obrona — wysylanie
+
+- **ZAWSZE** uzywaj explicit `targetOrigin`: `target.postMessage(data, "https://trusted.com")`
+- **NIGDY** `targetOrigin: "*"` — wiadomosc moze byc odczytana przez dowolna strone
+- Nie wysylaj wrazliwych danych (tokenow, PII) przez postMessage jesli to mozliwe
+
+### Obrona — odbieranie
+
+- **ZAWSZE** waliduj `event.origin`: `if (event.origin !== "https://trusted.com") return;`
+- **Waliduj format danych**: sprawdz typ, dlugosc, schemat — nie ufaj danym z postMessage
+- **Sanityzuj dane** przed uzyciem w DOM — nie wstawiaj do `innerHTML`, `eval()`, `location.*`
+- Uzywaj `JSON.parse()` na danych — nie `eval()`
+
+### Typowe podatne wzorce
+
+- `window.addEventListener("message", (e) => { document.body.innerHTML = e.data })` — XSS via postMessage
+- `window.addEventListener("message", (e) => { eval(e.data) })` — RCE via postMessage
+- `window.addEventListener("message", (e) => { location.href = e.data })` — redirect via postMessage
+- Brak walidacji `event.origin` — kazda strona moze wyslac payload
+
+### Testowanie
+
+- Stworz PoC HTML: `<iframe src="TARGET"><script>frames[0].postMessage("payload","*")</script>`
+- Wstrzyknij HTML/JS payloady przez postMessage
+- Szukaj w kodzie JS: `addEventListener("message"` — znajdz handlery i sprawdz walidacje
 
 ## ROZSZERZENIA BURP SUITE
 

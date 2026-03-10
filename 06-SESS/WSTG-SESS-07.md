@@ -97,10 +97,42 @@ curl -v -b "SESSIONID=EXPIRED_SESSION_VALUE" TARGET/dashboard 2>&1
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Idle timeout: 15-30 minut nieaktywnosci (krotszy dla wrazliwych aplikacji)
-- Absolute timeout: 4-8 godzin — sesja wygasa niezaleznie od aktywnosci
-- Wymagaj ponownego uwierzytelnienia dla operacji wrazliwych (platnosci, zmiana hasla)
-- Informuj uzytkownika o zbliajacym sie wygasnieciu sesji
+### Idle Timeout (brak aktywnosci)
+
+- **15-30 minut** dla standardowych aplikacji
+- **2-5 minut** dla aplikacji wysokiego ryzyka (bankowosc, ochrona zdrowia)
+- Po idle timeout: uniewazni sesje server-side + redirect na strone logowania
+- Mierz czas od OSTATNIEGO requestu uzytkownika
+
+### Absolute Timeout (calkowity czas sesji)
+
+- **4-8 godzin** — sesja wygasa niezaleznie od aktywnosci
+- Zapobiega scenariuszowi: sesja aktywna bez konca przy ciaglym uzyciu
+- Wymusza ponowne uwierzytelnienie — ogranicza okno czasowe wykradzionego tokenu
+- Krotszy absolute timeout = mniejsze ryzyko
+
+### Re-autentykacja dla operacji wrazliwych
+
+- **Zmiana hasla**, przelew, zmiana adresu email, zmiana ustawien bezpieczenstwa
+- Wymagaj podania aktualnego hasla LUB MFA — nawet w trakcie aktywnej sesji
+- Chroni przed scenariuszem: uzytkownik zapominal wylogowac sie na publicznym komputerze
+
+### Implementacja timeout
+
+- Timeout po stronie SERWERA — nie po stronie klienta (JavaScript timeout mozna ominac)
+- Cookie sesyjne: NIE ustawiaj `Expires`/`Max-Age` — cookie wygasa z zamknieciem przegladarki
+- Persistent sessions (Remember Me): osobny token z dluzszym timeout, ALE wymagaj re-auth dla wrazliwych operacji
+
+### Informowanie uzytkownika
+
+- Pokaz ostrzezenie przed wygasnieciem sesji (np. 2 minuty wczesniej)
+- Daj mozliwosc przedluzenia sesji — kliknij "Kontynuuj"
+- Po wygasnieciu: jasny komunikat "Twoja sesja wygasla" + redirect na login
+
+### Obrona przed session riding
+
+- Krotki timeout OGRANICZA okno ataku — atakujacy ma mniej czasu na wykorzystanie wykradzionej sesji
+- Im krotszy timeout — tym bezpieczniej, ALE gorszy UX — balans wymagany
 
 ## ROZSZERZENIA BURP SUITE
 

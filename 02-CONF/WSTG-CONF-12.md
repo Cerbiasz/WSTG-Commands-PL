@@ -99,12 +99,46 @@ shcheck https://TARGET | tee output_shcheck.txt
 
 > Źródło: OWASP CheatSheetSeries — Content_Security_Policy_Cheat_Sheet.md
 
-- Uzyj strict CSP z nonces (`script-src 'nonce-{random}'`) zamiast allowlist domen
-- Unikaj `unsafe-inline` i `unsafe-eval` — otwieraja droge do XSS
-- Wdroz `frame-ancestors` zamiast X-Frame-Options (CSP L2 jest silniejszy)
-- Uzyj `report-uri` / `report-to` do monitorowania naruszen polityki
-- Nie uzywaj wildcard (*) w dyrektywach — ograniczaj do konkretnych domen
-- Zacznij od `Content-Security-Policy-Report-Only` aby przetestowac przed wdrozeniem
+### Strict CSP — rekomendowane podejscie
+
+- **Nonce-based**: `script-src 'nonce-{random}'` — losowy nonce per request, TYLKO skrypty z tym nonce sa wykonywane
+- **Hash-based**: `script-src 'sha256-{hash}'` — TYLKO skrypty z dokladnym hashem sa wykonywane
+- Nonce/hash approach jest SILNIEJSZY niz allowlist domen — eliminuje wiele bypass technik
+
+### Niebezpieczne dyrektywy (UNIKAJ)
+
+- `unsafe-inline` — pozwala na inline `<script>` i `on*` event handlers — czyni XSS mozliwym
+- `unsafe-eval` — pozwala na `eval()`, `Function()`, `setTimeout(string)` — otwiera droge do code injection
+- `*` (wildcard) — pozwala na ladowanie z dowolnej domeny — praktycznie brak ochrony
+- `data:` w `script-src` — pozwala na `<script src="data:text/javascript,alert(1)">`
+- Domeny CDN (`*.googleapis.com`, `*.cloudflare.com`) — atakujacy moze hostowac JS na tych CDN
+
+### Kluczowe dyrektywy CSP
+
+- `default-src 'none'` — deny by default, potem allowlist per typ
+- `script-src 'nonce-{random}'` — inline skrypty tylko z nonce
+- `style-src 'self'` — CSS tylko z tej samej domeny
+- `img-src 'self' data:` — obrazy z tej samej domeny + data URI
+- `frame-ancestors 'none'` — blokuje iframe embedding (zastepuje X-Frame-Options)
+- `base-uri 'self'` — zapobiega base tag injection
+- `form-action 'self'` — formularze moga byc wysylane tylko na te sama domene
+- `object-src 'none'` — blokuje Flash, Java, inne pluginy
+
+### Wdrozenie CSP
+
+- **Krok 1**: `Content-Security-Policy-Report-Only` — testuj bez blokowania
+- **Krok 2**: Monitoruj raporty (`report-uri /csp-report`) — identyfikuj co by bylo zablokowane
+- **Krok 3**: Napraw naruszenia (usun inline scripts, uzyj nonce)
+- **Krok 4**: Wlacz enforcing: `Content-Security-Policy` (bez Report-Only)
+- Ustaw CSP na WSZYSTKICH stronach — nie tylko na wybranych
+
+### CSP Bypass — co testowac
+
+- Czy dozwolone domeny hostuja kontrolowany content (CDN, cloud storage)
+- Czy `unsafe-inline` lub `unsafe-eval` sa wlaczone
+- Czy brak `base-uri` (base tag injection)
+- Czy brak `frame-ancestors` (clickjacking)
+- Czy CSP jest Report-Only zamiast enforcing
 
 ## ROZSZERZENIA BURP SUITE
 

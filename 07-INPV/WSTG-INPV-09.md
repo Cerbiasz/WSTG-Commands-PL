@@ -60,12 +60,38 @@ ffuf -u "https://TARGET/search?user=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/x
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-- Uzywaj parameterized XPath queries (precompiled expressions)
-- Waliduj input — ogranicz dozwolone znaki (alfanumeryczne)
-- Nie buduj XPath expressions przez konkatenacje user input
-- Rozważ uzycie JSON/SQL zamiast XML/XPath
+### Czym jest XPath Injection
+
+- Analogiczny do SQL Injection, ale dotyczy zapytan XPath na dokumentach XML
+- Atakujacy modyfikuje zapytanie XPath aby: ominac uwierzytelnienie, odczytac dane, wyciagnac strukture XML
+- Przyklad: `//users/user[name='ATTACKER_INPUT' and pass='x']` → `' or '1'='1`
+
+### Obrona — Parameterized XPath Queries
+
+- **Uzywaj precompiled/parameterized XPath expressions** — user input NIE jest czescia query string
+- Java: `XPathExpression.evaluate()` z parametrami, NIE konkatenacja stringow
+- .NET: `XPathNavigator.Compile()` + zmienne
+- **NIGDY** nie buduj XPath przez konkatenacje: `"//user[name='" + input + "']"` — podatne na injection
+
+### Input Validation
+
+- Allowlist dozwolonych znakow: `[a-zA-Z0-9]` — odrzuc `'`, `"`, `[`, `]`, `/`, `(`, `)`, `=`
+- Waliduj dlugosc i format danych wejsciowych
+- Escapuj znaki specjalne XPath: `'` → `&apos;`, `"` → `&quot;`
+
+### Alternatywy dla XPath
+
+- Rozważ migracje na **JSON + SQL** zamiast XML + XPath — mniejsza powierzchnia ataku
+- Uzywaj DOM API z bezpiecznym parsowaniem zamiast string-based XPath queries
+- Jesli XML wymagany — rozważ XQuery z parameterized queries
+
+### Typy XPath Injection
+
+- **In-band**: dane widoczne w odpowiedzi (np. ominięcie loginu)
+- **Blind Boolean-based**: `' and string-length(//user[1]/name)=5 and '1'='1` — testowanie znak po znaku
+- **Blind Error-based**: rozne bledy dla true/false — wnioskowanie o strukturze XML
 
 ## ROZSZERZENIA BURP SUITE
 

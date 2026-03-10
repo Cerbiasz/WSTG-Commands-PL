@@ -111,10 +111,43 @@ curl -v -X POST TARGET/logout 2>&1
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Uniwaznij sesje po stronie serwera przy wylogowaniu — nie tylko usuwaj cookie
-- Wyczysc wszystkie cookies sesyjne po stronie klienta
-- Uniwaznij wszystkie powiazane tokeny (access, refresh, JWT)
-- Sprawdz czy przycisk wylogowania jest latwo dostepny i widoczny
+### Wymagania prawidlowego wylogowania
+
+- **Uniewaznienie sesji SERVER-SIDE** — usun sesje z pamięci/bazy serwera, NIE tylko cookie klienta
+- **Usun cookie klienta** — Set-Cookie z `expires=Thu, 01 Jan 1970` i pusta wartoscia
+- **Uniewazni WSZYSTKIE powiazane tokeny**: access token, refresh token, CSRF token, remember-me token
+- Wylogowanie musi byc operacja **server-side** — samo usuniecie cookie NIE wystarcza (atakujacy moze miec kopie)
+
+### JWT i logout
+
+- JWT sa **stateless** — serwer domyslnie nie moze ich uniewaznic
+- Implementuj **blacklist/revocation list** na serwerze — sprawdzaj przy kazdym request
+- Alternatywa: krotki czas zycia JWT (np. 5-15 min) + refresh token z mozliwoscia revokacji
+- Bez blacklisty: wykradzione JWT dziala do momentu wygasniecia — poważna podatnosc
+
+### Przycisk wylogowania
+
+- Dostepny na KAZDEJ stronie aplikacji — latwo widoczny
+- Wymaga potwierdzenia — uzytkownik nie powinien wylogowac sie przypadkowo
+- Uzyj **POST** do wylogowania — zabezpiecza przed CSRF logout (GET logout link moze byc naduzywany)
+
+### Cache po wylogowaniu
+
+- Ustaw `Cache-Control: no-store` na chronionych stronach — przycisk wstecz nie powinien wyswietlac tresci
+- Serwer powinien zwracac `Pragma: no-cache` i `Expires: 0`
+- Testuj przycisk wstecz po wylogowaniu — czy strona z cache jest wyswietlana
+
+### Wylogowanie z wielu sesji
+
+- Rozważ "Logout everywhere" — uniewaznienie WSZYSTKICH aktywnych sesji uzytkownika
+- Przydatne po zmianie hasla, wykryciu naruszenia bezpieczenstwa
+- Wymaga server-side tracking wszystkich aktywnych sesji per uzytkownik
+
+### Idle vs Absolute Timeout a logout
+
+- Idle timeout (np. 15 min) powinien dzialac jak automatyczne wylogowanie
+- Absolute timeout (np. 8h) — sesja wygasa niezaleznie od aktywnosci
+- Informuj uzytkownika o zbliajacym sie wygasnieciu — mozliwosc przedluzenia
 
 ## ROZSZERZENIA BURP SUITE
 

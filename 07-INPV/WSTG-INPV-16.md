@@ -66,6 +66,48 @@ curl --http2 -X PRI "https://TARGET/" -H "Upgrade: h2c"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — HTTP_Strict_Transport_Security_Cheat_Sheet.md, REST_Security_Cheat_Sheet.md
+
+### HTTP Request Smuggling — mechanizm
+
+- Exploituje **roznice w parsowaniu** dlugosci requestu miedzy frontend (proxy/LB) a backend
+- Frontend i backend nie zgadzaja sie gdzie konczy sie jeden request a zaczyna nastepny
+- Skutek: atakujacy **przemyca** czesc swojego requestu do requestu innego uzytkownika
+
+### Typy atakow
+
+| Typ | Frontend czyta | Backend czyta | Opis |
+|-----|---------------|---------------|------|
+| CL.TE | Content-Length | Transfer-Encoding | Frontend ufa CL, backend przetwarza chunked |
+| TE.CL | Transfer-Encoding | Content-Length | Frontend przetwarza chunked, backend ufa CL |
+| TE.TE | Transfer-Encoding (wariant 1) | Transfer-Encoding (wariant 2) | Obfuskacja jednego z TE headers |
+
+### Konsekwencje
+
+- **Bypass zabezpieczen**: ominięcie WAF, kontroli dostepu na froncie
+- **Cache poisoning**: zatrute response cachowane dla innych uzytkownikow
+- **Credential hijacking**: przechwycenie requestu innego uzytkownika (cookies, auth headers)
+- **Request routing**: przekierowanie requestu do innego backendu
+- **Web cache deception**: serwer cachuje wrazliwe dane innego uzytkownika
+
+### Obfuskacja Transfer-Encoding (TE.TE bypass)
+
+- `Transfer-Encoding: xchunked`
+- `Transfer-Encoding : chunked` (spacja przed dwukropkiem)
+- `Transfer-Encoding: chunked` + `Transfer-Encoding: x`
+- `Transfer-Encoding: chunked\r\n\t` (tab po CRLF)
+- `X: x\r\nTransfer-Encoding: chunked` (line folding)
+
+### Obrona
+
+- Uzyj **HTTP/2** end-to-end — eliminuje desynchronizacje (ale sprawdz H2C smuggling)
+- Nie mieszaj Content-Length i Transfer-Encoding — odrzucaj takie requesty
+- Normalizuj naglowki na frontend proxy — usun niejednoznaczne TE headers
+- Ustaw frontend i backend na **takie same reguły parsowania**
+- Monitoruj anomalie: rozne dlugosci response, nieoczekiwane 400/500 odpowiedzi
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

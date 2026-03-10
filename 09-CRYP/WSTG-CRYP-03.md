@@ -126,12 +126,47 @@ curl -v http://TARGET/api/login -X POST -d "user=test&pass=test"
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Transport_Layer_Protection_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Transport_Layer_Security_Cheat_Sheet.md, HTTP_Strict_Transport_Security_Cheat_Sheet.md
 
-- Szyfruj wszystkie dane wrazliwe w transmisji — HTTPS wszedzie
-- Wlacz HSTS aby zapobiec downgrade do HTTP
-- Nie pozwalaj na mixed content — zasoby HTTP na stronach HTTPS
-- Przekieruj HTTP na HTTPS na poziomie serwera (301 redirect)
+### TLS na wszystkich stronach
+
+- **HTTPS wszedzie** — nie tylko na login/checkout; strony HTTP moga ujawnic session cookies
+- Strony HTTP daja atakujacemu mozliwosc: sniffowania tokenow sesji, wstrzykiwania JavaScript (MitM)
+- **API endpoints**: wylacz HTTP calkowicie — failuj requesty zamiast redirectowac
+
+### Redirect HTTP → HTTPS
+
+- HTTP 301 (permanent redirect) na poziomie serwera
+- UWAGA: sam redirect NIE chroni — pierwszy request idzie przez HTTP (mozliwy MitM)
+- Dlatego HSTS jest NIEZBEDNY jako uzupelnienie redirectu
+
+### HSTS (HTTP Strict Transport Security)
+
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- `max-age` — czas w sekundach (31536000 = 1 rok) — przegladarka pamięta ze strona uzywa HTTPS
+- `includeSubDomains` — HSTS dotyczy tez wszystkich subdomen
+- `preload` — dodanie do preload list w przegladarkach (permanentne, trudne do cofniecia)
+- Bez HSTS: atakujacy moze uzyc **sslstrip** do downgrade HTTPS→HTTP w sieci lokalnej
+
+### Mixed Content
+
+- NIE laduj zasobow (JS, CSS, obrazki) przez HTTP na stronie HTTPS
+- Nowoczesne przegladarki blokuja active mixed content (JS, CSS) — ale passive (obrazki) moga byc ladowane
+- Sprawdz konsole przegladarki — ostrzezenia o mixed content
+
+### Cookie Security
+
+- **Secure flag** na WSZYSTKICH cookies — przegladarka nie wysle ich przez HTTP
+- Wazne nawet jesli serwer nie slucha na porcie 80 — atakujacy MitM moze sproofowac serwer HTTP
+- Cookie bez Secure flag moze byc przechwycone w otwartej sieci Wi-Fi
+
+### Cachowanie danych wrazliwych
+
+- Ustaw na odpowiedziach z wrazliwymi danymi:
+  - `Cache-Control: no-cache, no-store, must-revalidate`
+  - `Pragma: no-cache`
+  - `Expires: 0`
+- TLS chroni dane w transporcie, ALE nie chroni po dotarciu do klienta — dane moga byc w cache przegladarki
 
 ## ROZSZERZENIA BURP SUITE
 

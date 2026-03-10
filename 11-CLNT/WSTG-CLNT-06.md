@@ -42,6 +42,35 @@ curl -s "https://TARGET/page?link=http://evil.com/style.css"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — DOM_based_XSS_Prevention_Cheat_Sheet.md
+
+### Client-side Resource Manipulation — mechanizm
+
+- Atakujacy kontroluje **URL zasobu** ladowanego przez strone (src, href, action, data)
+- Skutek: ladowanie zlosliwego skryptu, CSS, obrazka, formularza z kontrolowanego serwera
+- Roznica vs XSS: nie wstrzykuje kodu, ale **zmienia zrodlo** zasobu
+
+### Niebezpieczne atrybuty/sinki
+
+| Atrybut/Sink | Ryzyko |
+|-------------|--------|
+| `<script src=X>` | Ladowanie zlosliwego JS — pelne RCE w kontekscie strony |
+| `<link href=X>` | Ladowanie zlosliwego CSS — exfiltracja danych, UI redress |
+| `<img src=X>` | Tracking pixel, SSRF (jesli server-side fetch) |
+| `<iframe src=X>` | Ladowanie strony atakujacego — phishing |
+| `<form action=X>` | Przekierowanie formularza na serwer atakujacego — credential theft |
+| `<object data=X>` | Ladowanie zlosliwego contentu |
+
+### Obrona
+
+- **Nigdy** nie uzywaj danych uzytkownika bezposrednio w atrybutach src/href/action
+- Waliduj URL-e: allowlist dozwolonych domen, sprawdz schemat (https://)
+- Uzyj **CSP**: `script-src 'self'`, `style-src 'self'` — blokuj zewnetrzne zasoby
+- **Subresource Integrity (SRI)**: `integrity="sha384-..."` na `<script>` i `<link>` — weryfikuj hash zasobu
+- Sanityzuj URL-e: odrzucaj `javascript:`, `data:`, `blob:` schematy
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

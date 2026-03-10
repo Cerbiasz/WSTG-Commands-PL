@@ -63,10 +63,43 @@ curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "u
 
 > Źródło: OWASP CheatSheetSeries — Authorization_Cheat_Sheet.md, Access_Control_Cheat_Sheet.md
 
-- Waliduj role na kazdym uzyciu — nie zakladaj ze uzytkownik nie zmieni parametrow
-- Separuj funkcje administracyjne od zwyklych uzytkownikow na poziomie kodu
-- Loguj wszystkie zmiany uprawnien i proby eskalacji
-- Testuj zmiane parametrow roli w requestach (role=admin, isAdmin=true)
+### Vertical Privilege Escalation — wektory ataku
+
+- **Parametr roli w request**: `role=admin`, `isAdmin=true`, `userType=administrator`
+- **Modyfikacja JWT claims**: zmiana `"role":"user"` na `"role":"admin"` w JWT payload
+- **Forced browsing**: bezposredni dostep do `/admin/`, `/management/`, `/internal/`
+- **HTTP method switching**: endpoint chroni GET ale nie POST/PUT/DELETE
+- **API version bypass**: `/api/v1/admin` — starsza wersja API bez kontroli dostepu
+
+### Obrona przed privilege escalation
+
+- **Waliduj role SERVER-SIDE** na KAZDYM request — nie polegaj na client-side
+- Sprawdzaj uprawnienia do **KONKRETNEJ AKCJI**, nie tylko typ uzytkownika
+- **Deny by default** — jesli brak jawnej reguly, ODMOW dostepu
+- Uzyj **centralnego middleware** do kontroli dostepu — nie rozpraszaj logiki autoryzacji
+- **Separuj funkcje administracyjne** od zwyklych uzytkownikow na poziomie kodu i infrastruktury
+  - Oddzielny panel admin na innej subdomenie/porcie
+  - Osobna warstwa middleware dla admin endpointow
+
+### Modele kontroli dostepu
+
+- **RBAC** (Role-Based): proste ale podatne na "role explosion" — role per zasob
+- **ABAC** (Attribute-Based): uwzglednia wiele atrybutow (rola, czas, IP, urzadzenie) — elastyczniejsze
+- **ReBAC** (Relationship-Based): kontrola na podstawie relacji user↔zasob ("autor moze edytowac swoj post")
+
+### Testowanie vertical privilege escalation
+
+- Zaloguj sie jako zwykly user → probuj endpointy admina
+- Dodaj parametry: `admin=true`, `role=admin`, `debug=1` do requestow
+- Zmien role/claims w tokenach JWT lub cookies
+- Testuj CRUD na admin zasobach z sesja zwyklego usera
+- Porownaj odpowiedzi: te same dane vs 403/404 vs inne dane
+
+### Logging i monitoring
+
+- Loguj WSZYSTKIE proby dostepu do zasobow o wyzszym poziomie uprawnien
+- Alertuj na powtarzajace sie proby eskalacji z jednego konta/IP
+- Naruszenia autoryzacji = zdarzenia WYSOKIEGO priorytetu w SIEM
 
 ## ROZSZERZENIA BURP SUITE
 

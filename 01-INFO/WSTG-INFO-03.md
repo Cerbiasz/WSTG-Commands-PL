@@ -117,6 +117,59 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
+
+### robots.txt — co szukac
+
+- **Disallow** wpisy ujawniaja ukryte sciezki — atakujacy sprawdzaja je w pierwszej kolejnosci
+- Nie uzywaj `robots.txt` do ukrywania wrazliwych zasobow — to informacja publiczna
+- `User-agent: *` + `Disallow: /admin/` = informacja dla atakujacego gdzie jest panel admina
+- Sprawdz roznice miedzy wersjami HTTP i HTTPS robots.txt
+
+### Typowe wycieki w robots.txt
+
+| Wpis Disallow | Co ujawnia |
+|--------------|-----------|
+| `/admin/`, `/administrator/` | Panel administracyjny |
+| `/backup/`, `/old/`, `/temp/` | Katalogi z backupami |
+| `/api/`, `/api/v1/internal/` | Wewnetrzne endpointy API |
+| `/staging/`, `/dev/`, `/test/` | Srodowiska deweloperskie |
+| `/cgi-bin/`, `/scripts/` | Skrypty serwerowe |
+| `/wp-admin/`, `/wp-includes/` | Struktura WordPress |
+
+### sitemap.xml — informacje
+
+- Zawiera pelna liste URL-ow strony — mapuje powierzchnie ataku
+- Moze zawierac URL-e niedostepne z glownej nawigacji
+- Sprawdz `sitemap_index.xml` — moze wskazywac na wiele sitemapów
+- Porownaj URL-e z sitemap z wynikami crawlingu — roznice moga wskazywac na ukryte zasoby
+
+### security.txt (RFC 9116)
+
+- Lokalizacja: `/.well-known/security.txt`
+- Zawiera: kontakt do zglaszania podatnosci, polityka, klucz PGP
+- Moze ujawnic: adresy email, programy bug bounty, scope testow
+- Sprawdz pole `Expires` — przestarzaly plik moze zawierac nieaktualne informacje
+
+### .well-known — interesujace endpointy
+
+| Endpoint | Co zawiera |
+|----------|-----------|
+| `/.well-known/openid-configuration` | Konfiguracja OAuth/OIDC — token endpoint, supported scopes |
+| `/.well-known/assetlinks.json` | Powiazania Android App Links |
+| `/.well-known/apple-app-site-association` | Powiazania iOS Universal Links |
+| `/.well-known/change-password` | URL do zmiany hasla (jesli zaimplementowany) |
+| `/.well-known/jwks.json` | Klucze publiczne JWT — weryfikacja tokenow |
+
+### Obrona
+
+- Nie polegaj na `robots.txt` jako mechanizmie bezpieczenstwa — to sugestia dla crawlerow
+- Blokuj dostep do wrazliwych zasobow przez autentykacje i autoryzacje, nie robots.txt
+- Nie umieszczaj wewnetrznych sciezek w robots.txt — uzyj `noindex` meta tag zamiast tego
+- Regularnie przegladaj sitemap.xml — usuwaj sciezki ktore nie powinny byc publiczne
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

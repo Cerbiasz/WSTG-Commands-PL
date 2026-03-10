@@ -98,6 +98,41 @@ curl -v TARGET/dashboard -H "Cookie: user=admin; role=superadmin; verified=true"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
+
+### Kontrola integralnosci — mechanizmy
+
+- **HMAC** (Hash-based Message Authentication Code): podpis danych kluczem serwera
+- **Podpisy cyfrowe**: RSA/ECDSA — silniejsze niz HMAC, asymetryczne
+- **Checksums**: SHA-256 hash danych — wykrywa modyfikacje (ale nie chroni bez klucza)
+- **JWT z podpisem**: RS256/ES256 — integralnosc payload potwierdzona podpisem
+
+### Co chronić integralnoscią
+
+- **Ceny i kwoty**: serwer musi przeliczac ceny — nie ufac wartosciom od klienta
+- **Dane sesji**: ViewState (ASP.NET), cookie-based sessions — musza byc podpisane
+- **Tokeny**: JWT, reset tokens, invite tokens — podpisane i weryfikowane
+- **Parametry workflow**: step number, status, verified flags — server-side state machine
+- **Pliki**: checksumy przy upload/download — weryfikuj integralnosc
+
+### Typowe ataki na integralnosc
+
+- **Modyfikacja ceny w tranzycie**: zmien `amount: 100` na `amount: 0.01` w Burp
+- **JWT manipulation**: zmien payload (role: admin) bez znajomosci klucza (alg:none attack)
+- **ViewState tampering**: jesli MAC validation wylaczony — modyfikuj dane
+- **Replay attack**: ponowne wyslanie prawidlowego requestu (np. podwojna platnosc)
+- **Parameter pollution**: `price=100&price=0.01` — ktora wartosc uzyje backend?
+
+### Obrona
+
+- Podpisuj HMAC-em wszystkie dane ktorych integralnosc jest krytyczna
+- Weryfikuj podpis server-side PRZED przetworzeniem danych
+- Uzyj **idempotency tokens** — zapobiegaj replay attacks
+- Implementuj **server-side state machine** — nie polegaj na parametrach kroku od klienta
+- Loguj i alertuj na nieudane weryfikacje integralnosci — moze wskazywac na atak
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

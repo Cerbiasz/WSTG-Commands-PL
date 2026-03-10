@@ -135,6 +135,54 @@ curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Transaction_Authorization_Cheat_Sheet.md, Abuse_Case_Cheat_Sheet.md
+
+### Bezpieczenstwo platnosci — kluczowe zasady
+
+- **Cena ustalana SERVER-SIDE**: serwer musi przeliczac calkowita kwote na podstawie produktow w koszyku
+- NIGDY nie ufaj cenie/kwocie przeslanej przez klienta — zawsze przelicz z bazy danych
+- **Integralnosc danych**: podpisuj HMAC-em parametry platnosci (kwota, waluta, order_id)
+- **Idempotency**: kazda platnosc z unikalnym kluczem — zapobiegaj double charging
+
+### Typowe ataki na platnosci
+
+| Atak | Opis | Obrona |
+|------|------|--------|
+| Price manipulation | Zmiana ceny w request body | Server-side price calculation |
+| Negative price/quantity | Ujemne wartosci daja "zwrot" | Waliduj: cena > 0, ilosc > 0 |
+| Currency switching | Zmiana waluty na tansza | Waliduj walute server-side |
+| Coupon stacking | Wielokrotne uzycie kuponu | Atomic operation, jednorazowe kupony |
+| Race condition | Podwojne klikniecie "Zaplac" | Idempotency keys |
+| Skip payment step | Bezposredni dostep do /order/complete | Server-side state machine |
+| Callback manipulation | Falszywy callback "payment success" | Weryfikuj podpis bramki platniczej |
+| Integer overflow | Ogromna ilosc * cena = overflow = niska kwota | Waliduj zakresy, uzyj Decimal |
+
+### Bramka platnicza — bezpieczna integracja
+
+- **Webhook/callback**: weryfikuj podpis (HMAC/RSA) od bramki platniczej
+- **Nie ufaj parametrom w URL callback** — sprawdz stan platnosci przez API bramki
+- **Server-to-server**: krytyczne dane (kwota, status) potwierdzane server-side, nie przez klienta
+- **3D Secure**: implementuj dla kart — dodatkowa warstwa autoryzacji
+- **PCI DSS**: nie przechowuj pelnych numerow kart — uzyj tokenizacji bramki
+
+### Autoryzacja transakcji
+
+- **Re-autentykacja**: wymagaj hasla/MFA przed krytycznymi operacjami finansowymi
+- **Transaction signing**: uzytkownik potwierdza dokladna kwote i odbiorce (nie generic "potwierdz")
+- **Limity transakcji**: dzienny/miesięczny limit — wymaga dodatkowej weryfikacji po przekroczeniu
+- **Cooling period**: opoznienie dla duzych transakcji — czas na wykrycie oszustwa
+
+### Testowanie
+
+- Modyfikuj cene, ilosc, walute, rabat w Burp Repeater
+- Testuj negatywne i zerowe wartosci
+- Testuj race condition na platnosci (wiele requestow jednoczesnie)
+- Sprawdz czy callback jest weryfikowany (wyslij falszywy callback)
+- Testuj pominiecie kroku platnosci (bezposredni dostep do potwierdzenia)
+- Sprawdz integer overflow na ilosc * cena
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

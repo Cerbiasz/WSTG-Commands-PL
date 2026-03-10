@@ -125,12 +125,39 @@ ffuf -u "TARGET/api/FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/Co
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, Abuse_Case_Cheat_Sheet.md
 
-- Waliduj dane po stronie serwera — walidacja kliencka to UX, nie bezpieczenstwo
-- Uzywaj allowlist (dozwolone wartosci) zamiast denylist (zakazane)
-- Waliduj typ danych, zakres, dlugosc i format — nie tylko obecnosc
-- Sprawdzaj reguly biznesowe: czy cena jest dodatnia, czy ilosc nie przekracza stanu magazynowego
+### Walidacja danych — hierarchia
+
+- **Syntactic validation**: format danych — typ, dlugosc, zakres, encoding, regex
+- **Semantic validation**: znaczenie biznesowe — czy cena jest dodatnia, czy ilosc jest sensowna
+- **OBIE** warstwy sa wymagane — syntactyczna walidacja nie wylapie logicznych bledow
+
+### Server-side validation — KLUCZOWE
+
+- Walidacja kliencka (JavaScript) to **UX** — latwa do ominięcia (Burp, curl, DevTools)
+- Walidacja SERVER-SIDE jest **obowiazkowa** — jedyna skuteczna obrona
+- Kazdy parametr musi byc walidowany: typ, dlugosc, zakres, format, dozwolone wartosci
+
+### Allowlist vs Denylist
+
+- **Allowlist** (PREFEROWANE): jawnie okresl co jest dozwolone — `[a-zA-Z0-9]`
+- **Denylist** (SLABE): probuj zablokowac co jest niebezpieczne — atakujacy znajdzie obejscie
+- Uzywaj regex do walidacji formatow: email, telefon, ZIP code, daty
+
+### Reguly biznesowe do walidacji
+
+- Cena: musi byc **dodatnia**, nie moze byc **zerowa** (chyba ze dozwolone)
+- Ilosc: nie moze przekraczac stanu magazynowego, nie moze byc ujemna
+- Rabat/kupon: nie moze dawac ujemnej ceny, limit uzyc per uzytkownik
+- Integer overflow: `2147483647 + 1` = `-2147483648` — nieprzewidywalne zachowanie
+- Float precision: `0.1 + 0.2 != 0.3` — nie uzywaj float do operacji finansowych (uzyj Decimal)
+
+### Abuse Cases — definiuj OBOK use cases
+
+- Dla kazdej funkcji zdefiniuj: "jak moze byc naduzona?"
+- Przyklad: rejestracja → mass account creation, login → brute force, checkout → price manipulation
+- Implementuj kontrole anty-abuse: rate limiting, CAPTCHA, monitoring anomalii
 
 ## ROZSZERZENIA BURP SUITE
 

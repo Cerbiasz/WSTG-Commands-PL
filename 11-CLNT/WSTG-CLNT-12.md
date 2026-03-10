@@ -50,12 +50,38 @@
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md, Session_Management_Cheat_Sheet.md
 
-- Nie przechowuj wrazliwych danych w localStorage/sessionStorage — dostepne dla JS (XSS)
-- Waliduj dane odczytane z storage — moga byc zmodyfikowane przez atakujacego
-- Czysc storage przy wylogowaniu
-- Uzywaj HttpOnly cookies zamiast storage dla tokenow sesji
+### Ryzyka przechowywania danych w przegladarce
+
+- **localStorage**: dostepne dla KAZDEGO JavaScript na tej samej domenie — XSS = pelen dostep
+- **sessionStorage**: jak localStorage ale per tab — wciaz dostepne przez XSS
+- **IndexedDB/WebSQL**: wieksza pojemnosc, te same ryzyka
+- **Cookies bez HttpOnly**: dostepne przez `document.cookie` — XSS moze je wykrasc
+
+### Co NIE powinno byc w client-side storage
+
+- **Tokeny sesji / JWT** — uzywaj HttpOnly cookies zamiast localStorage
+- **Hasla** — NIGDY nie przechowuj hasel po stronie klienta
+- **PII** (dane osobowe): imie, email, adres, PESEL, numer karty
+- **Klucze API** — nie umieszczaj w JavaScript / storage — uzywaj backend proxy
+- **CSRF tokeny** — powinny byc w HttpOnly cookies lub ukrytych polach formularza
+
+### Obrona
+
+- **HttpOnly cookies** dla tokenow sesji — niedostepne dla JavaScript
+- **Minimalizuj dane** w storage — przechowuj MINIMUM potrzebnych informacji
+- **Czysc storage przy wylogowaniu**: `localStorage.clear()`, `sessionStorage.clear()`
+- **Waliduj dane** odczytane z storage — moga byc zmodyfikowane przez atakujacego lub malware
+- **Szyfruj wrazliwe dane** w storage jesli MUSISZ je przechowywac (Web Crypto API)
+- **Ustaw krotki TTL** na danych w storage — nie przechowuj danych bez daty wygasniecia
+
+### Testowanie
+
+- DevTools > Application > Storage: przejrzyj WSZYSTKIE dane w localStorage, sessionStorage, IndexedDB, cookies
+- Szukaj: tokenow, hasel, kluczy API, PII, danych finansowych
+- Sprawdz czy dane sa czyszczone po wylogowaniu
+- Sprawdz czy dane sa szyfrowane
 
 ## ROZSZERZENIA BURP SUITE
 

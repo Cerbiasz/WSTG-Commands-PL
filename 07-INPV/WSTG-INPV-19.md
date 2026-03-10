@@ -95,12 +95,49 @@ curl -s "https://TARGET/fetch?url=http://COLLABORATOR_URL"
 
 > Źródło: OWASP CheatSheetSeries — Server_Side_Request_Forgery_Prevention_Cheat_Sheet.md
 
-- Waliduj i uzywaj allowlist URL-ow/domen do ktorych aplikacja moze wysylac requesty
-- Blokuj dostep do wewnetrznych IP (127.0.0.1, 10.0.0.0/8, 169.254.169.254, 172.16.0.0/12, 192.168.0.0/16)
-- Blokuj dostep do endpointow metadanych chmury (169.254.169.254 — AWS/GCP/Azure)
-- Wylacz nieuzywane schematy URL (file://, gopher://, dict://)
-- Nie podazaj za redirectami slepо — waliduj kazdy URL po przekierowaniu
-- Implementuj kontrole na poziomie sieci (firewall rules) jako defense-in-depth
+### Case 1 — Aplikacja komunikuje sie z ZNANYMI serwisami (allowlist)
+
+- Uzywaj **allowlist** docelowych IP/domen — to najlepsza obrona gdy cele sa znane
+- Waliduj input na warstwie aplikacji:
+  - **IP**: uzyj bibliotek do walidacji formatu (Apache Commons Validator, .NET IPAddress.TryParse, JS ip-address)
+  - **Domena**: uzyj bibliotek (Java DomainValidator, .NET Uri.CheckHostName, JS is-valid-domain)
+  - **URL**: NIE akceptuj pelnych URL od uzytkownika — tylko IP lub domene
+- Porownuj zwalidowany IP/domene z allowlista (strict string comparison, case sensitive)
+- Wylacz podazanie za **redirectami** w kliencie HTTP — bypass input validation
+
+### Case 2 — Aplikacja komunikuje sie z DOWOLNYMI serwisami (blocklist)
+
+- Gdy allowlist nie jest mozliwy (np. webhooks) — uzywaj blocklist jako minimum
+- Blokuj zakresy IP:
+  - Localhost: `127.0.0.0/8`, `0.0.0.0/8`, `::1/128`
+  - RFC1918 Private: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+  - Link-local: `169.254.0.0/16`
+  - Multicast: `224.0.0.0/4`, `ff00::/8`
+- Blokuj metadata endpoints chmury:
+  - AWS IMDS: `169.254.169.254`, `metadata.amazonaws.com`
+  - GCP: `metadata.google.internal`, `169.254.169.254`
+  - Azure IMDS: `169.254.169.254`
+- Zezwalaj TYLKO na HTTP/HTTPS — blokuj `file://`, `gopher://`, `dict://`, `ftp://`, `phar://`
+- Waliduj domene: sprawdz DNS resolution — jesli resolve'uje do prywatnego IP, zablokuj (obrona przed DNS pinning)
+
+### Walidacja IP — uwaga na bypassy
+
+- Sprawdz biblioteki pod katem odpornosci na: Hex encoding (`0x7f000001`), Octal (`0177.0.0.1`), Dword (`2130706433`), URL encoding, Mixed encoding
+- Java InetAddressValidator i JS ip-address sa ODPORNE na te bypassy
+- .NET IPAddress.TryParse jest PODATNY na Hex, Octal, Dword, Mixed (ale allowlist blokuje bypass)
+
+### Obrona na poziomie sieci
+
+- Firewall rules: ogranicz wychodzacy ruch aplikacji TYLKO do dozwolonych celow
+- Segmentacja sieci: zablokuj nielegitymowe polaczenia bezposrednio na poziomie sieci
+- AWS: migriuj do **IMDSv2** i wylacz IMDSv1 — IMDSv2 wymaga tokena sesji (PUT request)
+
+### Dodatkowe zabezpieczenia
+
+- Nie podazaj za redirectami slepo — waliduj kazdy URL po przekierowaniu
+- Monitoruj allowlist domen — wykrywaj gdy resolve'uja do prywatnych IP (DNS pinning)
+- Wymus `Host` header zgodny z oczekiwanym — zapobiega host header injection w SSRF
+- Uzyj Semgrep rules do statycznego wykrywania potencjalnych SSRF w kodzie
 
 ## ROZSZERZENIA BURP SUITE
 

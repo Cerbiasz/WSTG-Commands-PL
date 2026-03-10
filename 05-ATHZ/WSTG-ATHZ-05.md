@@ -72,11 +72,67 @@ curl -v "https://TARGET/oauth/authorize?client_id=CLIENT_ID&redirect_uri=https:/
 
 > Źródło: OWASP CheatSheetSeries — OAuth2_Cheat_Sheet.md
 
-- Waliduj redirect_uri scisle — uzyj dokladnego dopasowania, nie wzorcow
-- Uzywaj PKCE (Proof Key for Code Exchange) dla klientow publicznych
-- Waliduj parametr state aby zapobiec CSRF na OAuth flow
-- Uzywaj krotkoterminowych access tokenow i refresh tokenow z rotacja
-- Nie przechowuj tokenow w localStorage — uzywaj HttpOnly cookies lub secure storage
+### Fundamenty bezpieczenstwa OAuth 2.0
+
+- **PKCE** (Proof Key for Code Exchange) jest **obowiazkowe** dla klientow publicznych i zalecane dla wszystkich
+- **Implicit grant jest DEPRECATED** — uzywaj Authorization Code + PKCE zamiast tego
+- **Resource Owner Password Credentials grant** — NIE uzywaj (ujawnia credentials klientowi)
+- Wszystkie komunikacja OAuth musi byc przez **TLS** — redirect_uri nie moze uzywac `http://`
+- Uzywaj parametru **state** (lub PKCE) do ochrony przed CSRF na OAuth flow
+- Przy wielu Authorization Servers: uzywaj parametru **iss** do identyfikacji servera (ochrona przed mix-up)
+
+### redirect_uri — scisla walidacja
+
+- Uzywaj **dokladnego dopasowania** (exact match) — nie wzorcow, nie wildcardow
+- NIE pozwalaj na open redirectors na URL-ach aplikacji — moga byc uzyte do exfiltration kodu
+- Ataki na redirect_uri:
+  - `https://evil.com/callback` — calkowicie inny serwer
+  - `https://target.evil.com/callback` — subdomena atakujacego
+  - `https://target.com/callback/../evil` — path traversal
+  - `https://target.com/callback?next=evil.com` — open redirect chain
+  - `https://target.com@evil.com` — URL authority confusion
+
+### PKCE — implementacja
+
+- Klient generuje losowy `code_verifier` (min. 43 znaki, CSPRNG)
+- Hash `code_verifier` → `code_challenge` (SHA-256) wysylany w authorization request
+- Authorization Server musi **wymuszac** PKCE — odrzucac requesty bez `code_challenge`
+- Chroni przed **authorization code interception** — nawet jesli kod wycieknie, nie mozna go uzyc
+
+### Tokeny — bezpieczenstwo
+
+- **Access tokens**: krotkoterminowe (minuty-godziny), ograniczone scope i audience
+- **Refresh tokens**: dluzsze, chronione rotacja (nowy refresh token przy kazdym uzyciu)
+- **Audience restriction**: access token musi byc ograniczony do konkretnego Resource Server
+- **Scope restriction**: przyznawaj **minimalne** uprawnienia — principle of least privilege
+- Sender-constrained tokens (DPoP, mTLS) — wiaza token z klientem kryptograficznie
+
+### DPoP (Demonstration of Proof of Possession)
+
+- Klient generuje pare kluczy, podpisuje proof JWT z hashem tokenu
+- Resource Server weryfikuje proof + token — atakujacy z tokenem nie moze go uzyc bez klucza
+- Nie wymaga mTLS — dziala w przeglarkach i mobile apps
+- Chroni przed **token replay** i **token theft**
+
+### Przechowywanie tokenow
+
+- **Backend (server-side)**: najlepszy — tokeny nigdy nie trafiaja do przegladarki
+- **HttpOnly Secure cookie**: akceptowalne — chronione przed XSS
+- **sessionStorage**: akceptowalne dla SPA — nie przezywa zamkniecia karty
+- **localStorage**: **UNIKAJ** — dostepne z JavaScript, podatne na XSS
+- **URL/query parameters**: **NIGDY** — logowane, Referer leakage, historia przegladarki
+
+### Co testowac
+
+- Czy implicit flow jest uzywany (token w URL fragment)?
+- Czy PKCE jest wymagane?
+- Czy state parameter jest present i walidowany?
+- Czy redirect_uri jest scisle walidowane (exact match)?
+- Czy token leakuje przez Referer, URL, logi?
+- Czy scope escalation jest mozliwe?
+- Czy client_secret jest widoczne w frontend code?
+- Czy refresh token ma rotacje?
+- Czy mozna reuse authorization code?
 
 ## ROZSZERZENIA BURP SUITE
 

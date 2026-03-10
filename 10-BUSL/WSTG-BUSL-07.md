@@ -111,10 +111,40 @@ wfuzz -c --hc 404 -z range,1-1000 TARGET/api/item/FUZZ
 
 > Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md
 
-- Definiuj abuse cases obok use cases — jak moze byc naduzona kazda funkcja
-- Implementuj rate limiting na wszystkich endpointach
-- Wykrywaj anomalne wzorce uzywania (nietypowe ilosci, czestotliwosci, sekwencje)
-- Loguj podejrzana aktywnosc i alertuj na potencjalne naduzycia
+### Defenses Against Application Misuse
+
+- **Abuse cases obok use cases**: dla KAZDEJ funkcji zdefiniuj scenariusze naduzywania
+- Przyklad: "Jako atakujacy chce obejsc WAF", "Jako bot chce omnic CAPTCHA"
+- Wbuduj obrony w design — nie dodawaj post-factum
+
+### Rate Limiting — warstwowe
+
+- **Per IP**: ogranicz requesty z jednego IP (uwaga: NAT, proxy)
+- **Per uzytkownik/konto**: ogranicz operacje per zalogowany uzytkownik
+- **Per endpoint**: krytyczne endpointy (login, reset) maja nizsze limity
+- **Globalnie**: ogranicz calkowita przepustowosc — obrona przed DDoS
+- Progresywne opoznienia: 1s, 2s, 4s po kolejnych probach
+
+### WAF Bypass — co testowac
+
+- Case manipulation: `<ScRiPt>`, `SELECT` vs `select` vs `SeLeCt`
+- Encoding: URL encoding (`%27`), double encoding (`%2527`), Unicode
+- Komentarze SQL: `/**/`, `/*!50000*/` (MySQL version comment)
+- Alternatywne payloady: `<img src=x onerror=alert(1)>` zamiast `<script>alert(1)</script>`
+- Content-Type switching: `application/json` zamiast `application/x-www-form-urlencoded`
+
+### CAPTCHA — wdrozenie i bypass
+
+- Waliduj CAPTCHA **server-side** — nie po stronie klienta
+- CAPTCHA musi byc **jednorazowa** — stare rozwiazanie nie moze byc reuse
+- Uzyj **invisible CAPTCHA** (reCAPTCHA v3) — mniej irytujaca dla uzytkownikow
+- Testuj: puste pole CAPTCHA, brak parametru, stare rozwiazanie, OCR bypass
+
+### Monitoring i alerting
+
+- Loguj WSZYSTKIE podejrzane wzorce: duza ilosc 404, szybkie requesty, nietypowe User-Agent
+- Alertuj na: skanowanie portow, directory brute force, credential stuffing
+- Integruj z SIEM do centralnego monitorowania i korelacji zdarzen
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -172,12 +172,43 @@ ffuf -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/big.txt:PATH -u "http
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
 
-- Waliduj stan uwierzytelnienia po stronie serwera przy kazdym uzyciu
-- Wymagaj ponownego uwierzytelnienia dla wrazliwych operacji (zmiana hasla, platnosci)
-- Nie polegaj na ukrytych polach formularza lub cookies do kontroli dostepu
-- Sprawdz czy zmiana roli/sesji wymaga ponownej weryfikacji
+### Walidacja uwierzytelnienia po stronie serwera
+
+- **Kazdy request** musi byc walidowany server-side — nie polegaj na client-side checks
+- Uzyj globalnych filtrow/middleware: Java Filters, Django Middleware, Express middleware, .NET Filters
+- **Deny by default** — jesli brak jawnej reguly, ODMOW dostepu
+
+### Obejscie uwierzytelnienia — wektory
+
+- **Forced browsing**: bezposredni dostep do chronionych URL bez logowania
+- **Path manipulation**: `/admin/../admin`, `/admin;/`, `/%2e%2e/admin`, `/ADMIN/` (case sensitivity)
+- **HTTP method switching**: GET zamiast POST, OPTIONS, PUT na chronionych endpointach
+- **Header injection**: `X-Forwarded-For: 127.0.0.1`, `X-Original-URL`, `X-Custom-IP-Authorization`
+- **Parameter manipulation**: `?admin=true`, `?authenticated=true`, `?debug=true`
+- **API version bypass**: stara wersja API (`/api/v1/`) moze nie miec autentykacji
+
+### Re-autentykacja dla wrazliwych operacji
+
+- **Zmiana hasla**: wymagaj podania AKTUALNEGO hasla
+- **Platnosci / przelewy**: wymagaj hasla lub MFA
+- **Zmiana emaila / telefonu**: wymagaj hasla — atakujacy moze przejac konto
+- **Eksport danych**: wymagaj potwierdzenia tozsamosci
+- **Operacje administracyjne**: wymagaj step-up authentication
+
+### Nie polegaj na client-side
+
+- Ukryte pola formularza, cookies, localStorage — NIE sa mechanizmami kontroli dostepu
+- JavaScript ukrywajacy elementy UI — atakujacy moze ominac przez DevTools
+- Stan autentykacji MUSI byc weryfikowany SERVER-SIDE na kazdym request
+
+### Testowanie
+
+- Zmapuj WSZYSTKIE endpointy po zalogowaniu
+- Usun Cookie/Authorization header i sprawdz dostep do kazdego endpointu
+- Sprawdz dostep z roznych rol (user vs admin)
+- Testuj rozne metody HTTP na tym samym endpoincie
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -122,6 +122,62 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Third_Party_Javascript_Management_Cheat_Sheet.md, Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Identyfikacja frameworka — sygnatury
+
+| Framework/CMS | Sygnatury |
+|--------------|-----------|
+| WordPress | Cookie: `wordpress_`, sciezka `/wp-content/`, `/wp-includes/`, meta generator |
+| Joomla | Cookie: `joomla_`, sciezka `/administrator/`, `/components/` |
+| Drupal | Naglowek `X-Drupal-Cache`, `/sites/default/files/`, `Drupal.settings` w JS |
+| Laravel | Cookie: `laravel_session`, `XSRF-TOKEN`, naglowek `X-Powered-By: PHP` |
+| Django | Cookie: `csrftoken`, `sessionid`, strona admin `/admin/` |
+| Spring Boot | Sciezki `/actuator/`, cookie `JSESSIONID` |
+| ASP.NET | Cookie: `ASP.NET_SessionId`, naglowek `X-AspNet-Version`, ViewState |
+| Express.js | Naglowek `X-Powered-By: Express` (jesli nie wylaczony) |
+| Ruby on Rails | Cookie: `_session_id`, naglowek `X-Runtime` |
+| Next.js | Naglowek `X-Powered-By: Next.js`, sciezka `/_next/` |
+
+### Cookie names → technologia
+
+| Cookie | Technologia |
+|--------|------------|
+| `PHPSESSID` | PHP |
+| `JSESSIONID` | Java (Tomcat, JBoss, Jetty) |
+| `ASP.NET_SessionId` | ASP.NET |
+| `connect.sid` | Node.js (Express) |
+| `laravel_session` | Laravel (PHP) |
+| `csrftoken` + `sessionid` | Django (Python) |
+| `_rails_session` | Ruby on Rails |
+| `CFID` + `CFTOKEN` | ColdFusion |
+
+### JavaScript libraries — wykrywanie wersji
+
+- Sprawdz w DevTools Console: `jQuery.fn.jquery`, `angular.version`, `React.version`
+- Retire.js: automatyczne wykrywanie podatnych wersji bibliotek JS
+- SRI (Subresource Integrity): sprawdz czy `<script>` uzywa atrybutu `integrity`
+- Znane podatne wersje: jQuery < 3.5.0 (XSS), Angular.js 1.x (sandbox escape), Lodash < 4.17.21 (prototype pollution)
+
+### CMS version detection — techniki
+
+| CMS | Jak sprawdzic wersje |
+|-----|---------------------|
+| WordPress | `/wp-links-opml.php`, `/feed/`, meta generator, `/readme.html` |
+| Joomla | `/language/en-GB/en-GB.xml`, `/administrator/manifests/files/joomla.xml` |
+| Drupal | `/CHANGELOG.txt`, `/core/install.php`, naglowek `X-Generator` |
+| Magento | `/magento_version`, `/RELEASE_NOTES.txt` |
+
+### Obrona
+
+- Usun meta tagi `generator` ujawniajace CMS i wersje
+- Aktualizuj framework i wszystkie biblioteki JS do najnowszych wersji
+- Uzyj SRI (Subresource Integrity) dla zewnetrznych skryptow JS
+- Monitoruj CVE dla uzywanych technologii (Snyk, Dependabot, npm audit)
+- Usun domyslne pliki frameworka ujawniajace wersje (CHANGELOG, README, VERSION)
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

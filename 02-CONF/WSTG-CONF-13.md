@@ -132,6 +132,67 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Path confusion — mechanizm
+
+- Roznice w interpretacji sciezek miedzy **reverse proxy** (Nginx, Apache) a **backendem** (Tomcat, Node.js, Spring)
+- Proxy moze uznac sciezke za publiczna, a backend interpretuje ja jako dostep do chronionego zasobu
+- Kluczowe: normalizacja URL odbywa sie w roznych momentach na roznych komponentach
+
+### Techniki path confusion
+
+| Technika | Przyklad | Cel |
+|----------|---------|-----|
+| Path traversal | `/public/../admin` | Ominiecie kontroli dostepu |
+| Semicolon (Tomcat/Jetty) | `/admin/..;/public` | Tomcat traktuje `;` jako separator parametrow sciezki |
+| Double URL encoding | `%252e%252e%252f` | Bypass WAF — dekodowanie odbywa sie dwukrotnie |
+| Null byte | `/admin%00.jpg` | Starsze serwery obcinaja po null byte |
+| Backslash | `/admin\..\/public` | Windows IIS interpretuje `\` jak `/` |
+| UTF-8 overlong | `%c0%af` = `/` | Bypass filtrow ASCII |
+| Trailing dot/space | `/admin.` lub `/admin%20` | IIS ignoruje trailing dot/space |
+| Double slash | `//admin` | Niektore proxy pomijaja reguly dla podwojnego slasha |
+
+### Reverse proxy + backend — niespojnosci
+
+| Scenariusz | Proxy widzi | Backend widzi |
+|-----------|-------------|---------------|
+| `/public/..;/admin` | `/public/..;/admin` (publiczne) | `/admin` (chronione) |
+| `/admin/./` | `/admin/./` (block) | `/admin/` (normalizacja) |
+| `/Admin` | `/Admin` (nie matchuje regule `/admin`) | `/admin` (case insensitive) |
+| `//admin` | `//admin` (pomija regule) | `/admin` (normalizacja) |
+
+### Konfiguracja — jak zapobiegac
+
+**Nginx + backend:**
+```
+# Normalizuj sciezki PRZED przekazaniem do backendu
+merge_slashes on;  # domyslnie wlaczone
+# Blokuj path traversal
+location ~* /\.\./ { return 403; }
+# Blokuj semicolon
+location ~* ; { return 403; }
+```
+
+**Apache:**
+```
+# Wlacz AllowEncodedSlashes Off (domyslnie)
+AllowEncodedSlashes Off
+# mod_security: blokuj path traversal
+SecRule REQUEST_URI "\.\./" "id:1,deny,status:403"
+```
+
+### Obrona
+
+- **Normalizuj sciezki** na proxy/WAF PRZED przekazaniem do backendu
+- Testuj te same reguly dostepu na proxy I backendzie — nie polegaj na jednej warstwie
+- Blokuj znaki specjalne w sciezkach: `..`, `;`, `%00`, `%2e`, `%2f` na wejsciu
+- Uzyj **allowlist** sciezek zamiast denylist
+- Upewnij sie ze proxy i backend uzywaja tego samego algorytmu normalizacji URL
+- Testuj case sensitivity — jesli proxy jest case-sensitive a backend nie, to vulnerability
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

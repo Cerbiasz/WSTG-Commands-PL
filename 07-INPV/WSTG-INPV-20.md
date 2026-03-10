@@ -76,11 +76,40 @@ ffuf -u "https://TARGET/api/user" -X POST -H "Content-Type: application/json" -d
 
 > Źródło: OWASP CheatSheetSeries — Mass_Assignment_Cheat_Sheet.md
 
-- Uzywaj allowlist dozwolonych pol — jawnie okresl ktore pola moga byc modyfikowane
-- Uzywaj DTO (Data Transfer Objects) / View Models zamiast bezposredniego bindowania do entity
-- Framework-specific: Rails `strong_parameters`, .NET `[Bind]`, Spring `@JsonIgnore`
-- Testuj dodawanie nieoczekiwanych pol: role, isAdmin, price, balance, verified
-- Nigdy nie binduj user input bezposrednio do modelu bazy danych
+### Czym jest Mass Assignment
+
+- Framework automatycznie mapuje parametry request na pola obiektu/modelu
+- Atakujacy dodaje pola ktore NIE powinny byc modyfikowane: `role`, `isAdmin`, `price`, `balance`, `verified`
+- Przyklady: Rails (ActiveRecord), Spring (ModelAttribute), Django (ModelForm), Node (Mongoose)
+
+### Obrona — Allowlist pol
+
+- **Jawnie okresl ktore pola moga byc modyfikowane** — allowlist zamiast denylist
+- **DTO / View Models**: oddzielny obiekt do odbioru danych od uzytkownika, NIE entity bazodanowe
+- NIGDY nie binduj user input **bezposrednio** do modelu bazy danych
+
+### Framework-specific obrona
+
+- **Ruby on Rails**: `params.require(:user).permit(:name, :email)` — strong parameters
+- **Spring (Java)**: `@JsonIgnore` na polach wrażliwych, `@ModelAttribute` z allowlistą
+- **Django**: `Meta.fields = ['name', 'email']` w ModelForm — jawna lista pól
+- **ASP.NET**: `[Bind(Include = "Name,Email")]` lub `[BindNever]` na polach wrażliwych
+- **Node/Express + Mongoose**: `schema.set('strict', true)` + jawne pola w kontrolerze
+- **Laravel**: `$fillable` (allowlist) lub `$guarded` (denylist) w modelu Eloquent
+
+### Typowe pola do testowania
+
+- `role`, `isAdmin`, `admin`, `userType`, `privilege` — eskalacja uprawnien
+- `price`, `balance`, `credits`, `amount`, `discount` — manipulacja finansowa
+- `verified`, `active`, `approved`, `emailVerified` — obejscie weryfikacji
+- `password`, `passwordHash`, `secret` — nadpisanie credentials
+- `id`, `userId`, `ownerId` — zmiana wlasciciela obiektu (IDOR)
+
+### Testowanie
+
+- Porownaj odpowiedz API z dozwolonymi polami vs z dodanymi nieoczekiwanymi polami
+- Testuj endpointy: rejestracja, aktualizacja profilu, tworzenie zamowienia, zmiana ustawien
+- Uzyj Param Miner (Burp) lub arjun do discovery ukrytych parametrow
 
 ## ROZSZERZENIA BURP SUITE
 

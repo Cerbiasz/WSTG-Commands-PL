@@ -176,12 +176,61 @@ hashcat -a 0 -m 16500 JWT_TOKEN_HERE Desktop/WSTG/Bug-Bounty-Wordlists-main/jwt-
 
 > Źródło: OWASP CheatSheetSeries — JSON_Web_Token_for_Java_Cheat_Sheet.md
 
-- Waliduj algorytm po stronie serwera — nigdy nie akceptuj "alg":"none"
-- Uzywaj silnych kluczy: HMAC min 256 bit, RSA min 2048 bit
-- Ustaw krotki czas wygasniecia (exp) — minuty, nie dni
-- Waliduj wszystkie claimy: iss, aud, exp, nbf
-- Nie przechowuj wrazliwych danych w payload JWT — jest zakodowany, nie zaszyfrowany
-- Implementuj mechanizm odwolywania tokenow (blacklist lub short-lived + refresh)
+### Atak "alg:none" — brak podpisu
+
+- Atakujacy zmienia `"alg":"HS256"` na `"alg":"none"` — niektoré biblioteki akceptuja token BEZ podpisu
+- **Obrona**: JAWNIE wymagaj oczekiwanego algorytmu przy walidacji — `JWT.require(Algorithm.HMAC256(key))`
+- Uzywaj biblioteki, ktora NIE jest podatna na ten atak (sprawdz CVE)
+
+### Atak Key Confusion (RS256 → HS256)
+
+- JWT podpisany RS256 (asymetryczny) — atakujacy zmienia na HS256 (symetryczny) i uzywa public key jako secret
+- **Obrona**: waliduj algorytm server-side, nie polegaj na `alg` z headera tokenu
+- Uzywaj oddzielnych kluczy do HMAC i RSA — nie mieszaj
+
+### Token Sidejacking Prevention
+
+- Dodaj **user context** (fingerprint) do tokenu — losowy string w hardened cookie (`__Secure-Fgp`)
+- Przechowuj **SHA-256 hash** fingerprint w JWT (nie raw value — obrona przed XSS)
+- Przy walidacji: porownaj hash fingerprint z cookie z hashem w tokenie
+- Jesli brak cookie lub hash sie nie zgadza — odrzuc token
+
+### Revokacja tokenow (logout)
+
+- JWT jest **stateless** — domyslnie NIE mozna go uniewaznic
+- **Token Denylist**: przechowuj SHA-256 digest odwolanych tokenow w bazie
+  - `CREATE TABLE revoked_token(jwt_token_digest VARCHAR(255) PRIMARY KEY, revocation_date TIMESTAMP)`
+  - Wpis musi istniec minimum do czasu wygasniecia tokenu
+- **Alternatywa**: krotki czas zycia JWT (15 min) + refresh token z mozliwoscia revokacji
+- Przy logout: dodaj token do denylist + wyczysc cookie i sessionStorage
+
+### Walidacja claimow — WSZYSTKIE wymagane
+
+- **exp** (expiration): ZAWSZE ustawiaj, krotki czas (15 min dla access token)
+- **iss** (issuer): waliduj ze token pochodzi z Twojego serwera
+- **aud** (audience): waliduj ze token jest przeznaczony dla Twojej aplikacji
+- **nbf** (not before): token nie jest wazny przed ta data
+- **iat** (issued at): czas wydania — sprawdz czy nie jest z przyszlosci
+
+### Przechowywanie JWT po stronie klienta
+
+- **sessionStorage** (preferowane dla SPA) — czyszczone po zamknieciu karty
+- **NIE localStorage** — dostepne przez JavaScript, podatne na XSS, nie czyszczone automatycznie
+- **Cookie z HttpOnly** — bezpieczne ale wymaga CSRF protection
+- NIGDY nie przechowuj JWT w URL parametrach
+
+### Silne klucze
+
+- HMAC: min **256 bit** (HS256), **384 bit** (HS384), **512 bit** (HS512)
+- RSA: min **2048 bit** (zalecane 4096 bit)
+- ECC: **P-256** lub **Curve25519**
+- Klucz NIGDY w kodzie zrodlowym — uzywaj secrets manager/vault
+
+### JKU/JWK/KID Injection
+
+- **jku** (JWK Set URL): atakujacy podmienia URL na swoj serwer z wlasnym kluczem
+- **kid** (Key ID): moze byc podatny na path traversal (`../../dev/null`) lub SQL injection
+- **Obrona**: whitelist dozwolonych URL jku, walidacja kid, nie uzywaj user-controlled header claims
 
 ## ROZSZERZENIA BURP SUITE
 

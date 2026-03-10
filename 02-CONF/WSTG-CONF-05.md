@@ -156,6 +156,40 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Conten
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Access_Control_Cheat_Sheet.md
+
+### Panele administracyjne — bezpieczenstwo
+
+- **Nie umieszczaj** panelu admina pod przewidywalnymi URL-ami (`/admin`, `/administrator`, `/wp-admin`)
+- Ogranicz dostep do panelu admina przez **IP whitelist** lub **VPN**
+- Wymagaj **MFA** dla wszystkich kont administracyjnych
+- Osobna domena/subdomena dla panelu admina (np. `admin.internal.target.com`)
+- Nie linkuj panelu admina z glownej strony — nie powinien byc discoverable
+
+### Typowe sciezki paneli admina per technologia
+
+| Technologia | Sciezki |
+|-------------|---------|
+| WordPress | `/wp-admin`, `/wp-login.php` |
+| Joomla | `/administrator` |
+| Drupal | `/user/login`, `/admin` |
+| Django | `/admin/` |
+| phpMyAdmin | `/phpmyadmin/`, `/pma/`, `/mysql/` |
+| Tomcat | `/manager/`, `/host-manager/` |
+| Jenkins | `/login`, `/manage` |
+| Kibana/Grafana | `/app/kibana`, `/grafana/login` |
+| Spring Boot Actuator | `/actuator`, `/health`, `/env`, `/beans` |
+
+### Obrona
+
+- Zmien domyslna sciezke panelu admina na niestandardowa
+- Wdróż rate limiting na strone logowania admina
+- Monitoruj i alertuj na brute force na panelu admina
+- Usun niepotrzebne panele zarzadzania (phpMyAdmin, Adminer) z produkcji
+- Spring Boot: zabezpiecz endpointy Actuator — nie wystawiaj `/env`, `/configprops` publicznie
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

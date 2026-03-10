@@ -57,6 +57,44 @@ curl -s "https://TARGET/api/data?callback=alert" # JSONP
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — DOM_based_XSS_Prevention_Cheat_Sheet.md, Cross_Site_Scripting_Prevention_Cheat_Sheet.md
+
+### DOM-based JavaScript Execution — sinki
+
+- **eval()**: wykonanie dowolnego kodu JS — najniebezpieczniejszy
+- **Function()**: `new Function('alert(1)')()` — rownowazne eval
+- **setTimeout/setInterval**: z argumentem string — `setTimeout("alert(1)", 1000)`
+- **innerHTML/outerHTML**: wstawia HTML z potencjalnym JS
+- **document.write/writeln**: wstawia HTML do dokumentu
+- **element.setAttribute**: np. `setAttribute("onclick", user_input)`
+- **javascript: URI**: `location = "javascript:alert(1)"`
+
+### Zrodla (sources) danych uzytkownika w DOM
+
+- `location.hash`, `location.search`, `location.href`
+- `document.referrer`
+- `document.cookie`
+- `window.name`
+- `postMessage` data
+- `localStorage/sessionStorage`
+- URL parameters via frameworks (React Router, Vue Router)
+
+### Obrona
+
+- **NIGDY** nie uzywaj `eval()`, `Function()`, `setTimeout/setInterval` z danymi uzytkownika
+- Uzyj `textContent` zamiast `innerHTML` — nie interpretuje HTML/JS
+- Sanityzuj HTML: **DOMPurify** — jedyna zaufana biblioteka client-side
+- CSP: `script-src 'self'` — blokuje inline JS i eval
+- Uzyj frameworkow (React, Vue, Angular) — domyslnie enkoduja output
+
+### JSONP — ryzyko
+
+- Callback parameter: `?callback=alert(1)` — wykonanie dowolnego JS
+- JSONP jest **przestarzale** — uzywaj CORS + JSON zamiast JSONP
+- Jesli musisz uzywac: waliduj callback — allowlist dozwolonych nazw funkcji
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

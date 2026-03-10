@@ -90,11 +90,51 @@ wfuzz -c -z file,Desktop/WSTG/fuzzdb-master/attack/xss/xss-rsnake.txt -X POST -d
 
 > Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, XSS_Filter_Evasion_Cheat_Sheet.md
 
-- Enkoduj dane na wyjsciu (output), nie na wejsciu — dane sa uzywane w roznych kontekstach
-- Sanityzuj HTML allowlista tagow/atrybutow (DOMPurify) — nie blacklista
-- Sprawdz uploady plikow pod katem XSS (SVG, HTML, XML z paylodem)
-- Wdroz CSP jako dodatkowa warstwe obrony
-- Stored XSS jest groźniejszy niz reflected — payload wykonuje sie dla kazdego odwiedzajacego
+### Dlaczego Stored XSS jest krytyczny
+
+- Stored XSS jest grozniejszy niz reflected — payload wykonuje sie dla KAZDEGO odwiedzajacego strone
+- Moze prowadzic do: kradziezy sesji, impersonacji, keyloggingu, przekierowania na malware, defacement
+- Czesto wystepuje w: komentarzach, profilach, wiadomosciach, forach, recenzjach, polu "about me"
+
+### Output Encoding — klucz do obrony
+
+- Enkoduj dane na WYJSCIU (output), nie na wejsciu — te same dane moga byc uzywane w roznych kontekstach
+- Encoding musi byc dopasowany do kontekstu renderowania:
+  - HTML Body: `&lt;`, `&gt;`, `&amp;`, `&quot;`, `&#x27;`
+  - HTML Attribute: pelny encoding `&#xHH;` + ZAWSZE cudzylowy wokol atrybutow
+  - JavaScript: `\xHH` encoding — zmienne TYLKO w quoted strings
+  - URL: `%HH` encoding — tylko wartosc parametru
+- Uzyj `.textContent` zamiast `.innerHTML` — to safe sink ktory automatycznie enkoduje
+
+### HTML Sanitization dla rich content
+
+- Jesli uzytkownik musi tworzyc formatowany HTML (WYSIWYG, markdown) — uzyj sanityzacji zamiast encodingu
+- **DOMPurify** jest rekomendowany: `let clean = DOMPurify.sanitize(dirty);`
+- NIE modyfikuj stringa PO sanityzacji — to uniewaznla zabezpieczenia
+- NIE przekazuj sanityzowanego stringa do biblioteki ktora moze go zmutowac
+- Regularnie aktualizuj DOMPurify — bypassy sa odkrywane regularnie
+
+### Wektory ataku specyficzne dla Stored XSS
+
+- Sprawdz uploady plikow pod katem XSS: SVG (moze zawierac `<script>`), HTML, XML, pliki z EXIF/metadanymi
+- Rich text editory: sprawdz czy sanityzuja input — wiele z nich pozwala na bypass
+- Markdown parsery: testuj wstrzykniecie HTML/JS przez markdown syntax
+- Nazwy plikow: `"><img src=x onerror=alert(1)>.jpg` — jesli nazwa jest renderowana bez encodingu
+- Metadane plikow (EXIF): XSS payload w polu komentarza/autora EXIF
+
+### Framework Security i escape hatches
+
+- React: `dangerouslySetInnerHTML` — jesli uzywany z user input bez sanityzacji = stored XSS
+- Angular: `bypassSecurityTrustHtml()` — omija wbudowany sanitizer
+- Vue: `v-html` — renderuje raw HTML, wymaga sanityzacji
+- Nigdy nie lacz auto-escape frameworka z recznym renderowaniem HTML
+
+### Dodatkowe warstwy obrony
+
+- **CSP** z nonces: `script-src 'nonce-random'` — blokuje inline scripts nawet jesli XSS istnieje
+- **HttpOnly cookies**: zapobiega kradziezy sesji przez `document.cookie`
+- **X-Content-Type-Options: nosniff**: zapobiega MIME-sniffing uploadowanych plikow
+- Input validation jako dodatkowa warstwa — NIE jako jedyna obrona
 
 ## ROZSZERZENIA BURP SUITE
 

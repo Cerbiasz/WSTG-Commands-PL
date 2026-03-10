@@ -128,6 +128,66 @@ whois -h whois.radb.net -- "-i origin $(whois TARGET | grep -i origin | awk '{pr
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Docker_Security_Cheat_Sheet.md
+
+### Komponenty architektury — identyfikacja
+
+| Komponent | Jak wykryc | Naglowki/sygnatury |
+|-----------|-----------|-------------------|
+| CDN | Naglowki `CF-Ray`, `X-CDN`, `X-Cache`, `X-Served-By` | Cloudflare, Akamai, Fastly, CloudFront |
+| WAF | Strony blokowania, naglowki, wafw00f | ModSecurity, Cloudflare, AWS WAF, Imperva |
+| Load Balancer | Rozne odpowiedzi, naglowek `Via`, cookie `BIGipServer` | F5, HAProxy, Nginx, AWS ALB |
+| Reverse Proxy | Naglowki `Via`, `X-Forwarded-For`, rozne Server headers | Nginx, Apache, Envoy, Traefik |
+| Cache | `X-Cache: HIT/MISS`, `Age`, `X-Varnish` | Varnish, Redis, Memcached |
+| Database | Bledy SQL, naglowki specyficzne | MySQL, PostgreSQL, MongoDB, MSSQL |
+
+### CDN — identyfikacja per provider
+
+| CDN | Sygnatury |
+|-----|-----------|
+| Cloudflare | Naglowek `CF-Ray`, `Server: cloudflare`, cookie `__cfduid` |
+| Akamai | Naglowek `X-Akamai-Transformed`, cookie `AkamaiGHP` |
+| AWS CloudFront | Naglowek `X-Amz-Cf-Id`, `X-Amz-Cf-Pop`, `Via: ... CloudFront` |
+| Fastly | Naglowek `X-Served-By`, `X-Cache`, `Fastly-Debug-Digest` |
+| Azure CDN | Naglowek `X-Azure-Ref`, `X-MSEdge-Ref` |
+
+### WAF detection — wskazówki
+
+- Wyslij zlosliwe zapytanie (np. `?id=1' OR 1=1--`) i sprawdz odpowiedz
+- WAF zwykle zwraca: 403, custom error page, lub modyfikuje request
+- `wafw00f` automatycznie identyfikuje > 100 typow WAF
+- Naglowki WAF: `X-WAF-Event`, `X-Protected-By`, `X-CDN-Forward`
+- WAF bypass: nie oznacza ze aplikacja jest bezpieczna — WAF to dodatkowa warstwa
+
+### Architektura typowa — warstwy
+
+```
+Klient → CDN → WAF → Load Balancer → Reverse Proxy → App Server → Database
+                                                    → Cache (Redis/Memcached)
+                                                    → Message Queue
+                                                    → External APIs
+```
+
+### Mapowanie architektury — checklist
+
+1. **Frontend**: CDN, statyczne zasoby, SPA framework
+2. **Warstwa bezpieczenstwa**: WAF, rate limiting, DDoS protection
+3. **Load balancing**: round-robin, sticky sessions, health checks
+4. **Application tier**: web server, app server, konteneryzacja (Docker/K8s)
+5. **Data tier**: baza danych (relacyjna/NoSQL), cache, storage
+6. **Zewnetrzne uslugi**: payment gateway, email, SMS, OAuth providers
+7. **Infrastruktura**: on-premise vs cloud (AWS/Azure/GCP), regiony
+
+### Obrona
+
+- Minimalizuj informacje ujawniane w naglowkach HTTP
+- Konfiguruj CDN/WAF aby nie ujawnialy backend IP
+- Uzyj osobnych sieci dla roznych warstw (DMZ, backend, database)
+- Monitoruj kazda warstwe osobno — logi, metryki, alerty
+- Dokumentuj architekture i aktualizuj diagram przy zmianach
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

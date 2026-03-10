@@ -190,12 +190,42 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 
 > Źródło: OWASP CheatSheetSeries — File_Upload_Cheat_Sheet.md
 
-- Waliduj typ pliku po stronie serwera przez zawartosc (magic bytes), nie rozszerzenie
-- Ogranicz rozmiar pliku — zapobiegaj DoS przez duze uploady
-- Przechowuj pliki POZA webroot — nie pozwalaj na bezposredni dostep przez URL
-- Zmien nazwe uploadowanego pliku na losowa — zapobiegaj path traversal
-- Skanuj pliki pod katem malware przed zapisaniem
-- Uzywaj allowlist dozwolonych rozszerzen (.jpg, .png, .pdf)
+### Walidacja typu pliku — wielowarstwowa
+
+- **Warstwa 1 — Rozszerzenie**: allowlist dozwolonych (`.jpg`, `.png`, `.pdf`) — NIE denylist
+- **Warstwa 2 — MIME type**: sprawdz `Content-Type` header — ALE latwo sfalszywowalny
+- **Warstwa 3 — Magic bytes**: sprawdz pierwsze bajty pliku (sygnatura) — trudniejsze do obejscia
+- **Warstwa 4 — Zawartosc**: re-enkoduj obrazy (PIL, ImageMagick) — usun wbudowane payloady
+- Sprawdzaj **WSZYSTKIE warstwy** — kazda z osobna moze byc obejscia
+
+### Techniki bypass filtrow uploadu
+
+| Technika | Przyklad | Opis |
+|----------|---------|------|
+| Podwojne rozszerzenie | `shell.php.jpg` | Serwer moze interpretowac jako PHP |
+| Alternatywne rozszerzenia | `.phtml`, `.phar`, `.php5` | Moga byc interpretowane jako PHP |
+| Case manipulation | `.PhP`, `.pHP`, `.Php` | Case-insensitive serwer moze je przetworzyc |
+| Null byte | `shell.php%00.jpg` | Starszy PHP obcina po null byte |
+| MIME spoof | `Content-Type: image/jpeg` na .php | Filtr sprawdza MIME, nie zawartosc |
+| Polyglot | Prawidlowy JPEG z PHP w komentarzu | Przechodzi walidacje obrazu |
+| .htaccess upload | `AddType application/x-httpd-php .jpg` | Pliki .jpg interpretowane jako PHP |
+| Trailing chars | `shell.php.`, `shell.php::$DATA` | Windows ignoruje trailing dot/ADS |
+
+### Bezpieczne przechowywanie plikow
+
+- Przechowuj **POZA webroot** — brak bezposredniego dostepu przez URL
+- **Zmien nazwe** na losowa (UUID) — zapobiegaj path traversal i name collision
+- **Osobna domena/CDN**: serwuj z innej domeny — izoluj od glownej aplikacji
+- **Bez execute**: pliki nie powinny miec uprawnienia execute
+- **Content-Disposition: attachment** — wymuszaj pobieranie zamiast renderowania
+- **X-Content-Type-Options: nosniff** — zapobiegaj MIME sniffing
+
+### Limity uploadu
+
+- **Max rozmiar**: ustaw limit (np. 10 MB) — zapobiegaj DoS
+- **Max ilosc**: ogranicz uploady per uzytkownik/sesje/czas
+- **Quota dyskowa**: ogranicz calkowita przestrzen per uzytkownik
+- **Skanuj antywirusem**: ClamAV lub cloud scanning przed zapisaniem
 
 ## ROZSZERZENIA BURP SUITE
 

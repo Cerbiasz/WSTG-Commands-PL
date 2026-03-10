@@ -166,11 +166,53 @@ hashcat -m 0 -a 0 hashes.txt Desktop/WSTG/SecLists-master/Passwords/Leaked-Datab
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Password_Storage_Cheat_Sheet.md
 
-- Minimalna dlugosc hasla: 8 znakow (NIST 800-63B zaleca do 64 znakow max)
-- Sprawdzaj hasla przeciw bazom wycieknietych hasel (HaveIBeenPwned)
-- Nie wymuszaj skomplikowanych regul kompozycji (duze/male/cyfry) — NIST odradza
-- Hashuj hasla algorytmem Argon2id (preferowany), bcrypt lub scrypt
-- Nigdy nie przechowuj hasel w plaintext, MD5 lub SHA1
+### Polityka sily hasla (NIST SP800-63B)
+
+- **Minimalna dlugosc**: 8 znakow z MFA, 15 znakow bez MFA
+- **Maksymalna dlugosc**: minimum **64 znaki** — pozwol na passphrases
+- **Nie obcinaj hasla cicho** (silent truncation) — uzytkownik musi wiedziec o limitach
+- Pozwol na **WSZYSTKIE znaki** wlacznie z Unicode i spacjami — brak regul kompozycji (duze/male/cyfry/specjalne)
+- NIST **ODRADZA** wymuszanie okresowej zmiany hasel — zmiana TYLKO po wycieku
+- Wlacz **password strength meter** (np. zxcvbn-ts) — pomaga uzytkownikowi stworzyc silne haslo
+
+### Blokowanie slabych hasel
+
+- Sprawdzaj hasla przeciw **bazom wycieknietych hasel**: [HaveIBeenPwned Passwords API](https://haveibeenpwned.com/API/v3#PwnedPasswords)
+- Blokuj **top-N najpopularniejszych hasel** — listy dostepne w SecLists
+- Blokuj hasla identyczne z username, email, nazwa aplikacji
+
+### Przechowywanie hasel — algorytmy hashowania
+
+- **Argon2id** (REKOMENDOWANY): min 19 MiB pamieci, 2 iteracje, 1 stopien rownolegloscí
+- **scrypt**: min CPU/memory cost 2^17, block size 8 (1024 bytes), parallelization 1
+- **bcrypt**: work factor 10+, limit hasla 72 bajty
+- **PBKDF2** (jesli FIPS-140 wymagany): work factor 600000+, HMAC-SHA-256
+- **NIGDY**: plaintext, MD5, SHA1, SHA256 (bez key stretching)
+
+### Salting i Peppering
+
+- **Salt**: unikalny, losowy string per haslo — nowoczesne algorytmy (Argon2id, bcrypt) generuja go automatycznie
+- **Pepper**: wspolny sekret NIE przechowywany z hashami — dodatkowa warstwa obrony
+  - Pre-hashing: pepper dodany do hasla PRZED hashowaniem
+  - Post-hashing: HMAC na wyniku hashowania (HMAC-SHA256 z pepper jako klucz)
+  - Pepper przechowuj w secrets vault lub HSM — NIE w bazie danych
+
+### Work Factor
+
+- Obliczenie hashu powinno trwac **ponizej 1 sekundy** — balans miedzy bezpieczenstwem a wydajnoscia
+- Periodycznie zwiekszaj work factor w miare rosnacej mocy hardware
+- Re-hashuj hasla przy nastepnym logowaniu uzytkownika z nowym work factorem
+
+### Porownywanie haszy
+
+- Uzywaj **constant-time comparison** — obrona przed timing attacks
+- PHP: `password_verify()`, Python: `hmac.compare_digest()`
+- Ustaw max input length — obrona przed DoS przez bardzo dlugie hasla
+
+### Zmiana hasla
+
+- Wymagaj aktywnej sesji + weryfikacji aktualnego hasla
+- Obrona przed scenariuszem: uzytkownik zapominal sie wylogowac na publicznym komputerze
 
 ## ROZSZERZENIA BURP SUITE
 

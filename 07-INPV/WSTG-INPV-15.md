@@ -53,6 +53,43 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, HTTP_Strict_Transport_Security_Cheat_Sheet.md
+
+### HTTP Response Splitting / CRLF Injection — mechanizm
+
+- Atakujacy wstrzykuje znaki **CR (\\r = %0d)** i **LF (\\n = %0a)** do naglowkow HTTP
+- Pozwala na: wstrzykniecie nowych naglowkow, zatruwanie cache, XSS, session fixation
+- Cel ataku: parametry odbijane w naglowkach (Location, Set-Cookie, custom headers)
+
+### Konsekwencje ataku
+
+- **HTTP Response Splitting**: dwa pelne response w jednym — cache poisoning
+- **Header injection**: `Set-Cookie: hacked=true` — session fixation
+- **XSS**: wstrzyknij `Content-Type: text/html` + body z JavaScript
+- **Cache poisoning**: zatrute response cachowane przez proxy/CDN
+- **Log injection**: falszywe wpisy w logach serwera
+
+### Enkodowania CRLF do testowania
+
+| Encoding | Wartość |
+|----------|---------|
+| Standard URL | `%0d%0a` |
+| Unicode | `%E5%98%8D%E5%98%8A` |
+| Double encoding | `%250d%250a` |
+| Escaped | `\\r\\n` |
+| CR only | `%0d` |
+| LF only | `%0a` |
+
+### Obrona
+
+- **Nigdy** nie umieszczaj danych uzytkownika bezposrednio w naglowkach HTTP
+- Usuwaj lub odrzucaj znaki CR/LF z danych uzytkownika
+- Uzywaj frameworkow/bibliotek ktore automatycznie enkoduja naglowki (nowoczesne frameworki to robia)
+- Waliduj URL-e w naglowku Location — allowlist dozwolonych domen
+- Ustaw `Content-Security-Policy` — ogranicza XSS nawet po udanym response splitting
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

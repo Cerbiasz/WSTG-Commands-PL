@@ -152,6 +152,63 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt -m
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Secrets_Management_Cheat_Sheet.md
+
+### Wycieki informacji — co szukac
+
+| Typ wycieku | Gdzie szukac | Przyklad |
+|------------|-------------|---------|
+| Klucze API | Pliki JS, komentarze HTML | `apiKey: "AIzaSy..."`, `aws_access_key_id` |
+| Wewnetrzne IP | Komentarze, naglowki, JS | `10.0.0.x`, `192.168.x.x`, `172.16.x.x` |
+| Adresy email | Komentarze, meta tagi | `dev@company.com`, `admin@internal.com` |
+| Sciezki plikow | Stack traces, komentarze | `/var/www/html/`, `C:\inetpub\wwwroot\` |
+| Wersje oprogramowania | META generator, komentarze | `WordPress 6.2`, `Drupal 9.5` |
+| Dane debugowe | Console.log, komentarze | `// DEBUG:`, `// TODO: remove before deploy` |
+| Tokeny sesji | URL, JavaScript | `?token=`, `sessionId` w URL |
+| Credentials | JavaScript, komentarze | `password: "admin123"`, `// test account` |
+
+### Komentarze developerskie — wzorce
+
+```
+<!-- TODO: fix authentication bypass -->
+<!-- HACK: temporary workaround -->
+<!-- FIXME: SQL injection here -->
+<!-- username: admin, password: test123 -->
+<!-- DEBUG: remove before production -->
+/* API endpoint: https://internal-api.company.com */
+```
+
+### Source maps — ryzyko
+
+- Pliki `.js.map` zawieraja **oryginalny kod zrodlowy** (przed minifikacja/bundlowaniem)
+- Sprawdz: `//# sourceMappingURL=app.js.map` na koncu plikow JS
+- Ujawniaja: nazwy zmiennych, komentarze, structure kodu, nazwy plikow
+- **Obrona**: nie deployuj source map na produkcje, lub ogranicz dostep (403)
+
+### Hardcoded secrets — regexy do wyszukiwania
+
+| Secret | Regex |
+|--------|-------|
+| AWS Access Key | `AKIA[0-9A-Z]{16}` |
+| AWS Secret Key | `[0-9a-zA-Z/+]{40}` |
+| Google API Key | `AIza[0-9A-Za-z\\-_]{35}` |
+| GitHub Token | `gh[pousr]_[A-Za-z0-9_]{36,}` |
+| Slack Token | `xox[baprs]-[0-9a-zA-Z-]+` |
+| JWT | `eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+` |
+| Private Key | `-----BEGIN (RSA\|EC\|DSA) PRIVATE KEY-----` |
+| Generic password | `(password\|passwd\|pwd)\s*[:=]\s*['"][^'"]+` |
+
+### Obrona
+
+- **Nigdy nie hardcoduj** kluczy API, hasel, tokenow w kodzie frontendowym
+- Uzyj zmiennych srodowiskowych lub secrets management (Vault, AWS Secrets Manager)
+- Dodaj pre-commit hooks z narzedziem `truffleHog` lub `git-secrets` aby blokowac commity z secretami
+- Nie deployuj source map na produkcje
+- Usuwaj komentarze debugowe przed deploymentem (build pipeline)
+- Uzyj CSP aby ograniczyc do jakich domen JS moze sie komunikowac
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

@@ -69,11 +69,37 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt 
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
 
-- Zapewnij rowny poziom bezpieczenstwa we wszystkich kanalach (web, mobile, API)
-- Nie pozwalaj na obejscie MFA przez przejscie na slabszy kanal uwierzytelnienia
-- Sprawdz czy API endpointy wymagaja takiego samego poziomu uwierzytelnienia co interfejs webowy
+### Spojnosc zabezpieczen miedzy kanalami
+
+- **WSZYSTKIE kanaly** (web, mobile app, API, SSO, legacy) MUSZA miec rowny poziom bezpieczenstwa
+- Atakujacy uzyje NAJSLABSZEGO kanalu — np. stare API bez MFA, mobile app bez rate limiting
+- Sprawdz czy stare wersje API (`/api/v1/`) nadal sa dostepne i czy maja te same zabezpieczenia
+
+### Typowe obejscia przez alternatywne kanaly
+
+- API endpoint bez MFA (web wymaga MFA, ale API nie)
+- Mobile API z prostszym uwierzytelnieniem (np. PIN zamiast hasla + MFA)
+- SSO/OAuth bypass — redirect na slabszy provider
+- Legacy endpoints nadal aktywne po migracji
+- Rate limiting na web ale nie na API
+
+### Multi-Factor Authentication — hierarchia sily
+
+- **WebAuthn/FIDO2** (najsilniejsze): hardware key, biometrics — phishing-resistant
+- **TOTP** (silne): Google Authenticator, Authy — time-based OTP
+- **Push notification** (dobre): approve/deny na telefonie
+- **SMS OTP** (slabsze): podatne na SIM swap, SS7 attacks — ale lepsze niz nic
+- **Email OTP** (najslabsze z MFA): jezeli email jest skompromitowany — MFA tez
+
+### Testowanie sposobnosci kanalow
+
+- Zaloguj sie przez kazdy kanal i porownaj wymagania
+- Sprawdz czy MFA jest wymagane na WSZYSTKICH kanalach
+- Sprawdz rate limiting na kazdym kanale osobno
+- Sprawdz czy sesja z jednego kanalu jest wazna w innym
+- Testuj logout — czy wylogowanie w jednym kanale wplywa na inne
 
 ## ROZSZERZENIA BURP SUITE
 

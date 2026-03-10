@@ -120,13 +120,57 @@ nmap -p 443 --script http-cookie-flags TARGET
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Cookie_Theft_Mitigation_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Ustaw flage `Secure` — cookie wysylane tylko przez HTTPS
-- Ustaw flage `HttpOnly` — cookie niedostepne dla JavaScript (ochrona przed XSS)
-- Ustaw `SameSite=Strict` lub `Lax` — ochrona przed CSRF
-- Ogranicz `Path` i `Domain` do minimum wymaganego zakresu
-- Ustaw krotki czas wygasniecia — unikaj sesji trwalych bez potrzeby
+### Secure flag
+
+- Cookie wysylane TYLKO przez HTTPS — przegladarka nigdy nie wysle go przez HTTP
+- **KRYTYCZNE** nawet jesli serwer nie slucha na porcie 80 — atakujacy MitM moze sproofowac HTTP serwer
+- Cookie bez Secure flag moze byc przechwycone w otwartej sieci Wi-Fi
+
+### HttpOnly flag
+
+- Cookie niedostepne dla JavaScript (`document.cookie` nie zwroci go)
+- **Ochrona przed XSS** — nawet jesli atakujacy wstrzyknie JS, nie moze wykrasc session cookie
+- UWAGA: NIE chroni przed CSRF, session fixation ani innymi atakami
+
+### SameSite attribute
+
+- `SameSite=Strict` — cookie NIE wysylane w cross-site requests (najsilniejsza ochrona CSRF)
+  - Moze powodowac problemy UX (np. link z emaila nie zaloguje uzytkownika)
+- `SameSite=Lax` — cookie wysylane tylko w top-level navigations (GET) — dobry kompromis
+- `SameSite=None; Secure` — cookie wysylane w cross-site (wymagane do third-party cookies)
+- Domyslna wartosc w nowoczesnych przegladarkach: `Lax` (jesli nie ustawiono)
+
+### Domain attribute
+
+- **Nie ustawiaj Domain** jesli cookie ma byc dostepne tylko z dokladnej domeny
+- `Domain=.example.com` — cookie dostepne ze WSZYSTKICH subdomen (ryzyko: subdomain takeover)
+- Im wezszy zakres Domain — tym bezpieczniej
+
+### Path attribute
+
+- Ogranicz Path do minimum wymaganego zakresu (np. `/app/` zamiast `/`)
+- UWAGA: Path NIE jest mechanizmem bezpieczenstwa — JavaScript z innej sciezki moze odczytac cookie
+- Traktuj jako dodatkowa warstwe, nie primary defense
+
+### Expires / Max-Age
+
+- Cookie sesyjne: **NIE ustawiaj** Expires/Max-Age — cookie wygasa z zamknieciem przegladarki
+- Persistent cookies: ustaw najkrotszy mozliwy czas wygasniecia
+- Dlugie sesje (Remember Me) = wieksze ryzyko — wymagaj re-autentykacji dla krytycznych akcji
+
+### Cookie Prefixes
+
+- `__Secure-` prefix: cookie MUSI miec flage `Secure` — przegladarka odrzuci je bez Secure
+- `__Host-` prefix: cookie MUSI miec `Secure`, `Path=/`, i NIE moze miec `Domain` — najsilniejsza izolacja
+- `__Host-` zapobiega subdomain fixation i ogranicza scope do dokladnej domeny
+
+### Dodatkowe praktyki
+
+- Ustaw WSZYSTKIE atrybuty bezpieczenstwa jednoczesnie — brak jednego moze zniweczyc ochrone
+- Testuj w roznych przegladarkach — implementacja SameSite moze sie roznic
+- Monitoruj Set-Cookie headery w odpowiedziach — reverse proxy/CDN moze je modyfikowac
 
 ## ROZSZERZENIA BURP SUITE
 

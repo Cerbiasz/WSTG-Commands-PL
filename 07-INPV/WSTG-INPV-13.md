@@ -75,6 +75,44 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/fo
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, C_Based_Toolchain_Hardening_Cheat_Sheet.md
+
+### Buffer Overflow — czy nadal relevantne w web?
+
+- Nowoczesne jezyki (Java, Python, C#, JS, Go, Rust) maja **wbudowana ochrone** przed buffer overflow
+- Buffer overflow nadal moze wystapic w:
+  - Komponentach natywnych (C/C++) — np. modul Apache, biblioteka przetwarzajaca obrazy
+  - Parsowaniu plikow (ImageMagick, FFmpeg, libxml)
+  - Custom natywnych rozszerzeniach (PHP extensions w C, Python C extensions)
+  - CGI binaries
+- Web aplikacje: focus na **integer overflow** i **format string** — te sa bardziej relevantne
+
+### Integer Overflow — wazne w web
+
+- `MAX_INT (2147483647) + 1` = `-2147483648` (32-bit signed) — zmiana znaku
+- Moze powodowac: bledne obliczenia cen, ominięcie limitow, ujemne wartosci
+- Testuj graniczne wartosci: `0`, `-1`, `2147483647`, `2147483648`, `9999999999999999`
+- Jezyki z fixed-size integer (C, Java, Go) — podatne; Python ma arbitrary precision
+
+### Format String — ataki
+
+- Specifiers `%s`, `%x`, `%n` — moga czytac/zapisywac pamiec w programach C/C++
+- W web: niebezpieczne jesli dane uzytkownika trafiaja bezposrednio do `printf()` lub `sprintf()`
+- `%x` — odczyt wartosci ze stosu (memory disclosure)
+- `%n` — zapis do pamieci (code execution)
+- W nowoczesnych jezykach: format string nie jest exploitowalny (Python, Java maja bezpieczne formatowanie)
+
+### Obrona
+
+- **Input validation**: ogranicz dlugosc danych wejsciowych na KAZDYM endpoincie
+- **Max content length**: ustaw limity na serwerze (`client_max_body_size` nginx, `LimitRequestBody` Apache)
+- **Uzywaj bezpiecznych jezykow**: Java, C#, Go, Rust — zamiast C/C++ dla web komponentow
+- Jesli C/C++: uzyj `-fstack-protector-strong`, ASLR, DEP/NX, `-D_FORTIFY_SOURCE=2`
+- **WAF**: wykrywaj format string payloads w parametrach
+- Testuj zuzycie pamieci i CPU przy dlugich inputach — obrona przed DoS
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

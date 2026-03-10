@@ -127,6 +127,35 @@ ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-me
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — REST_Security_Cheat_Sheet.md
+
+### Metody HTTP — bezpieczenstwo
+
+- Zezwalaj TYLKO na potrzebne metody — typowo GET i POST, opcjonalnie PUT/PATCH/DELETE dla REST API
+- **TRACE**: wylacz — umozliwia Cross-Site Tracing (XST), ujawnia cookies i auth headers
+- **PUT/DELETE**: zezwalaj TYLKO na autoryzowanych endpointach API — nie na statycznych zasobach
+- **OPTIONS**: moze ujawniac dozwolone metody — rozważ ograniczenie (ale potrzebne dla CORS preflight)
+- **CONNECT**: wylacz — moze byc uzyty do tunelowania
+- Niestandardowe metody (FOO, JEFF): serwer powinien zwracac 405 — nie akceptowac jako GET
+
+### Konfiguracja per serwer
+
+| Serwer | Jak ograniczyc metody |
+|--------|---------------------|
+| Apache | `<LimitExcept GET POST>Require all denied</LimitExcept>` |
+| Nginx | `if ($request_method !~ ^(GET\|POST)$) { return 405; }` |
+| IIS | Web.config: `<security><requestFiltering><verbs>` |
+| Tomcat | `<security-constraint>` w web.xml |
+
+### Method Override — zagrożenie
+
+- Headery: `X-HTTP-Method-Override`, `X-Method-Override`, `X-HTTP-Method`
+- Parametr: `_method=PUT` w body (Rails, Laravel, Django)
+- Atakujacy moze uzyc POST z override header aby wykonac PUT/DELETE
+- Obrona: nie akceptuj method override headers z niezaufanych zrodel
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

@@ -90,6 +90,56 @@ zap-cli report -o output_zap_spider.html -f html
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Threat_Modeling_Cheat_Sheet.md
+
+### Mapowanie sciezek — co dokumentowac
+
+| Element | Opis | Przyklad |
+|---------|------|---------|
+| Workflow | Wieloetapowy proces biznesowy | Rejestracja → weryfikacja email → profil |
+| Data flow | Przeplyw danych miedzy komponentami | Frontend → API → baza danych |
+| Trust boundaries | Granice zaufania | Publiczny internet → WAF → DMZ → backend |
+| Entry/Exit points | Wejscia i wyjscia danych | Formularze, API, webhooks, eksporty |
+| Roles | Rozne sciezki dla roznych rol | Admin vs user vs guest |
+| State transitions | Zmiany stanu obiektu | Zamowienie: draft → paid → shipped → delivered |
+
+### Krytyczne workflows do mapowania
+
+| Workflow | Dlaczego krytyczny | Na co testowac |
+|----------|-------------------|---------------|
+| Rejestracja | Tworzenie konta | Enumeration, mass registration, bypass weryfikacji |
+| Logowanie | Autentykacja | Brute force, credential stuffing, bypass MFA |
+| Reset hasla | Odzyskanie dostepu | Token prediction, email injection, race condition |
+| Zakup/platnosc | Transakcja finansowa | Price manipulation, race condition, bypass kroku |
+| Zmiana roli/uprawnien | Eskalacja uprawnien | IDOR, mass assignment, privilege escalation |
+| Upload plikow | Wgrywanie tresci | RCE, XSS, path traversal |
+| Eksport danych | Pobieranie danych | IDOR, information disclosure, injection |
+
+### Techniki mapowania
+
+- **Reczny crawling**: klikaj w kazdy link, przycisk, formularz z wlaczonym Burp
+- **Automatyczny spider**: Burp Spider, ZAP Spider, Katana, Gospider
+- **Analiza JS**: LinkFinder, JSParser — odkrywanie endpointow ukrytych w JavaScript
+- **Historyczne URL**: GAU, Waybackurls — sciezki z archive.org
+- **Porownanie rol**: mapuj aplikacje jako admin, user, guest — roznice ujawniaja kontrole dostepu
+
+### State machine — analiza wieloetapowych procesow
+
+1. Zidentyfikuj wszystkie **stany** w procesie (np. koszyk → platnosc → potwierdzenie)
+2. Sprawdz czy mozna **pominac krok** (np. przejsc od koszyka do potwierdzenia)
+3. Sprawdz czy mozna **cofnac sie** i zmodyfikowac dane po zatwierdzeniu
+4. Sprawdz czy stan jest przechowywany **server-side** (bezpieczne) czy **client-side** (niebezpieczne)
+5. Testuj **race conditions** — rownoczesne zapytania w krytycznych momentach
+
+### Obrona
+
+- Wymuszaj kolejnosc krokow server-side — nie polegaj na client-side routing
+- Uzyj tokenow sesji do sledzenia stanu procesu wieloetapowego
+- Implementuj timeout dla niedokonczonych procesow
+- Loguj i monitoruj nietypowe sciezki przeplywu (pominiecie kroku, cofanie)
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

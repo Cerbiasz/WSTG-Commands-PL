@@ -120,14 +120,69 @@ ffuf -u "https://TARGET/search?q=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-mas
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, XSS_Filter_Evasion_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Cross_Site_Scripting_Prevention_Cheat_Sheet.md, DOM_based_XSS_Prevention_Cheat_Sheet.md, XSS_Filter_Evasion_Cheat_Sheet.md
 
-- Output encoding musi byc dopasowany do kontekstu: HTML body, atrybuty, JavaScript, URL, CSS
-- Uzywaj frameworkowego auto-escaping (React, Angular, Vue) — ale uwazaj na escape hatches (dangerouslySetInnerHTML, bypassSecurityTrustAs*)
-- Sanityzuj HTML uzytkownika biblioteka DOMPurify — nigdy regexem
-- Wdroz Content-Security-Policy z nonces zamiast unsafe-inline
-- Uzywaj textContent/setAttribute zamiast innerHTML/document.write
-- Testuj rozne konteksty odbicia: HTML body, atrybuty, JS string, URL, CSS
+### Filozofia obrony przed XSS
+
+- Kazda zmienna wyswietlana w aplikacji musi przejsc walidacje + encoding/sanityzacje — to tzw. **perfect injection resistance**
+- Zadna pojedyncza technika nie rozwiaze XSS — konieczna kombinacja: framework security + output encoding + HTML sanitization + CSP
+- Output encoding jest kluczowy — zamienia dane uzytkownika na bezpieczny tekst, nie pozwalajac na interpretacje jako kod
+
+### Output Encoding wg kontekstu
+
+- **HTML Body** (`<div>$var</div>`): HTML Entity Encoding — `& → &amp;`, `< → &lt;`, `> → &gt;`, `" → &quot;`, `' → &#x27;`
+- **HTML Attribute** (`<div attr="$var">`): HTML Attribute Encoding — ZAWSZE otaczaj wartosci cudzylowami `"` lub `'`
+- **JavaScript** (`<script>var x='$var'</script>`): JavaScript Encoding `\xHH` — zmienne TYLKO w quoted data values
+- **URL** (`<a href="...?param=$var">`): URL Encoding `%HH` — koduj TYLKO wartosc parametru, nie caly URL
+- **CSS** (`style="property: $var"`): CSS Hex Encoding `\XX` — zmienne TYLKO w wartosciach wlasciwosci CSS
+- Podwojny kontekst (URL w href): najpierw URL encode, potem HTML attribute encode
+
+### Niebezpieczne konteksty (Dangerous Contexts)
+
+- NIGDY nie umieszczaj zmiennych bezposrednio w: `<script>...tutaj...</script>`, komentarzach HTML `<!-- -->`, blokach `<style>`, definicjach tagow/atrybutow
+- Unikaj: `eval()`, `setTimeout()`, `setInterval()`, `new Function()`, `document.write()`, `innerHTML`
+- Event handlery (`onclick`, `onerror`, `onmouseover`) — nawet z encoding, NIE sa bezpieczne dla niezaufanych danych
+
+### Framework Security
+
+- Uzywaj frameworkowego auto-escaping (React, Angular, Vue, Lit, Polymer) — ale uwazaj na escape hatches:
+  - React: `dangerouslySetInnerHTML` — nie uzywaj bez sanityzacji; nie obsluguje `javascript:` i `data:` URLs
+  - Angular: `bypassSecurityTrustAs*` — omija wbudowane zabezpieczenia
+  - Lit: `unsafeHTML` — bezposrednie wstawienie HTML
+  - Polymer: `inner-h-t-m-l` attribute i `htmlLiteral`
+- Regularne aktualizacje frameworkow i pluginow — stare wersje moga miec znane bypassy
+
+### HTML Sanitization
+
+- Sanityzuj HTML uzytkownika biblioteka **DOMPurify**: `let clean = DOMPurify.sanitize(dirty);`
+- NIGDY nie uzywaj regexa do sanityzacji HTML
+- Po sanityzacji NIE modyfikuj stringa — mozesz uniewaznc zabezpieczenia
+- Regularnie aktualizuj DOMPurify — przegladarki zmieniaja zachowanie, odkrywane sa nowe bypassy
+
+### Safe Sinks (bezpieczne metody DOM)
+
+- Uzywaj safe sinks zamiast niebezpiecznych metod:
+  - `elem.textContent = var` zamiast `innerHTML`
+  - `elem.setAttribute(safeName, var)` — bezpieczne TYLKO dla niewykonujacych atrybutow (align, class, id, title, value itd.)
+  - `document.createTextNode(var)` — zawsze bezpieczne
+  - `formfield.value = var` — bezpieczne
+- Niebezpieczne: `innerHTML`, `outerHTML`, `document.write()`, `document.writeln()`
+
+### DOM-based XSS — dodatkowe zasady
+
+- HTML escape POTEM JavaScript escape przed wstawieniem do HTML subcontext w DOM
+- W event handler subcontext — JavaScript encoding NIE zapobiega XSS (setAttribute z onclick nadal wykona kod)
+- Uzyj `element.textContent` jako PRIMARY safe method do wstawiania tekstu w DOM
+- Unikaj umieszczania danych uzytkownika w `window[var]` po lewej stronie wyrazenia
+- Unikaj `eval()` JSON — uzywaj `JSON.parse()` zamiast tego
+- Wykrywaj DOM XSS: szukaj wzorcow `document.write(location.hash)`, `innerHTML = location.search` itp.
+
+### Dodatkowe warstwy obrony
+
+- **Content-Security-Policy**: uzyj nonces zamiast `unsafe-inline`, traktuj jako defence-in-depth, NIE jako jedyna obrone
+- **Cookie attributes**: `HttpOnly`, `Secure`, `SameSite` — ograniczaja impact, ale nie eliminuja przyczyny XSS
+- **WAF**: nie polega na WAF jako obronie przed XSS — latwo omijany, nie chroni przed DOM XSS
+- CSP musi byc dostosowany do konkretnej aplikacji — uniwersalna polityka enterprise jest nieskuteczna
 
 ## ROZSZERZENIA BURP SUITE
 

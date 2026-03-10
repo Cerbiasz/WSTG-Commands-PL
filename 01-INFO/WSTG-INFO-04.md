@@ -151,6 +151,53 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Powierzchnia ataku — co enumerowac
+
+| Element | Narzedzia | Dlaczego wazne |
+|---------|-----------|---------------|
+| Subdomeny | subfinder, amass, crt.sh | Kazda subdomena to potencjalny cel |
+| Virtual hosts | ffuf, gobuster vhost | Rozne aplikacje na tym samym IP |
+| Porty webowe | nmap, masscan | Niestandardowe porty (8080, 3000, 9090) |
+| DNS records | dig, dnsrecon | MX, TXT, NS — ujawniaja infrastrukture |
+| Certificate Transparency | crt.sh | Historyczne i aktywne subdomeny z certyfikatow |
+| Reverse DNS | host, dig -x | Inne domeny na tym samym IP |
+
+### Zrodla pasywnej enumeracji subdomen
+
+| Zrodlo | Opis |
+|--------|------|
+| Certificate Transparency (crt.sh) | Publiczne logi certyfikatow SSL |
+| Wayback Machine | Historyczne snapshoty z archive.org |
+| DNS aggregators (SecurityTrails, PassiveTotal) | Historyczne rekordy DNS |
+| Search engines (Google: `site:*.target.com`) | Zaindeksowane subdomeny |
+| Shodan / Censys | Skanowanie portow i uslug |
+| GitHub / Pastebin | Wycieki kodu z hardcoded subdomenami |
+
+### Virtual hosts — testowanie
+
+- Rozne aplikacje moga byc hostowane na tym samym IP pod roznymi naglowkami `Host`
+- ffuf: `ffuf -u https://IP -H "Host: FUZZ.target.com" -w wordlist.txt -fs SIZE`
+- Filtruj po rozmiarze odpowiedzi (`-fs`) aby wyeliminowac domyslne odpowiedzi
+
+### DNS zone transfer (AXFR)
+
+- `dig target.com AXFR @ns1.target.com` — jesli dozwolony, ujawnia wszystkie rekordy
+- Wiekszosci serwerow DNS jest poprawnie skonfigurowana (AXFR disabled)
+- Ale zawsze warto sprawdzic — to pelna mapa DNS domeny
+
+### Obrona — minimalizacja powierzchni ataku
+
+- Regularnie inwentaryzuj subdomeny i usuwaj niepotrzebne
+- Usuwaj rekordy DNS dla wycofanych uslug (zapobieganie subdomain takeover)
+- Nie hostuj wewnetrznych aplikacji na publicznych subdomenach
+- Uzyj wildcard DNS z rozwaga — `*.target.com` ujawnia kazda subdomene
+- Monitoruj Certificate Transparency logi pod katem nieautoryzowanych certyfikatow
+- Segmentuj aplikacje: osobne serwery/kontenery dla roznych uslug
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

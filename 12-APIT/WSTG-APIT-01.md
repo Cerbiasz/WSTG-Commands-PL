@@ -102,14 +102,46 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — GraphQL_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — GraphQL_Cheat_Sheet.md, REST_Security_Cheat_Sheet.md
 
-- Wylacz introspection na produkcji — nie ujawniaj calego schematu API
-- Implementuj query depth limiting — zapobiegaj deeply nested queries (DoS)
-- Uzywaj query cost analysis — ogranicz zlozonosc zapytan
-- Waliduj i sanityzuj wszystkie inputy — GraphQL nie waliduje automatycznie
-- Implementuj autoryzacje per field/type — nie tylko na poziomie endpointu
-- Rozważ persisted queries — akceptuj tylko pre-approved query hashes
+### GraphQL Security
+
+- **Wylacz introspection** na produkcji — nie ujawniaj calego schematu API atakujacemu
+- **Query depth limiting**: ogranicz zagnieżdzenie zapytan (np. max 10 levels) — zapobiegaj DoS
+- **Query cost analysis**: przypisz koszty do pol i ogranicz calkowity koszt zapytania
+- **Persisted queries**: akceptuj TYLKO pre-approved query hashes — eliminuje arbitrary queries
+- **Autoryzacja per field/type** — nie tylko na poziomie endpointu, ale na kazdym polu
+- **Batch attack prevention**: ogranicz ilosc operacji w jednym batch request
+- **Rate limiting** na poziomie zapytan, nie requestow (1 request GraphQL = wiele operacji)
+
+### REST API Security
+
+- **Autentykacja**: OAuth 2.0 + JWT, API keys (TYLKO jako identyfikator, NIE jako jedyna auth)
+- **Autoryzacja**: sprawdzaj uprawnienia na KAZDYM endpoincie, KAZDEJ metodzie HTTP
+- **Input validation**: waliduj wszystkie parametry — typ, dlugosc, format, zakres
+- **Rate limiting**: ogranicz requesty per API key/IP/user — zapobiegaj abuse
+- **Wersjonowanie**: utrzymuj bezpieczenstwo WSZYSTKICH aktywnych wersji API (v1, v2, v3)
+- **CORS**: `Access-Control-Allow-Origin` — NIE uzywaj `*` z credentials
+
+### API Discovery — co sprawdzic
+
+- `/swagger`, `/swagger-ui`, `/api-docs`, `/openapi.json`, `/graphql` — dokumentacja API
+- Starsze wersje API (`/api/v1/`) — czesto bez nowych zabezpieczen
+- Hidden endpoints — sprawdz kod JavaScript, mobile app decompilation
+- GraphQL introspection: `{ __schema { types { name fields { name } } } }`
+
+### OWASP API Security Top 10
+
+- **API1**: Broken Object Level Authorization (BOLA/IDOR) — sprawdzaj uprawnienia do KAZDEGO obiektu
+- **API2**: Broken Authentication — slabe mechanizmy uwierzytelnienia API
+- **API3**: Broken Object Property Level Authorization — Mass Assignment, excessive data exposure
+- **API4**: Unrestricted Resource Consumption — brak rate limiting, DoS
+- **API5**: Broken Function Level Authorization — brak autoryzacji na poziomie funkcji
+- **API6**: Unrestricted Access to Sensitive Business Flows — automatyzacja krytycznych operacji
+- **API7**: Server Side Request Forgery (SSRF) — API jako proxy do wewnetrznych zasobow
+- **API8**: Security Misconfiguration — debug mode, verbose errors, CORS misconfiguration
+- **API9**: Improper Inventory Management — shadow API, stare wersje
+- **API10**: Unsafe Consumption of APIs — brak walidacji odpowiedzi z third-party API
 
 ## ROZSZERZENIA BURP SUITE
 

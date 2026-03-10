@@ -147,6 +147,75 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Docker_Security_Cheat_Sheet.md
+
+### Uprawnienia plikow — zasady
+
+| Zasada | Opis |
+|--------|------|
+| Least Privilege | Pliki webowe: odczyt tylko dla procesu serwera, nie `777` |
+| Separation of Duties | Uzytkownik serwera web ≠ wlasciciel plikow |
+| No Execute on Uploads | Katalog uploadow: brak prawa execute, brak interpretacji skryptow |
+| Config Files Protected | `.env`, `config.php`: `640` lub `600`, dostep tylko dla procesu serwera |
+| Log Files | Logi: append-only, niedostepne przez HTTP |
+
+### Typowe uprawnienia Linux — web server
+
+| Zasob | Uprawnienia | Wlasciciel |
+|-------|-------------|------------|
+| Pliki PHP/Python/Ruby | `644` (rw-r--r--) | root:www-data |
+| Katalogi aplikacji | `755` (rwxr-xr-x) | root:www-data |
+| Pliki konfiguracyjne | `640` (rw-r-----) | root:www-data |
+| Katalog uploadow | `750` (rwxr-x---) | www-data:www-data |
+| Klucze prywatne/SSL | `600` (rw-------) | root:root |
+| Logi aplikacji | `640` (rw-r-----) | www-data:adm |
+
+### Pliki wrazliwe — co chronic
+
+- **`.env`** — credentials, klucze API, connection strings
+- **`.git/`** — pelne repozytorium kodu (git checkout pozwala odtworzyc pliki)
+- **`wp-config.php`**, **`config.php`** — dane do bazy danych
+- **`.htpasswd`** — hashe hasel
+- **`id_rsa`**, **`*.pem`**, **`*.key`** — klucze prywatne
+- **`*.sql`**, **`*.db`** — dumpy baz danych
+- **`debug.log`**, **`error.log`** — moga zawierac tokeny, stack traces
+
+### Konfiguracja serwera — blokowanie dostepu
+
+**Apache:**
+```
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+<DirectoryMatch "/\.git">
+    Require all denied
+</DirectoryMatch>
+```
+
+**Nginx:**
+```
+location ~ /\. { deny all; }
+location ~ /\.git { deny all; }
+```
+
+### Directory listing — wylaczenie
+
+| Serwer | Konfiguracja |
+|--------|-------------|
+| Apache | `Options -Indexes` |
+| Nginx | `autoindex off;` (domyslnie wylaczony) |
+| IIS | Usun "Directory Browsing" z Feature Delegation |
+
+### Obrona
+
+- Regularnie skanuj webroot: `find /var/www -perm -o+w -type f` (pliki world-writable)
+- Ustaw `umask 027` dla procesu serwera web
+- Nie przechowuj kluczy, hasel, certyfikatow w katalogu webowym
+- Uzyj `.gitignore` aby nie commitowac `.env`, `*.key`, `*.pem`
+- Monitoruj zmiany plikow konfiguracyjnych (AIDE, Tripwire, OSSEC)
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp — test wymaga dostepu do systemu plikow serwera.

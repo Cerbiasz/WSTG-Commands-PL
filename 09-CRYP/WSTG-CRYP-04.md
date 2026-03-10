@@ -136,11 +136,52 @@ openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noo
 
 > Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md, Key_Management_Cheat_Sheet.md
 
-- Uzywaj silnych algorytmow: AES-256, RSA-2048+, SHA-256+ — unikaj MD5, SHA1, DES
-- Rotuj klucze regularnie — implementuj mechanizm rotacji bez przerwy serwisu
-- Przechowuj klucze oddzielnie od danych — uzywaj HSM lub dedicated key vault
-- Nie hardkoduj kluczy w kodzie zrodlowym — uzywaj zmiennych srodowiskowych lub secret manager
-- Uzywaj roznych kluczy do roznych celow (szyfrowanie, podpis, MAC)
+### Algorytmy — co uzywac, czego unikac
+
+- **Szyfrowanie symetryczne**: AES-128 minimum, AES-256 preferowany, tryb **GCM** (authenticated encryption)
+- **Szyfrowanie asymetryczne**: ECC Curve25519 (preferowany) lub RSA >= 2048 bit
+- **Hashowanie hasel**: Argon2id (rekomendowany), bcrypt (cost >= 10), scrypt, PBKDF2 (FIPS)
+- **Hashowanie integralnosci**: SHA-256+, SHA-3
+- **NIGDY nie uzywaj**: MD5, SHA-1 (do hasel), DES, 3DES, RC4, Blowfish, ECB mode
+- **NIGDY**: custom/wlasne algorytmy kryptograficzne
+
+### Tryby szyfrowania blokowego
+
+- **GCM** (REKOMENDOWANY) — authenticated encryption, zapewnia poufnosc + integralnosc
+- **CCM** — alternatywa dla GCM
+- **CTR/CBC** — jesli GCM niedostepny, ALE wymagaja osobnego MAC (Encrypt-then-MAC)
+- **ECB** — NIGDY (ten sam plaintext → ten sam ciphertext, wzorce widoczne)
+
+### Secure Random Number Generation (CSPRNG)
+
+- Java: `SecureRandom` | Python: `secrets` | PHP: `random_bytes()` | Node: `crypto.randomBytes()`
+- .NET: `RandomNumberGenerator` | Go: `crypto/rand` | C: `getrandom(2)` | Ruby: `SecureRandom`
+- **NIGDY**: `Math.random()`, `rand()`, `random()`, `mt_rand()` — przewidywalne
+
+### Zarzadzanie kluczami
+
+- **Separacja kluczy od danych**: klucze na filesystem, dane w DB (lub odwrotnie)
+- **Envelope encryption**: Data Encryption Key (DEK) szyfrowany Key Encryption Key (KEK)
+- **Przechowywanie kluczy**: HSM, AWS KMS, Azure Key Vault, HashiCorp Vault, GCP Cloud KMS
+- **NIE**: hardkoduj w kodzie, NIE commituj do VCS, NIE w env vars (ryzyko phpinfo/proc/environ)
+- **Rotacja kluczy**: po kompromitacji, po uplywie cryptoperiod, po zaszyfrowaniu duzej ilosci danych
+
+### RSA — bezpieczne uzycie
+
+- **OAEP padding** (Optimal Asymmetric Encryption Padding) — ZAWSZE
+- NIGDY: PKCS#1 v1.5 padding — podatny na Bleichenbacher attack
+
+### UUID/GUID a bezpieczenstwo
+
+- UUID v4 — losowe, bezpieczne jesli generowane przez CSPRNG
+- UUID v1 — oparte na timestamp + MAC address — NIE losowe, mozliwe do odgadniecia
+- NIE polegaj na "randomowosci" UUID bez weryfikacji implementacji
+
+### Defence in Depth
+
+- Zaszyfrowane dane powinny byc chronione tez przez access control
+- NIE polegaj na bezpieczenstwie zaszyfrowanych URL parameters
+- Kazda warstwa obrony moze zawodzic — redundancja jest kluczowa
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -108,11 +108,52 @@ done
 
 > Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md
 
-- Uzywaj authenticated encryption (AES-GCM) — chroni przed padding oracle
-- Unikaj trybu CBC bez HMAC — podatny na padding oracle attack
-- Nie ujawniaj bledow padding w odpowiedziach — uzywaj generycznych komunikatow bledow
-- Uzywaj constant-time comparison dla weryfikacji MAC/HMAC
-- Rozważ migracje na AES-GCM lub ChaCha20-Poly1305 zamiast CBC
+### Authenticated Encryption — obrona przed padding oracle
+
+- **AES-GCM** (REKOMENDOWANY) — zapewnia poufnosc + integralnosc + autentycznosc w jednej operacji
+- **ChaCha20-Poly1305** — alternatywa, dobra wydajnosc na urzadzeniach bez AES-NI
+- **CCM** — kolejna opcja authenticated encryption
+- Authenticated modes ELIMINUJA padding oracle — nie ma osobnego kroku walidacji padding
+
+### Dlaczego CBC jest podatny
+
+- CBC (Cipher Block Chaining) wymaga osobnej walidacji padding (PKCS#7)
+- Jesli serwer rozroznia "zly padding" od "zla wartosc" — atakujacy dekryptuje ciphertext bajt po bajcie
+- Roznice moga byc: rozny kod HTTP (500 vs 200), rozny czas odpowiedzi, rozny komunikat bledu
+- **Encrypt-then-MAC**: jesli MUSISZ uzyc CBC — oblicz HMAC na ciphertext PRZED dekrypcja, zweryfikuj HMAC first
+
+### Bezpieczne porownywanie MAC/HMAC
+
+- Uzywaj **constant-time comparison** — obrona przed timing attacks
+- Python: `hmac.compare_digest()`, Java: `MessageDigest.isEqual()`, PHP: `hash_equals()`
+- NIGDY nie porownuj hashow przez `==` lub `equals()` — timing side-channel
+
+### Algorytmy szyfrowania symetrycznego
+
+- **AES-128** minimum, **AES-256** preferowany, z trybem **GCM** lub **CCM**
+- **NIGDY**: DES, 3DES, RC4, Blowfish (przestarzale, slabe klucze)
+- **NIGDY**: tryb **ECB** — ten sam plaintext daje ten sam ciphertext (wzorce widoczne)
+
+### Algorytmy asymetryczne
+
+- **ECC Curve25519** (preferowany) lub **RSA >= 2048 bit**
+- RSA: ZAWSZE uzywaj **OAEP padding** (Optimal Asymmetric Encryption Padding) — obrona przed known plaintext attacks
+- NIGDY: RSA z PKCS#1 v1.5 padding — podatny na Bleichenbacher attack
+
+### Secure Random Number Generation
+
+- Kryptograficznie bezpieczne PRNG (CSPRNG) dla kluczy, IV, tokenow:
+  - Java: `SecureRandom`, Python: `secrets`, PHP: `random_bytes()`, Node: `crypto.randomBytes()`
+  - C: `getrandom(2)`, .NET: `RandomNumberGenerator`, Go: `crypto/rand`
+- **NIGDY**: `Math.random()`, `rand()`, `mt_rand()` — przewidywalne, NIE do kryptografii
+
+### Zarzadzanie kluczami
+
+- Przechowuj klucze ODDZIELNIE od zaszyfrowanych danych (np. klucze na filesystem, dane w DB)
+- Uzywaj **Key Encryption Key (KEK)** do szyfrowania **Data Encryption Key (DEK)** — envelope encryption
+- Rotuj klucze: po kompromitacji, po uplywie cryptoperiod, po zaszyfrowaniu duzej ilosci danych
+- Przechowuj klucze w: HSM, AWS KMS, Azure Key Vault, HashiCorp Vault — NIE w kodzie zrodlowym
+- NIE hard-coduj kluczy w kodzie, NIE commituj do VCS, NIE przechowuj w env vars (phpinfo exposure)
 
 ## ROZSZERZENIA BURP SUITE
 

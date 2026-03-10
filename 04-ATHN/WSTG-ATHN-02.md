@@ -144,11 +144,50 @@ hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P D
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Credential_Stuffing_Prevention_Cheat_Sheet.md
 
-- Zmien wszystkie domyslne dane logowania przed wdrozeniem na produkcje
-- Wdroz ochrone przed credential stuffing: CAPTCHA, rate limiting, device fingerprinting
-- Uzyj listy znanych wycieknietych hasel (np. HaveIBeenPwned API) do blokowania
-- Implementuj wykrywanie anomalii: logowania z nowych lokalizacji, nietypowe user-agenty
-- Wdroz MFA jako druga warstwe ochrony przed przejecia kont
+### Domyslne credentials — eliminacja
+
+- **Zmien WSZYSTKIE** domyslne dane logowania PRZED wdrozeniem na produkcje
+- Sprawdz: panele administracyjne, bazy danych, serwery aplikacji, middleware, IoT, routery
+- Wymus zmiane domyslnego hasla przy pierwszym logowaniu — nie pozwol na uzywanie defaults
+- Regularnie audytuj systemy pod katem kont z domyslnymi credentials
+
+### Credential Stuffing Prevention
+
+- **Credential stuffing**: atakujacy uzywa wycieknietych par login:haslo z innych serwisow
+- **Multi-Factor Authentication (MFA)** — PRIMARY defense — nawet ze znanym haslem atakujacy nie przejdzie
+- **CAPTCHA**: bot detection na stronie logowania — reCAPTCHA v3, hCaptcha
+  - CAPTCHA po N nieudanych probach (np. 3) — nie irytuj legalnych uzytkownikow
+- **Rate limiting**: ogranicz proby logowania per IP, per konto, per globalnie
+  - Progresywne opoznienia: 1s, 2s, 4s, 8s po kolejnych bledach
+  - Lockout konta po N nieudanych prob (np. 10) z automatycznym odblokowaniem po X minutach
+- **Device fingerprinting**: identyfikuj znane urzadzenia uzytkownika — wymagaj MFA z nowych
+- **IP reputation**: blokuj znane adresy IP botnetow, VPN, proxy
+
+### Blokowanie znanych wycieknietych hasel
+
+- Sprawdzaj nowe hasla przeciw **HaveIBeenPwned Passwords API** (k-anonymity — bezpieczne)
+- Blokuj top-N najpopularniejszych hasel — listy dostepne w SecLists
+- Blokuj hasla identyczne z username, email, nazwa aplikacji
+
+### Wykrywanie anomalii
+
+- Logowania z nowych lokalizacji (geolokalizacja IP)
+- Nietypowe User-Agent (np. curl, skrypt zamiast przegladarki)
+- Wiele kont logowanych z jednego IP w krotkim czasie
+- Logowania w nietypowych godzinach
+- Powiadomienie uzytkownika o nowym logowaniu z nieznanego urzadzenia
+
+### Komunikaty bledow
+
+- **Generyczne komunikaty** — "Invalid username or password" — nie ujawniaj czy uzytkownik istnieje
+- Identyczny czas odpowiedzi dla istniejacego i nieistniejacego uzytkownika — obrona timing attacks
+- Nie ujawniaj informacji o polityce blokowania konta w komunikatach bledow
+
+### Logging i monitoring
+
+- Loguj WSZYSTKIE proby logowania (udane i nieudane) z: timestamp, IP, UA, username
+- Alertuj na: nagly wzrost nieudanych logow, credential stuffing patterns, brute force
+- Integruj z SIEM do centralnego monitorowania
 
 ## ROZSZERZENIA BURP SUITE
 

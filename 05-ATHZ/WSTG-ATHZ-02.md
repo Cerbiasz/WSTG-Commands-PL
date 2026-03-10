@@ -93,13 +93,49 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/403/403_ur
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Authorization_Cheat_Sheet.md, Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Authorization_Cheat_Sheet.md, Access_Control_Cheat_Sheet.md
 
-- Wymuszaj autoryzacje po stronie serwera przy kazdym uzyciu — deny by default
-- Uzywaj niebezposrednich referencji do obiektow (UUID zamiast sekwencyjnych ID)
-- Waliduj uprawnienia na poziomie obiektu (object-level authorization)
-- Centralizuj logike autoryzacji — unikaj rozproszonych checkow
-- Testuj dostep horyzontalny (inny uzytkownik) i wertykalny (wyzsza rola)
+### Fundamentalne zasady autoryzacji
+
+- **Deny by Default**: jesli brak jawnej reguly — ODMOW dostepu; kazde uprawnienie musi byc jawnie przyznane
+- **Least Privilege**: przydzielaj MINIMUM uprawnien potrzebnych do wykonania zadania — horyzontalnie i wertykalnie
+- **Waliduj przy KAZDYM uzyciu**: sprawdzaj uprawnienia na KAZDY request, niezaleznie od zrodla (AJAX, server-side, API)
+  - Uzyj globalnych filtrow/middleware: Java Filters, Django Middleware, .NET Core Filters, Laravel Middleware
+
+### Model kontroli dostepu
+
+- Preferuj **ABAC** (Attribute-Based) lub **ReBAC** (Relationship-Based) nad **RBAC** (Role-Based)
+  - RBAC: proste ale podatne na "role explosion", slabo obsluguje fine-grained permissions
+  - ABAC: uwzglednia wiele atrybutow (rola, czas, lokalizacja, urzadzenie) — lepsza obrona least privilege
+  - ReBAC: kontrola dostepu na podstawie relacji miedzy uzytkownikiem a zasobem (np. "autor moze edytowac swoj post")
+
+### Obrona przed bypass autoryzacji
+
+- NIE polegaj na client-side access control — atakujacy moze ominac JavaScript/CSS ukrywajace elementy
+- Sprawdzaj autoryzacje **SERVER-SIDE**, na gateway lub w serverless function
+- Unikaj eksponowania identyfikatorow (ID) uzytkownikowi — jesli to mozliwe, pobieraj dane na podstawie sesji/JWT
+- Jesli ID sa eksponowane — uzywaj **UUID/hash** zamiast sekwencyjnych numerow
+- Sprawdzaj uprawnienia do **KONKRETNEGO obiektu**, nie tylko do typu obiektu
+
+### Obsluga bledow autoryzacji
+
+- Centralizuj logike obslugi bledow autoryzacji — unikaj nieoczekiwanych stanow aplikacji
+- Nie ujawniaj wrazliwych informacji w komunikatach o bledzie (sciezki, logi, debug output)
+- Loguj WSZYSTKIE naruszenia autoryzacji jako zdarzenia wysokiego priorytetu
+
+### Testowanie autoryzacji
+
+- Testuj dostep **horyzontalny**: uzytkownik A probuuje dostep do zasobow uzytkownika B
+- Testuj dostep **wertykalny**: zwykly user probuje dostep do zasobow admina
+- Testuj forced browsing do chronionych endpointow
+- Testuj method switching (GET zamiast POST, PUT zamiast DELETE)
+- Testuj header-based bypass: `X-Original-URL`, `X-Forwarded-For: 127.0.0.1`
+
+### Logging i monitoring
+
+- Loguj wszystkie proby dostepu i naruszenia autoryzacji
+- Uzywaj synchronizowanych zegarow i stref czasowych
+- Rozważ SIEM do centralnego monitorowania logow dostepu
 
 ## ROZSZERZENIA BURP SUITE
 

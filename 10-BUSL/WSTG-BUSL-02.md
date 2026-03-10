@@ -99,6 +99,39 @@ curl -v -X POST TARGET/api/register -H "Content-Type: application/json" \
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
+
+### Forging Requests — kategorie atakow
+
+- **CSRF**: zmuszenie przegladarki uzytkownika do wykonania requestu bez jego wiedzy
+- **Parameter tampering**: modyfikacja ukrytych pol formularza, cen, ID
+- **Replay attack**: ponowne wyslanie prawidlowego requestu
+- **IDOR**: zmiana identyfikatorow obiektow (user_id, order_id) na cudze
+
+### Obrona przed CSRF
+
+- **Synchronizer Token**: unikalny token per sesja/request w formularzu (nie w cookie)
+- **SameSite cookies**: `SameSite=Strict` lub `SameSite=Lax` — blokuj cross-origin requesty
+- **Double Submit Cookie**: token w cookie + w body/header — porownanie server-side
+- **Custom headers**: wymagaj custom headera (np. `X-Requested-With`) — przegladarki nie dodaja automatycznie cross-origin
+- **Origin/Referer validation**: sprawdz header Origin/Referer — ale moze byc pusty
+
+### Obrona przed Parameter Tampering
+
+- **Server-side validation**: NIGDY nie ufaj danym od klienta — przeliczaj ceny, waliduj uprawnienia
+- **HMAC/podpis**: podpisuj krytyczne dane (cena, ID) kluczem serwera — weryfikuj przy odbiorze
+- **Integrity tokens**: hash parametrow + secret — wykrywaj modyfikacje
+- **Allowlist parametrow**: akceptuj TYLKO oczekiwane pola (strong parameters)
+- **Idempotency tokens**: jednorazowe tokeny — zapobiegaj replay attacks
+
+### Przewidywalne identyfikatory
+
+- Sekwencyjne ID (user/1, user/2) → **IDOR** — atakujacy zgaduje ID innych uzytkownikow
+- Uzywaj **UUID v4** zamiast sekwencyjnych ID w URL-ach i parametrach
+- Sprawdzaj autoryzacje na KAZDYM dostepie do obiektu — nie polegaj na "nieodgadnialnosci" ID
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

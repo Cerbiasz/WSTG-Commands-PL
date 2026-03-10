@@ -52,10 +52,42 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 
 > Źródło: OWASP CheatSheetSeries — Unvalidated_Redirects_and_Forwards_Cheat_Sheet.md
 
-- Unikaj uzywania user input w URL-ach przekierowan
-- Uzywaj allowlist dozwolonych URL-ow/domen do przekierowania
-- Waliduj URL server-side — nie polegaj na kontrolach klienckich
-- Nie uzywaj parametrow URL do definiowania celu przekierowania (np. ?redirect=)
+### Open Redirect — ryzyka
+
+- **Phishing**: atakujacy wysyla link `trusted.com/redirect?url=evil.com` — ofiara ufa domenie
+- **OAuth token theft**: redirect_uri → atakujacy kradnie authorization code
+- **SSO bypass**: redirect po logowaniu do strony atakujacego
+- **Chaining**: open redirect + SSRF, open redirect + XSS
+
+### Obrona — hierarchia
+
+1. **Unikaj user input w URL przekierowan** — najlepsza obrona
+2. **Mapping IDs**: zamiast `?url=https://...` uzywaj `?id=1` → mapuj do dozwolonych URL
+3. **Allowlist domen**: jawna lista dozwolonych domen do przekierowania
+4. **Walidacja URL server-side**: sprawdz scheme (tylko https), host (tylko zaufane domeny)
+
+### Typowe bypass techniki (testowanie)
+
+- `//evil.com` — protocol-relative URL, przegladarka uzupelnia protokol
+- `/\evil.com` — backslash jako separator
+- `/%09/evil.com` — tab character bypass
+- `https://trusted.com@evil.com` — userinfo w URL (user=trusted.com, host=evil.com)
+- `https://evil.com#trusted.com` — fragment jako dezorientacja
+- `data:text/html,<script>` — data URI scheme
+- `javascript:alert(1)` — JavaScript pseudo-protocol
+
+### Client-Side Redirect (DOM-based)
+
+- JavaScript: `location.href = userInput`, `location.assign()`, `location.replace()`
+- Waliduj URL PRZED przypisaniem do location — sprawdz czy zaczyna sie od `/` (relative) lub zaufanej domeny
+- NIGDY nie przypisuj user input bezposrednio do `location.*`
+
+### Walidacja URL — bezpieczna implementacja
+
+- Parsuj URL (np. `new URL(input)`) — sprawdz `.hostname` przeciw allowlist
+- Odrzuc: `javascript:`, `data:`, `vbscript:` schemes
+- Sprawdz ze URL jest absolute i zaczyna sie od `https://`
+- Uzywaj server-side walidacji — client-side mozna ominac
 
 ## ROZSZERZENIA BURP SUITE
 

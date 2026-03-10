@@ -81,12 +81,57 @@ retire --js --jspath /sciezka/do/pobranych/js/
 
 > Źródło: OWASP CheatSheetSeries — DOM_based_XSS_Prevention_Cheat_Sheet.md, DOM_Clobbering_Prevention_Cheat_Sheet.md
 
-- Unikaj innerHTML, document.write, outerHTML — uzywaj textContent lub setAttribute
-- Sanityzuj HTML za pomoca DOMPurify przed wstawieniem do DOM
-- Waliduj wszystkie DOM sources: location.hash, location.search, document.referrer, window.name
-- Wdroz CSP z nonces jako dodatkowa warstwe obrony
-- Uwazaj na DOM Clobbering — atakujacy moze nadpisac globalne obiekty przez HTML id/name
-- Zamroz Object.prototype aby zapobiec prototype pollution w DOM
+### Kluczowa roznica: DOM XSS vs Reflected/Stored XSS
+
+- Reflected/Stored XSS: injection po stronie SERWERA
+- DOM XSS: injection po stronie KLIENTA (przegladarki) — payload nigdy nie trafia na serwer
+- WAF i server-side filtry NIE chronia przed DOM XSS
+
+### Niebezpieczne sinki (NIGDY nie uzywaj z niezaufanymi danymi)
+
+- `element.innerHTML`, `element.outerHTML` — renderuja HTML
+- `document.write()`, `document.writeln()` — pisza bezposrednio do dokumentu
+- `eval()`, `setTimeout(string)`, `setInterval(string)`, `new Function(string)` — wykonuja kod
+- `element.setAttribute("onclick", ...)` — setAttribute z event handler implicitly konwertuje string na kod JS
+
+### Bezpieczne sinki (UZYWAJ tych zamiast powyzszych)
+
+- `element.textContent = var` — PRIMARY safe method, automatycznie enkoduje
+- `element.insertAdjacentText(position, var)` — bezpieczne
+- `document.createTextNode(var)` — zawsze bezpieczne
+- `element.setAttribute(safeName, var)` — bezpieczne TYLKO dla niewykonujacych atrybutow (class, id, title, value, align itd.)
+- `element.className = var` — bezpieczne
+- `DOMPurify.sanitize(var)` + innerHTML — jesli MUSISZ wstawic HTML
+
+### 7 regul DOM XSS Prevention
+
+1. **HTML escape, potem JS escape** przed wstawieniem do HTML subcontext w execution context
+2. **JS escape** przed wstawieniem do HTML attribute subcontext (ale NIE double-encode — setAttribute jest safe sink)
+3. **Uwazaj na event handlers i JS code subcontext** — JS encoding NIE zapobiega XSS w setAttribute("onclick", ...)
+4. **JS escape + URL encode** przed wstawieniem do CSS attribute subcontext (`style.property = x` jest safe sink)
+5. **URL escape, potem JS escape** przed wstawieniem do URL attribute subcontext
+6. **Uzywaj bezpiecznych metod DOM**: textContent, createElement, setAttribute (safe attrs)
+7. **Naprawianie DOM XSS**: zamien innerHTML/document.write na textContent/innerText
+
+### Wytyczne dla JavaScript
+
+- Niezaufane dane traktuj TYLKO jako tekst do wyswietlenia — nigdy jako kod
+- Zawsze JS encode i delimituj niezaufane dane w quoted strings
+- Uzywaj `document.createElement()` + `setAttribute()` + `appendChild()` do budowania dynamicznego UI
+- NIE uzywaj `eval()` do parsowania JSON — uzywaj `JSON.parse()`
+- Ogranicz dostep do wlasciwosci obiektu przy `object[x]` accessors — dodaj warstwe posrednia
+- Uruchamiaj JavaScript w sandboxie (ECMAScript 5 canopy)
+
+### Wykrywanie DOM XSS
+
+- Szukaj wzorcow: `document.write(location.hash)`, `innerHTML = location.search`, `eval(document.URL)`
+- Uzyj Semgrep rules do statycznej analizy DOM XSS
+- DOM sources do sprawdzenia: `location.hash`, `location.search`, `location.href`, `document.referrer`, `window.name`, `document.URL`
+
+### DOM Clobbering
+
+- Atakujacy moze nadpisac globalne obiekty JavaScript przez HTML `id` i `name` atrybuty
+- Obrona: zamroz `Object.prototype`, uzywaj `const` zamiast `var`, waliduj istnienie obiektow przed uzyciem
 
 ## ROZSZERZENIA BURP SUITE
 

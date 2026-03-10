@@ -107,12 +107,41 @@ cat Desktop/WSTG/Bug-Bounty-Wordlists-main/shodan-dorks.txt
 
 > Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
 
-- Zmapuj wszystkie punkty wejscia/wyjscia danych: formularze, API, pliki, cookies, naglowki HTTP
-- Pogrupuj punkty ataku wg ryzyka: zewnetrzne (internet-facing) vs wewnetrzne, anonimowe vs uwierzytelnione
-- Skup sie na zdalnych punktach wejscia — szczegolnie tych dostepnych bez uwierzytelnienia
-- Monitoruj zmiany attack surface przy kazdym nowym wdrozeniu — nowe endpointy = nowe ryzyko
-- Uzyj narzedzi do crawlowania (ZAP, Burp Spider) aby automatycznie zmapowac dostepne zasoby
-- Zidentyfikuj dane wrazliwe (PII, sekrety, klucze API) i sprawdz ich ochrone
+### Analiza Attack Surface — co zmapowac
+
+- **Punkty wejscia danych**: formularze, URL parametry, naglowki HTTP, cookies, pliki upload, API endpoints
+- **Punkty wyjscia danych**: odpowiedzi HTTP, pliki do pobrania, emaile, WebSocket
+- **Zasoby**: pliki statyczne, bazy danych, pliki konfiguracyjne, logi, backupy
+- **Infrastruktura**: serwery, porty, subdomeny, CDN, load balancery, microservices
+
+### Grupowanie wg ryzyka
+
+- **Najwyzsze ryzyko**: endpointy dostepne anonimowo z internetu (login, rejestracja, API publiczne)
+- **Wysokie ryzyko**: endpointy uwierzytelnione z dostepem do wrazliwych danych (profil, platnosci)
+- **Srednie ryzyko**: endpointy wewnetrzne (panel admin, monitoring)
+- **Nizsze ryzyko**: zasoby statyczne (obrazy, CSS, JS — ale sprawdz czy nie zawieraja sekretow)
+
+### OSINT — pasywne zbieranie informacji
+
+- **Google Dorking**: `site:TARGET filetype:pdf`, `inurl:admin`, `intitle:"index of"`
+- **Shodan/Censys**: skanowanie portow, uslug, certyfikatow SSL bez bezposredniego kontaktu z TARGET
+- **Wayback Machine**: historyczne wersje stron — moze ujawniac stare endpointy, pliki konfiguracyjne
+- **GitHub/GitLab**: wyciek kodu zrodlowego, kluczy API, credentials — `"TARGET" password`, `"TARGET" api_key`
+- **DNS**: subdomeny, rekordy MX, TXT (SPF, DKIM), CNAME — amass, subfinder, dnsrecon
+- **Certificate Transparency**: crt.sh — odkrywanie subdomen z certyfikatow SSL
+
+### Monitoring zmian Attack Surface
+
+- Porownuj attack surface PRZED i PO kazdym wdrozeniu
+- Nowe endpointy, nowe parametry, nowe formularze = nowe ryzyko
+- Automatyzuj discovery: regularne skanowanie, crawlowanie, porownywanie z baseline
+
+### Dane wrazliwe do identyfikacji
+
+- PII (dane osobowe): imiona, adresy, PESEL, email
+- Credentials: hasla, tokeny, klucze API, connection strings
+- Dane finansowe: numery kart, konta bankowe
+- Dane medyczne, prawne — regulacje GDPR, HIPAA, PCI DSS
 
 ## ROZSZERZENIA BURP SUITE
 

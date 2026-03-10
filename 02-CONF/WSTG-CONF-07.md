@@ -99,12 +99,44 @@ curl -s https://TARGET | grep -iE "http://" | grep -v "https://" | tee output_mi
 
 > Źródło: OWASP CheatSheetSeries — HTTP_Strict_Transport_Security_Cheat_Sheet.md, Transport_Layer_Security_Cheat_Sheet.md
 
-- Wlacz HSTS z dlugim max-age (minimum 31536000 = 1 rok) i includeSubDomains
-- Dodaj domene do HSTS preload list (hstspreload.org) dla pelnej ochrony
-- Uzyj wylacznie TLS 1.2+ (najlepiej TLS 1.3) — wylacz TLS 1.0/1.1
+### HSTS — konfiguracja
+
+- **max-age**: minimum `31536000` (1 rok) — krotszy jest niewystarczajacy
+- **includeSubDomains**: chronij WSZYSTKIE subdomeny — nie tylko glowna domene
+- **preload**: dodaj do preload list (hstspreload.org) — ochrona od pierwszego requestu
+- Pelny naglowek: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- HSTS musi byc wysylany TYLKO przez HTTPS — NIE przez HTTP
+
+### Dlaczego HSTS jest kluczowy
+
+- Bez HSTS: pierwszy request moze isc przez HTTP → **sslstrip** atak
+- Atakujacy w MitM moze przechwycic HTTP → proxy → nie przekieruj do HTTPS
+- HSTS zmusza przegladarke do uzywania HTTPS **bezwarunkowo** po pierwszym uzyciu
+- **HSTS preload**: przegladarka zna domene PRZED pierwszym requestem — zero HTTP requestow
+
+### Wymagania HSTS preload list
+
+- `max-age` >= 31536000 (1 rok)
+- `includeSubDomains` musi byc obecne
+- `preload` musi byc obecne
+- Serwer musi obslugiwac HTTPS na glownej domenie (nie tylko subdomenach)
+- HTTP musi przekierowywac 301 do HTTPS
+- Wszystkie subdomeny musza obslugiwac HTTPS
+
+### Mixed content — zagrożenie
+
+- Strona HTTPS ladujaca zasoby przez HTTP = **mixed content**
+- Active mixed content (script, iframe) — blokowane przez przegladarke
+- Passive mixed content (obrazy, audio) — ostrzezenie, ale ladowane
+- Sprawdz: `curl -s https://TARGET | grep -i "http://" | grep -v "https://"`
+- CSP: `upgrade-insecure-requests` — automatycznie upgraduj HTTP do HTTPS
+
+### TLS konfiguracja
+
+- TLS 1.2+ (najlepiej TLS 1.3) — wylacz TLS 1.0/1.1
 - Wylacz slabe cipher suites: RC4, DES, 3DES, NULL, EXPORT
-- Preferuj AEAD cipher suites (AES-GCM, ChaCha20-Poly1305) z ECDHE (PFS)
-- Unikaj mixed content — wszystkie zasoby musza byc ladowane przez HTTPS
+- Preferuj AEAD: AES-GCM, ChaCha20-Poly1305 z ECDHE (PFS)
+- Narzedzie: **Mozilla SSL Configuration Generator** — generuj prawidlowa konfiguracje
 
 ## ROZSZERZENIA BURP SUITE
 

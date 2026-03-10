@@ -142,12 +142,62 @@ diff output_headers_http.txt output_headers_https.txt
 
 > Źródło: OWASP CheatSheetSeries — HTTP_Headers_Cheat_Sheet.md
 
-- Ustaw `X-Content-Type-Options: nosniff` aby zapobiec MIME sniffing
-- Ustaw `X-Frame-Options: DENY` lub `SAMEORIGIN` przeciw clickjacking
-- Wdroz naglowek CSP z restrykcyjna polityka
-- Ustaw `Referrer-Policy: strict-origin-when-cross-origin` lub bardziej restrykcyjna
-- Wdroz `Permissions-Policy` aby ograniczyc dostep do API przegladarki (kamera, mikrofon, geolokacja)
-- Usun naglowki ujawniajace: `Server`, `X-Powered-By`, `X-AspNet-Version`
+### Naglowki bezpieczenstwa — kompletna lista
+
+| Naglowek | Wartosc | Cel |
+|----------|---------|-----|
+| `X-Content-Type-Options` | `nosniff` | Blokuje MIME sniffing |
+| `X-Frame-Options` | `DENY` / `SAMEORIGIN` | Ochrona przed clickjacking |
+| `Content-Security-Policy` | Restrykcyjna polityka | XSS, injection prevention |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Wymuszanie HTTPS |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Kontrola Referer header |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Blokada API przegladarki |
+| `Cross-Origin-Opener-Policy` | `same-origin` | Izolacja okna przegladarki |
+| `Cross-Origin-Resource-Policy` | `same-origin` | Blokada cross-origin read |
+| `Cross-Origin-Embedder-Policy` | `require-corp` | Wymaganie CORP na zasobach |
+| `Cache-Control` | `no-store` (wrazliwe dane) | Zapobieganie cache'owaniu |
+
+### Naglowki do USUNIECIA (information disclosure)
+
+| Naglowek | Przyklad | Ryzyko |
+|----------|---------|--------|
+| `Server` | `Apache/2.4.51` | Ujawnia technologie i wersje |
+| `X-Powered-By` | `PHP/8.1.0` | Ujawnia jezyk programowania |
+| `X-AspNet-Version` | `4.0.30319` | Ujawnia wersje .NET |
+| `X-AspNetMvc-Version` | `5.2` | Ujawnia wersje MVC |
+| `X-Generator` | `WordPress 6.0` | Ujawnia CMS |
+| `X-Runtime` | `0.012345` | Ujawnia czas przetwarzania (timing attack) |
+
+### Referrer-Policy — opcje (od najbardziej restrykcyjnej)
+
+- `no-referrer` — nigdy nie wysylaj Referer
+- `same-origin` — wysylaj tylko do tego samego origin
+- `strict-origin` — wysylaj origin (bez path) tylko przez HTTPS→HTTPS
+- `strict-origin-when-cross-origin` — **REKOMENDOWANE** — pelny URL same-origin, origin cross-origin
+- `no-referrer-when-downgrade` — domyslne, nie wysylaj przy HTTPS→HTTP
+
+### Permissions-Policy — wazne dyrektywy
+
+- `camera=()` — zablokuj dostep do kamery
+- `microphone=()` — zablokuj dostep do mikrofonu
+- `geolocation=()` — zablokuj dostep do lokalizacji
+- `payment=()` — zablokuj Payment Request API
+- `usb=()` — zablokuj WebUSB
+- `display-capture=()` — zablokuj Screen Capture API
+
+### Cross-Origin headers (COOP/COEP/CORP)
+
+- **COOP** (`same-origin`): izoluje okno przegladarki — blokuje cross-origin window references
+- **CORP** (`same-origin`): blokuje cross-origin read zasobow (obrazy, skrypty, fonty)
+- **COEP** (`require-corp`): wymaga CORP na wszystkich zaladowanych zasobach
+- Razem wlaczaja **cross-origin isolation** — wymagane dla SharedArrayBuffer, high-res timers
+
+### Testowanie naglowkow
+
+- Sprawdz https://securityheaders.com — automatyczna ocena
+- Porownaj naglowki na roznych endpointach — musza byc spojne
+- Sprawdz naglowki na HTTP vs HTTPS — moga sie roznic
+- Testuj clickjacking: stworz iframe z TARGET — sprawdz czy sie laduje
 
 ## ROZSZERZENIA BURP SUITE
 

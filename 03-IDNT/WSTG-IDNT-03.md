@@ -112,6 +112,37 @@ curl -s "https://TARGET/api/profile" -H "Authorization: Bearer DELETED_USER_TOKE
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
+
+### Provisioning kont — kontrola dostepu
+
+- **Tylko autoryzowane role** moga tworzyc/modyfikowac/usuwac konta
+- Sprawdzaj uprawnienia na **kazdym endpoincie** provisioningu (BOLA/IDOR)
+- Waliduj role przypisywane nowym kontom — nie pozwalaj na self-escalation
+- Testuj: tworzenie konta admin przez zwyklego usera, tworzenie bez autoryzacji
+
+### De-provisioning — usuwanie kont
+
+- Usuniety/dezaktywowany uzytkownik musi natychmiast **utracic** wszystkie sesje i tokeny
+- Sprawdz czy token usuniętego uzytkownika nadal dziala (dangling sessions)
+- Odwolaj refresh tokens, invalidate JWT (denylist), usun sesje server-side
+- Audit trail: loguj kto, kiedy i jakie konto stworzyl/usunal/zmodyfikowal
+
+### Invite/zaproszenia
+
+- Tokeny zaproszeniowe: CSPRNG, jednorazowe, krotki TTL (24-72h)
+- Nie pozwalaj na reuse tokenu zaproszenia po aktywacji
+- Ogranicz scope zaproszenia — nie pozwalaj zapraszajacemu nadac wyzszych uprawnien niz posiada
+- Sprawdz czy token zaproszenia moze byc brute-forced
+
+### Bulk provisioning
+
+- Ogranicz rozmiar batch requestow (max. 100 uzytkownikow na raz)
+- Waliduj kazdy rekord indywidualnie — nie pozwalaj na injection w CSV/JSON batch
+- Rate limiting na endpoincie bulk provisioning
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

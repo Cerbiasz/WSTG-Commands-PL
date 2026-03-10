@@ -102,11 +102,40 @@ curl -s -X PUT "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN
 
 > Źródło: OWASP CheatSheetSeries — Access_Control_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
 
-- Wymuszaj autoryzacje po stronie serwera — nigdy nie polegaj na kontrolach klienckich
-- Stosuj zasade deny by default — dostep tylko jawnie przyznany
-- Implementuj RBAC (Role-Based Access Control) i waliduj role przy kazdym uzyciu
-- Centralyzuj logike autoryzacji — unikaj rozproszonych checkow w kodzie
-- Loguj wszystkie proby dostepu i zmiany uprawnien
+### Definicja rol i uprawnien
+
+- **Role**: grupuja uprawnienia (admin, user, moderator, manager, readonly)
+- **Uprawnienia**: granularne akcje (create_user, delete_order, view_report)
+- Unikaj **role explosion** — zbyt wiele rol = trudne do zarzadzania
+- Preferuj **ABAC/ReBAC** nad RBAC dla fine-grained permissions
+
+### Wymuszanie autoryzacji
+
+- **Server-side ONLY** — NIGDY nie polegaj na client-side (JavaScript, hidden fields, localStorage)
+- **Deny by default** — dostep tylko jesli jawnie przyznany
+- **Centralny middleware** — unikaj rozproszonych checkow w kodzie (latwe do pominiecia)
+- **Kazdego request** waliduj — nie zakladaj ze sesja = autoryzacja
+
+### Separacja uprawnien
+
+- Oddzielne panele admin od user interface (inna subdomena/port)
+- Funkcje administracyjne w oddzielnym module/kontrolerze
+- Osobny middleware autoryzacji dla admin endpointow
+
+### Testowanie zdefiniowanych rol
+
+- Zmapuj WSZYSTKIE role w systemie i ich oczekiwane uprawnienia
+- Zaloguj sie jako kazda rola → testuj dostep do endpointow innych rol
+- Testuj **horizontal** (user A → zasoby user B) i **vertical** (user → admin) escalation
+- Manipuluj parametry: `role=admin`, `isAdmin=true`, JWT claims
+- Uzyj Burp Autorize/AuthMatrix do automatycznego porownywania
+
+### Logging i audit
+
+- Loguj WSZYSTKIE proby dostepu i naruszenia autoryzacji
+- Loguj zmiany uprawnien (kto, kiedy, co zmieniono)
+- Alertuj na powtarzajace sie proby eskalacji
+- Regularny audit rol i uprawnien — usun nieuzywane konta i nadmiarowe uprawnienia
 
 ## ROZSZERZENIA BURP SUITE
 

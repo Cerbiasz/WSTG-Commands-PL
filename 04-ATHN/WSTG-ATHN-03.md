@@ -125,13 +125,46 @@ hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -p "
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Credential_Stuffing_Prevention_Cheat_Sheet.md
 
-- Implementuj progresywne opoznienia po nieudanych probach logowania
-- Zablokuj konto po N nieudanych probach (np. 5-10) z mozliwoscia odblokowania
+### Mechanizmy obrony przed brute force
+
+- **Account lockout**: zablokuj konto po 5-10 nieudanych probach
+  - Automatyczne odblokowanie po 15-30 minutach (NIE permanentne — DoS risk)
+  - UWAGA: atakujacy moze celowo blokowac konta uzytkownikow (lock-out attack)
+- **Progresywne opoznienia (throttling)**: 1s, 2s, 4s, 8s, 16s po kolejnych bledach
+  - Mniej agresywne niz lockout — nie blokuje konta, ale spowalnia brute force
+- **CAPTCHA**: po N nieudanych probach (np. 3) — reCAPTCHA v3, hCaptcha
+  - NIE na pierwszej probie — irytuje legalnych uzytkownikow
+- **Rate limiting IP**: ogranicz liczbę prób z jednego IP per minute
+  - UWAGA: proxy/VPN/NAT — wiele uzytkownikow moze miec ten sam IP
+
+### Password spraying — obejscie lockout
+
+- Atakujacy probuje JEDNO haslo na WIELU kontach (zamiast wielu hasel na jednym koncie)
+- Omija account lockout (1 proba per konto)
+- **Obrona**: globalne rate limiting, CAPTCHA, wykrywanie wzorcow (wiele kont z jednego IP)
+- Blokuj popularne hasla (Password1!, Qwerty123) — atakujacy probuje wlasnie tych
+
+### Komunikaty bledow
+
+- **Identyczny komunikat** dla blednego loginu i hasla: "Invalid username or password"
+- **Identyczny czas odpowiedzi** — nie ujawniaj czy konto istnieje przez timing
+- **NIE ujawniaj** ile prob pozostalo do blokady — information leakage
+- **NIE ujawniaj** czy konto jest zablokowane vs nie istnieje
+
+### Multi-Factor Authentication (MFA)
+
+- MFA eliminuje wiekszosc atakow brute force — nawet ze znanym haslem atakujacy nie przejdzie
+- TOTP (np. Google Authenticator), WebAuthn/FIDO2, SMS (slabsze ale lepsze niz nic)
+- Wymagaj MFA przynajmniej dla: adminow, uzytkownikow z wrazliwymi danymi
+
+### Logging i alerting
+
+- Loguj WSZYSTKIE nieudane proby: timestamp, IP, username, User-Agent
+- Alertuj na: wiele blednych prob na jedno konto, password spraying patterns, credential stuffing
+- Integruj z SIEM do centralnego monitorowania
 - Powiadom uzytkownika o zablokowaniu konta (email/SMS)
-- Loguj wszystkie nieudane proby logowania z adresem IP i timestampem
-- Nie ujawniaj dokladnej liczby pozostalych prob — unikaj information leakage
 
 ## ROZSZERZENIA BURP SUITE
 

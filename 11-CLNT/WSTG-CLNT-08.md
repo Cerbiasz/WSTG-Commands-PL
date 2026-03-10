@@ -43,6 +43,31 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP Testing Guide, ogólne zasady bezpieczenstwa
+
+### Flash/SWF — status (2020+)
+
+- **Flash jest EOL od 31 grudnia 2020** — Adobe zakonczyl wsparcie
+- Przegladarki usunely wsparcie Flash — Chrome, Firefox, Edge, Safari
+- Testowanie Cross Site Flashing jest **legacy** — ale SWF mogą nadal istniec na serwerach
+- Jesli znajdziesz SWF na serwerze: **usun go** — nie ma powodu go utrzymywac
+
+### Jesli SWF nadal istnieje — co sprawdzic
+
+- **ExternalInterface.call()**: moze wywolac JavaScript — potencjalny XSS
+- **navigateToURL/getURL**: przekierowanie — potencjalny open redirect
+- **loadMovie/loadClip**: ladowanie zewnetrznego SWF — content injection
+- **flashvars**: parametry z URL — injection point
+- **allowScriptAccess**: `always` = pelny dostep do JS strony hosting
+
+### Obrona
+
+- **Usun wszystkie pliki SWF** z serwera — Flash jest przestarzaly
+- Zablokuj MIME type `application/x-shockwave-flash` na serwerze
+- Jesli nie mozna usunac: ustaw `allowScriptAccess="never"` i `allowNetworking="none"`
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

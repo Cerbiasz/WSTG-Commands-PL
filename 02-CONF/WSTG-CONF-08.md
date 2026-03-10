@@ -83,6 +83,60 @@ curl -sI https://TARGET/api/v1/ -H "Origin: https://evil.com" | grep -iE "^Acces
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md, REST_Security_Cheat_Sheet.md
+
+### Cross-domain policy — niebezpieczne konfiguracje
+
+| Konfiguracja | Ryzyko | Poprawna wersja |
+|-------------|--------|-----------------|
+| `allow-access-from domain="*"` | Dowolna domena moze czytac dane | Ogranicz do konkretnych domen |
+| `<allow-http-request-headers-from domain="*">` | Dowolne naglowki z dowolnej domeny | Tylko zaufane domeny |
+| `Access-Control-Allow-Origin: *` + credentials | Nie dziala w przegladarce, ale swiadczy o zlej konfiguracji | Konkretna domena, nie wildcard |
+| Reflected Origin w ACAO | Atakujacy moze czytac dane ofiary | Whitelist dozwolonych origin |
+| `Access-Control-Allow-Origin: null` | Bypass przez iframe sandbox | Nie akceptuj null origin |
+
+### CORS — poprawna konfiguracja
+
+- **Whitelist origin**: sprawdzaj Origin z lista dozwolonych domen — nie odbijaj dynamicznie
+- **Credentials**: `Access-Control-Allow-Credentials: true` wymaga konkretnego origin (nie `*`)
+- **Metody**: ogranicz `Access-Control-Allow-Methods` do potrzebnych (GET, POST)
+- **Naglowki**: ogranicz `Access-Control-Allow-Headers` do minimum
+- **Max-Age**: ustaw `Access-Control-Max-Age` aby zmniejszyc preflight requests
+- **Expose-Headers**: nie ujawniaj wrazliwych naglowkow
+
+### crossdomain.xml (Flash) — status
+
+- Flash Player oficjalnie wycofany (EOL grudzien 2020)
+- Pliki `crossdomain.xml` nadal moga istniec na serwerach — usun je
+- Jesli konieczny dla legacy: `allow-access-from domain="specific.domain.com"`, **nigdy** `domain="*"`
+
+### clientaccesspolicy.xml (Silverlight) — status
+
+- Silverlight oficjalnie wycofany (EOL pazdziernik 2021)
+- Usun pliki `clientaccesspolicy.xml` z serwerow produkcyjnych
+- Legacy Silverlight apps powinny byc zmigrowane
+
+### Testowanie CORS — payloady
+
+```
+Origin: https://evil.com                    # Podstawowy test
+Origin: null                                # Iframe sandbox bypass
+Origin: https://target.com.evil.com         # Subdomena atakujacego
+Origin: https://eviltarget.com              # Suffix match bypass
+Origin: https://target.com%60.evil.com      # Backtick bypass
+Origin: https://sub.target.com              # Subdomena target
+```
+
+### Obrona
+
+- Usun `crossdomain.xml` i `clientaccesspolicy.xml` jesli nie sa potrzebne
+- Implementuj CORS whitelist na serwerze — nie odbijaj Origin dynamicznie
+- Nie laczkuj `Allow-Credentials: true` z luznymi origin rules
+- Testuj CORS na kazdym endpoincie API osobno — konfiguracja moze sie roznic
+- Uzyj CSP `connect-src` jako dodatkowa warstwe ochrony
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

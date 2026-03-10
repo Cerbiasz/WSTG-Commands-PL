@@ -143,10 +143,44 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 
 > Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md
 
-- Wylacz tryb debug/verbose na produkcji — konfiguracja frameworka
-- Usun szczegolowe komunikaty bledow: stack trace, nazwy klas, zapytania SQL
-- Skonfiguruj custom error pages (404, 500) bez informacji o technologii
-- Monitoruj logi po stronie serwera zamiast ujawniac je uzytkownikowi
+### Co stack trace moze ujawnic atakujacemu
+
+- **Technologie**: `com.opensymphony.xwork2` → Struts2, `Apache Tomcat/7.0.56` → konkretna wersja z CVE
+- **Sciezki plikow**: `D:\app\index_new.php on line 188` → struktura aplikacji
+- **Zapytania SQL**: `odbc_fetch_array()` → typ bazy danych, mozliwy injection point
+- **Klasy i metody**: `java.lang.NumberFormatException.forInputString()` → logika biznesowa
+- **Connection strings**: dane dostepu do bazy, hosty wewnetrzne
+
+### Wylaczanie stack traces na produkcji
+
+- **Java/Spring**: ustaw `server.error.include-stacktrace=never` w `application.properties`
+- **ASP.NET Core**: NIE uzywaj `app.UseDeveloperExceptionPage()` na produkcji — uzywaj `app.UseExceptionHandler()`
+- **ASP.NET**: `<customErrors mode="RemoteOnly">` lub `mode="On"` w Web.config
+- **PHP**: `display_errors = Off`, `log_errors = On` w php.ini
+- **Django**: `DEBUG = False` w settings.py (KRYTYCZNE)
+- **Node.js/Express**: NIE uzywaj `app.use(errorHandler())` na produkcji — custom middleware z generycznym response
+
+### Globalny error handler — wzorzec
+
+- Przechwytuj WSZYSTKIE nieobsluzowane wyjatki na najwyzszym poziomie
+- Loguj pelny stack trace SERVER-SIDE (do plikow logow, SIEM, ELK)
+- Zwracaj uzytkownikowi TYLKO generyczny komunikat: `{"message":"An error occurred"}`
+- Uzywaj RFC 7807 (Problem Details) w REST API: `Content-Type: application/problem+json`
+
+### Debug endpointy do sprawdzenia
+
+- `/actuator`, `/actuator/env`, `/actuator/heapdump` — Spring Boot Actuator
+- `/trace.axd`, `/elmah.axd` — ASP.NET diagnostics
+- `/phpinfo.php` — PHP info (ujawnia cala konfiguracje)
+- `/_debugbar`, `/__debug__/` — Laravel/Django debug toolbars
+- `?debug=true`, `?trace=true`, `?show_errors=1` — debug query params
+
+### Monitoring i alerting
+
+- Monitoruj bledy 5xx — wskazuja na nieoczekiwane awarie, potencjalne ataki
+- Loguj WSZYSTKIE nieobsluzowane wyjatki jako zdarzenia wysokiego priorytetu
+- Alertuj na nagly wzrost bledow — moze wskazywac na atak fuzzing/injection
+- Uzywaj centralnego systemu logowania (ELK, Splunk, SIEM) do korelacji bledow
 
 ## ROZSZERZENIA BURP SUITE
 

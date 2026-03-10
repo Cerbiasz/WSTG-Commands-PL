@@ -96,6 +96,59 @@ curl -s https://TARGET/misc/drupal.js | md5sum
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Vulnerable_Dependency_Management_Cheat_Sheet.md, Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Identyfikacja wersji aplikacji — techniki
+
+| Technika | Opis | Niezawodnosc |
+|----------|------|-------------|
+| Meta generator tag | `<meta name="generator" content="WordPress 6.2">` | Wysoka (jesli nie usuniete) |
+| Pliki wersji | `/CHANGELOG.txt`, `/VERSION`, `/readme.html` | Wysoka |
+| RSS/Atom feed | `<generator>` w feedzie | Srednia |
+| Hash plikow statycznych | MD5 CSS/JS vs baza referencyjnych hashów | Wysoka |
+| Error pages | Stack trace, domyslne strony bledow | Srednia |
+| HTTP headers | `X-Generator`, `X-Powered-By` | Srednia (moze byc sfalsowane) |
+| Favicon hash | Hash favicony → identyfikacja technologii | Niska-srednia |
+| URL patterns | Struktura URL specyficzna dla aplikacji | Srednia |
+
+### Off-the-shelf vs custom application
+
+| Cecha | Off-the-shelf (CMS, framework) | Custom application |
+|-------|-------------------------------|-------------------|
+| Identyfikacja | Latwa — znane sygnatury | Trudna — brak publicznych sygnatur |
+| CVE search | Mozliwy po ustaleniu wersji | Nie dotyczy |
+| Testowanie | Znane podatnosci + konfiguracja | Pelny pentest wymagany |
+| Exploit availability | Publiczne exploity (Metasploit, ExploitDB) | Brak — wymaga wlasnego development |
+
+### Po identyfikacji wersji — nastepne kroki
+
+1. **Szukaj CVE**: `searchsploit wordpress 6.2`, NVD, Vulners, Snyk DB
+2. **Sprawdz ExploitDB**: `searchsploit -m <exploit_id>` — gotowe exploity
+3. **Nuclei templates**: `nuclei -u target -tags cve` — automatyczne testowanie
+4. **Porownaj z latest**: czy wersja jest aktualna? ile wersji za najnowsza?
+5. **Sprawdz pluginy/moduły**: WPScan, JoomScan — podatnosci w dodatkach
+
+### Baza wersji — narzedzia
+
+| Narzedzie | Uzycie |
+|-----------|--------|
+| WPScan | `wpscan --url target` — WordPress (wersja, pluginy, tematy, uzytkownicy) |
+| JoomScan | `joomscan -u target` — Joomla |
+| Droopescan | `droopescan scan drupal -u target` — Drupal |
+| CMSeek | `cmseek -u target` — uniwersalny CMS scanner |
+| retire.js | Podatne wersje bibliotek JS |
+
+### Obrona
+
+- **Aktualizuj regularnie** — wiekszosci exploitow dotyczy starych wersji
+- Usun pliki ujawniajace wersje: `CHANGELOG.txt`, `readme.html`, `VERSION`
+- Usun lub zmien meta tag `generator`
+- Wdróż **patch management process** — testuj i wdrazaj aktualizacje bezpieczenstwa
+- Monitoruj advisories bezpieczenstwa dla uzywanych technologii
+- Uzyj WAF jako tymczasowa ochrone (virtual patching) przed wdrozeniem aktualizacji
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

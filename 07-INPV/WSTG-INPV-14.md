@@ -60,6 +60,41 @@ curl -s "https://TARGET/" -H "Referer: <script>alert('XSS')</script>"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, Cross_Site_Scripting_Prevention_Cheat_Sheet.md
+
+### Incubated Vulnerability — definicja
+
+- Podatnosc **przechowywana** (stored) — payload jest zapisywany i wyzwalany **pozniej**, czesto przez innego uzytkownika
+- Roznica vs reflected: reflected dziala natychmiast, incubated wymaga "recall step"
+- Czas miedzy wstrzyknieciem a wyzwoleniem moze wynosic minuty, godziny lub dni
+
+### Typowe wektory ataku
+
+| Wektor | Payload wstrzykniety w... | Wyzwalany gdy... |
+|--------|--------------------------|-----------------|
+| Stored XSS | Formularz feedbacku, komentarz | Admin otwiera panel zgloszeniowy |
+| Second-order SQLi | Pole rejestracji (username) | Dane sa uzyte w innym zapytaniu SQL |
+| Log injection | User-Agent, Referer header | Administrator przegladasz logi w web UI |
+| Email header injection | Pole "imie" lub "email" | System wysyla email z tymi danymi |
+| PDF generation XSS | Dane uzytkownika | System generuje PDF z tych danych (wkhtmltopdf, Puppeteer) |
+
+### Obrona
+
+- **Output encoding**: enkoduj dane przy WYSWIETLANIU — nie przy zapisie
+- Sanityzuj dane na KAZDYM punkcie wyjscia: HTML, logi, emaile, PDF, CSV
+- **Content Security Policy**: ogranicza wykonanie inline JavaScript nawet jesli XSS istnieje
+- Loguj bezpiecznie: nie renderuj logow uzytkownikow w HTML bez enkodowania
+- Uzyj **Burp Collaborator** do detekcji blind/incubated payloadow
+
+### Testowanie
+
+- Wstaw payloady XSS/SQLi w pola ktore sa wyswietlane **pozniej** (feedback, komentarze, profil)
+- Sprawdz panel admina/logi po wstrzyknięciu payloadow
+- Testuj User-Agent i Referer injection — logowane i wyswietlane w analytics
+- Uzyj out-of-band (OOB) detekcji: DNS/HTTP callback do wykrywania blind execution
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

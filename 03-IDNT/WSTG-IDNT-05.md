@@ -136,10 +136,43 @@ ffuf -w Desktop/WSTG/SecLists-master/Usernames/sap-default-usernames.txt:USER -u
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
 
-- Nazwy uzytkownikow powinny byc case-insensitive i unikalne
-- Ogranicz dozwolone znaki w nazwie uzytkownika (alfanumeryczne + ograniczone znaki specjalne)
-- Nie uzywaj adresow email jako jedynego identyfikatora — umozliwiaj zmiane maila bez zmiany konta
-- Nie ujawniaj polityki nazw uzytkownikow atakujacym
+### Polityka nazw uzytkownikow
+
+- **Case-insensitive**: `Admin`, `admin`, `ADMIN` musza byc traktowane jako to samo konto
+- Uzyj **allowlist znakow**: alfanumeryczne + ograniczone znaki specjalne (`.`, `-`, `_`)
+- **Min/max dlugosc**: np. 3-64 znaki — zapobiegaj krotkim i bardzo dlugim nazwom
+- Trimuj biale znaki na poczatku i koncu — `" admin"` != `"admin"` to blad
+- User ID powinno byc **losowe** (UUID) — nie sekwencyjne (user001, user002)
+
+### Zarezerwowane nazwy — denylist
+
+- Blokuj nazwy systemowe: `root`, `admin`, `administrator`, `system`, `null`, `undefined`, `NaN`
+- Blokuj nazwy serwisowe: `postmaster`, `webmaster`, `hostmaster`, `abuse`, `noreply`
+- Blokuj slowa kluczowe: `true`, `false`, `login`, `register`, `api`, `graphql`
+- Uwzglednij warianty case i Unicode confusables
+
+### Email jako identyfikator
+
+- Pozwol uzytkownikom uzywac email jako username, ale **weryfikuj email**
+- Umozliw zmiane adresu email **bez zmiany konta** — oddziel identyfikator od emaila
+- Waliduj format email: nie akceptuj `test@test@test.com`, `user@.com`
+- Uwzglednij aliasy email: `user+tag@gmail.com` — czy to ten sam uzytkownik?
+
+### Unicode i znaki specjalne — zagrożenia
+
+- **Unicode confusables**: cyrylica `А` (U+0410) wyglada jak lacinskie `A` (U+0041)
+- **Null bytes**: `admin%00` moze byc traktowane jako `admin` po obcieciu
+- **Right-to-left override**: U+202E moze zmienic wyswietlanie nazwy
+- **Zero-width characters**: U+200B (zero-width space) — niewidoczny ale zmienia unikatowość
+- Normalizuj Unicode (NFC) przed porownaniem i zapisem
+
+### Testowanie
+
+- Czy mozna zarejestrowac konto z nazwa istniejacego uzytkownika (case variant, Unicode)?
+- Czy nazwy systemowe sa zablokowane?
+- Czy komunikaty bledow ujawniaja politykę nazewnictwa?
+- Czy schemat nazw wewnetrznych kont jest przewidywalny (sekwencyjne ID)?
+- Czy mozna wstawic znaki specjalne (spacje, null bytes, Unicode) w username?
 
 ## ROZSZERZENIA BURP SUITE
 

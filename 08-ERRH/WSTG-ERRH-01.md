@@ -172,11 +172,54 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 
 > Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md
 
-- Uzywaj generycznych stron bledow dla uzytkownikow — nie ujawniaj stack trace, sciezek, wersji DB
-- Loguj szczegolowe bledy TYLKO po stronie serwera — nigdy w odpowiedzi HTTP
-- Obsluz WSZYSTKIE typy wyjatkow — nieobsluzony wyjatek moze ujawnic wrazliwe dane
-- Wdroz globalny error handler w frameworku — zapobiegaj niespojnym odpowiedziom
-- Zwracaj standardowe kody HTTP (500, 403, 404) bez dodatkowych szczegolow
+### Dlaczego error handling jest krytyczny
+
+- Nieobsluzony blad moze ujawnic: nazwe i wersje serwera, frameworki, sciezki plikow, zapytania SQL, connection strings, nazwy tabel
+- Atakujacy wykorzystuja te informacje w fazie **Reconnaissance** — identyfikacja technologii, injection points, wersji z znanymi CVE
+- Przyklad: stack trace Struts2/Tomcat ujawnia `com.opensymphony.xwork2` + `Apache Tomcat/7.0.56` — atakujacy wie co atakowac
+
+### Zasady ogolne
+
+- **Generyczne odpowiedzi dla uzytkownika** — zwracaj ogolny komunikat np. `{"message":"An error occurred, please retry"}`
+- **Szczegolowe logowanie SERVER-SIDE** — loguj pelny stack trace, request details, user context po stronie serwera
+- **Obsluz WSZYSTKIE typy wyjatkow** — nieobsluzony wyjatek moze ujawnic wrazliwe dane techniczne
+- **Wdroz globalny error handler** — zapobiegaj niespojnym odpowiedziom na roznych endpointach
+- **Uzywaj kodow HTTP poprawnie**: 4xx dla bledow klienta (unauthorized, bad request), 5xx dla bledow serwera
+- **RFC 7807** (Problem Details for HTTP APIs) — standardowy format odpowiedzi bledow w REST API: `application/problem+json`
+
+### Globalny error handler — konfiguracja wg technologii
+
+- **Standard Java (web.xml)**: `<error-page><exception-type>java.lang.Exception</exception-type><location>/error.jsp</location></error-page>`
+- **Spring MVC/Boot**: klasa z `@RestControllerAdvice` + `@ExceptionHandler(Exception.class)` zwracajaca `ProblemDetail` (Spring 6+ RFC 7807)
+- **ASP.NET Core**: `app.UseExceptionHandler("/api/error")` w `Startup.cs` — dedykowany ErrorController zwraca generyczny JSON
+  - W DEV: `app.UseDeveloperExceptionPage()` — WYLACZ na produkcji
+  - `app.UseStatusCodePages()` — custom odpowiedzi dla kodow statusu
+- **ASP.NET Web API (.NET Framework)**: zarejestruj `ExceptionLogger` + `ExceptionHandler` w `WebApiConfig.Register()`
+  - `config.Services.Replace(typeof(IExceptionLogger), new GlobalErrorLogger())`
+  - `config.Services.Replace(typeof(IExceptionHandler), new GlobalErrorHandler())`
+  - `<customErrors mode="RemoteOnly">` w Web.config
+
+### Co NIE powinno byc w odpowiedzi bledu
+
+- Stack traces, numery linii kodu, nazwy klas
+- Sciezki plikow (`D:\app\index_new.php on line 188`)
+- Zapytania SQL, connection strings, nazwy tabel
+- Wersje serwera, frameworka, bibliotek
+- Zmienne srodowiskowe, konfiguracja
+
+### Kody HTTP — poprawne uzycie
+
+- **4xx** — blad klienta: 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed, 429 Too Many Requests
+- **5xx** — blad serwera: 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable
+- Monitoruj bledy 5xx — wskazuja na nieoczekiwane awarie aplikacji
+- NIE zwracaj szczegolow implementacji w body odpowiedzi — uzywaj generycznych komunikatow
+
+### Dodatkowe najlepsze praktyki
+
+- Dodaj header `X-ERROR: true` do odpowiedzi bledow — ulatwia client-side error handling
+- Uzywaj [Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) do prawidlowego logowania bledow
+- Testuj error handling na produkcji — upewnij sie ze debug mode jest WYLACZONY
+- Sprawdz czy reverse proxy/CDN nie dodaje wlasnych stron bledow z informacjami technicznymi
 
 ## ROZSZERZENIA BURP SUITE
 

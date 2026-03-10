@@ -101,6 +101,48 @@ seq 1 5 | parallel -j5 "curl -s -X POST TARGET/api/register -d 'username=testuse
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md, Transaction_Authorization_Cheat_Sheet.md
+
+### Race Condition — mechanizm
+
+- **TOCTOU** (Time of Check to Time of Use): warunek sprawdzany w czasie T1, operacja wykonywana w T2
+- Miedzy T1 a T2 stan moze sie zmienic — np. saldo sprawdzone, ale zmienione przed przelewem
+- Skutek: podwojne wykorzystanie kuponow, podwojna platnosc, przekroczenie limitow
+
+### Typowe scenariusze race condition w web
+
+| Scenariusz | Skutek |
+|------------|--------|
+| Realizacja kuponu | Wielokrotne uzycie jednorazowego kodu |
+| Transfer srodkow | Podwojne obciazenie / double spending |
+| Glosowanie | Wielokrotne glosy na te sama opcje |
+| Rejestracja unikalnego username | Dwa konta z tą samą nazwą |
+| Rezerwacja / zakup | Dwa zamowienia na ten sam przedmiot |
+| Like / follow | Wielokrotne polubienia |
+
+### Obrona przed race conditions
+
+- **Transakcje bazodanowe**: `SELECT ... FOR UPDATE` z `SERIALIZABLE` isolation level
+- **Distributed locks**: Redis SETNX, database advisory locks
+- **Idempotency keys**: unikalny klucz per operacja — powtorzony request = ignorowany
+- **Optimistic locking**: version counter w rekordzie — UPDATE WHERE version = N
+- **Atomic operations**: `UPDATE balance SET amount = amount - 100 WHERE amount >= 100`
+
+### Timing Attacks
+
+- **Timing leak**: rozny czas odpowiedzi ujawnia informacje (np. czy username istnieje)
+- Porownywanie hasel/tokenow musi byc **constant-time** — `hmac.compare_digest()`, `crypto.timingSafeEqual()`
+- Roznica 50ms miedzy "user exists" a "user doesn't exist" pozwala na enumeracje
+
+### Testowanie
+
+- Uzyj **Burp Turbo Intruder** z `concurrentConnections=30+` do race condition
+- `GNU parallel -j50` do rownoczesnych requestow z terminala
+- Zmierz czas odpowiedzi dla 100+ requestow — szukaj roznic wskazujacych na timing leak
+- Testuj na operacjach krytycznych: platnosci, kupony, limity, glosowania
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

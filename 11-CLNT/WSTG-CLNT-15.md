@@ -61,12 +61,46 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Third_Party_Javascript_Management_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Third_Party_Javascript_Management_Cheat_Sheet.md, DOM_based_XSS_Prevention_Cheat_Sheet.md
 
-- Uzywaj atrybutu integrity (SRI) na tagach script i link dla zasobow third-party
-- Pinuj wersje zasobow third-party — nie uzywaj latest/dynamic URL
-- Wdroz CSP aby wymusic SRI (`require-sri-for script style`)
-- Monitoruj zmiany w zasobach third-party — wykrywaj supply chain attacks
+### CSTI — Client-Side Template Injection
+
+- Dane uzytkownika sa **wstawiane do szablonu client-side** (Angular, Vue, Handlebars)
+- Skutek: wykonanie **JavaScript** w kontekscie strony — XSS
+- Roznica vs SSTI: kod wykonywany w **przegladarce**, nie na serwerze
+
+### Payloady per framework
+
+| Framework | Payload | Wersja |
+|-----------|---------|--------|
+| AngularJS 1.x | `{{constructor.constructor('alert(1)')()}}` | < 1.6 |
+| AngularJS 1.6+ | `{{$on.constructor('alert(1)')()}}` | >= 1.6 (sandbox removed) |
+| Vue.js 2.x | `{{_c.constructor('alert(1)')()}}` | 2.x |
+| Vue.js 3.x | Sandbox — trudniejsze do eksploitacji | 3.x |
+| Handlebars | `{{#with "s" as |string|}}...{{/with}}` | Rozne |
+
+### AngularJS sandbox escape — historia
+
+- AngularJS 1.0-1.5: sandbox — probowal ograniczyc wykonanie kodu
+- Sandbox byl **wielokrotnie obchodzony** — nowe bypass w kazdej wersji
+- AngularJS 1.6+: **sandbox usuniety** — `{{constructor.constructor('alert(1)')()}}` dziala bezposrednio
+- Angular (2+): nie interpretuje `{{}}` z danych uzytkownika — bezpieczne domyslnie
+
+### Obrona
+
+- **Nie wstawiaj danych uzytkownika** do szablonow client-side bez enkodowania
+- Uzyj **CSP** z `script-src 'self'` — blokuje eval(), Function() (wymagane przez wiele exploitow CSTI)
+- Aktualizuj frameworki — nowsze wersje maja lepsze zabezpieczenia
+- Angular (2+) i React: domyslnie bezpieczne — enkoduja output
+- Vue 3: bardziej restrykcyjny sandbox — trudniejsze do exploitacji
+
+### Subresource Integrity (SRI) — third-party JS
+
+- `<script src="cdn.com/lib.js" integrity="sha384-..." crossorigin="anonymous">`
+- Przegladarka weryfikuje hash pliku — jesli CDN skompromitowany, plik nie zostanie zaladowany
+- Pinuj wersje: `lib@1.2.3` zamiast `lib@latest`
+- CSP: `require-sri-for script style` — wymuszaj SRI
+- Monitoruj zmiany w third-party zasobach — supply chain attacks
 
 ## ROZSZERZENIA BURP SUITE
 

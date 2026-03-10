@@ -42,11 +42,44 @@ curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noreferre
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Browser_Extension_Vulnerabilities_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md
 
-- Sprawdz uprawnienia rozszerzenia — czy nie zadaje nadmiernych permissions
-- Waliduj komunikacje rozszerzenia z aplikacja webowa
-- Sprawdz czy rozszerzenie nie wstrzykuje kodu na strone
+### Reverse Tabnabbing — mechanizm ataku
+
+1. Strona A zawiera link `<a href="https://evil.com" target="_blank">` bez `rel="noopener"`
+2. Uzytkownik klika link → otwiera sie nowa karta z evil.com
+3. Evil.com uzywa `window.opener.location = "https://phishing.com"` → strona A zmienia sie na phishing
+4. Uzytkownik wraca do "karty A" → widzi strone phishingowa (np. fake login)
+
+### Podatny kod
+
+```html
+<!-- PODATNE -->
+<a href="https://external.com" target="_blank">Link</a>
+
+<!-- BEZPIECZNE -->
+<a href="https://external.com" target="_blank" rel="noopener noreferrer">Link</a>
+```
+
+### Obrona
+
+- **Zawsze** dodawaj `rel="noopener noreferrer"` do linkow z `target="_blank"`
+- `noopener`: blokuje dostep do `window.opener` — zapobiega tabnabbingowi
+- `noreferrer`: nie wysyla Referer header — dodatkowa prywatnosc
+- Nowoczesne przegladarki (Chrome 88+, Firefox 79+) automatycznie dodaja `noopener` — ale nie polegaj na tym
+- **CSP**: rozważ `sandbox` na iframe aby ograniczyc mozliwosci zagnieżdzonych stron
+
+### User-generated content — ryzyko
+
+- Jesli uzytkownicy moga wstawiac linki (komentarze, profil, wiadomosci) — **automatycznie** dodawaj `rel="noopener noreferrer"`
+- W Markdown rendererach: sprawdz czy linkd z `target="_blank"` maja prawidlowe atrybuty rel
+- Frameworki: React automatycznie dodaje `noopener` od v16.x; sprawdz konfiguracje innych
+
+### Testowanie
+
+- Przeszukaj kod zrodlowy: `grep -i 'target="_blank"' | grep -iv 'noopener'`
+- Sprawdz user-generated content pod katem linkow bez noopener
+- Stworz PoC: strona ktora zmienia `window.opener.location` po otwarciu
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -145,6 +145,56 @@ ffuf -u "https://TARGET/?FUZZ=test" -w Desktop/WSTG/SecLists-master/Discovery/We
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md, Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Entry points — kategoryzacja
+
+| Typ entry point | Przyklady | Potencjalne ataki |
+|----------------|-----------|------------------|
+| URL parametry (GET) | `?id=1&search=test` | SQLi, XSS, IDOR, LFI |
+| Body parametry (POST) | Formularze, JSON, XML | SQLi, XSS, XXE, command injection |
+| HTTP naglowki | `Cookie`, `Referer`, `User-Agent`, `X-Forwarded-For` | Header injection, log injection, SSRF |
+| Cookies | Session ID, preferencje | Session hijacking, parameter tampering |
+| Pliki (upload) | Obrazy, dokumenty, archiwa | RCE, XSS, path traversal |
+| URL sciezka | `/api/users/123` | IDOR, path traversal |
+| WebSocket | Wiadomosci WS | Injection, CSWSH |
+
+### Ukryte parametry — jak je znalezc
+
+- **Arjun**: automatyczne odkrywanie ukrytych parametrow HTTP (GET, POST, JSON)
+- **ParamSpider**: zbieranie parametrow z historycznych URL-ow (Wayback Machine)
+- **Burp Intruder**: fuzzowanie parametrow z wordlista `burp-parameter-names.txt`
+- **Analiza JS**: LinkFinder, JSParser — endpointy i parametry w kodzie JavaScript
+- **Hidden fields**: `<input type="hidden">` w formularzach — czesto brak walidacji server-side
+
+### Mapowanie parametrow — checklist
+
+Dla kazdego entry point dokumentuj:
+1. **Nazwa parametru** i lokalizacja (GET, POST, cookie, header)
+2. **Typ danych** — string, integer, boolean, date, file
+3. **Ograniczenia** — dlugosc, dozwolone znaki, zakres wartosci
+4. **Walidacja** — client-side only? server-side?
+5. **Wplyw** — co kontroluje ten parametr (logika biznesowa, dostep, wyswietlanie)
+6. **Encoding** — URL encoding, Base64, JSON, XML
+
+### Analiza request/response — na co zwrocic uwage
+
+- **Parametry w URL** ktore kontroluja dostep: `role=`, `admin=`, `debug=`
+- **Hidden fields** z wartosciami ktore mozna manipulowac: `price`, `discount`, `user_id`
+- **Cookies** bez flag Secure/HttpOnly — potential hijacking
+- **Custom headers** akceptowane przez aplikacje: `X-Custom-Auth`, `X-User-Role`
+- **Rozne odpowiedzi** na rozne wartosci tego samego parametru — wskazuja na logike
+
+### Obrona
+
+- Waliduj WSZYSTKIE dane wejsciowe server-side — nigdy nie ufaj client-side validation
+- Uzyj allowlist (whitelist) zamiast denylist (blacklist) dla walidacji
+- Implementuj walidacje na granicy systemu: API gateway, controller, middleware
+- Nie akceptuj nieznanych parametrow — strict parameter binding
+- Loguj niestandardowe parametry w requestach — moga wskazywac na probe ataku
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

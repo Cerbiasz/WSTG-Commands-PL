@@ -68,6 +68,42 @@ curl -s "https://TARGET/search?q=safe&q=<script>alert(1)</script>"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Input_Validation_Cheat_Sheet.md
+
+### HTTP Parameter Pollution — mechanizm
+
+- Wysylanie **wielu parametrow o tej samej nazwie** — `?id=1&id=2`
+- Rozne technologie parsuja to rozne — co tworzy niespojnosci miedzy komponentami
+
+### Zachowanie backendow — kluczowa tabela
+
+| Technologia | Zachowanie | Przyklad `?id=1&id=2` |
+|-------------|------------|----------------------|
+| PHP/Apache | Bierze **ostatni** | `id=2` |
+| ASP.NET/IIS | Laczy **przecinkiem** | `id=1,2` |
+| JSP/Tomcat | Bierze **pierwszy** | `id=1` |
+| Python Flask | Bierze **pierwszy** | `id=1` |
+| Python Django | Bierze **ostatni** | `id=2` |
+| Node.js Express | **Array** | `id=[1,2]` |
+| Go net/http | Bierze **pierwszy** | `id=1` |
+
+### Wektory ataku HPP
+
+- **WAF bypass**: WAF waliduje pierwszy parametr (bezpieczny), backend uzywa drugiego (zlosliwego)
+- **Logic bypass**: `?admin=false&admin=true` — backend moze wziac `true`
+- **Authentication bypass**: `?user=admin&user=victim` — rozne komponenty moga odczytac rozne wartosci
+- **Price manipulation**: `?price=100&price=1` — nadpisanie ceny
+- HPP w **POST body**: `username=admin&username=victim` — ten sam mechanizm
+
+### Obrona
+
+- Uzywaj **frameworkow ktore odrzucaja duplikaty** parametrow lub explicite definiuj zachowanie
+- Waliduj dane po stronie backendu — nie polegaj na WAF/froncie
+- Uzyj jednego sposobu parsowania parametrow w calym pipeline (WAF → proxy → backend)
+- Loguj i alertuj na zduplikowane parametry — moze wskazywac na probe ataku
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

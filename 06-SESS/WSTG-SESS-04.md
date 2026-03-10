@@ -97,10 +97,44 @@ curl -s -I TARGET/page | grep -i "etag"
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Nigdy nie umieszczaj session ID w URL-u (ryzyko wycieku przez Referer, logi, historia)
-- Uzywaj POST dla przesylania danych wrazliwych — nie GET
-- Szyfruj dane sesji przechowywane po stronie serwera
+### Session ID NIE w URL
+
+- **NIGDY** nie umieszczaj session ID w URL parametrach — wycieka przez:
+  - **Referer header**: klikniecie linku zewnetrznego wysyla URL z tokenem w Referer
+  - **Logi serwera**: URL z tokenem zapisywany w access logach, proxy logach, CDN logach
+  - **Historia przegladarki**: URL z tokenem dostepny lokalnie
+  - **Zakladki**: uzytkownik moze przypadkowo udostepnic URL z tokenem
+  - **Udostepnienie URL**: kopiowanie linku z session ID
+
+### Transport tokenow sesji
+
+- Session ID TYLKO w cookies z flagami `Secure`, `HttpOnly`, `SameSite`
+- Dane wrazliwe wysylaj przez **POST** — nie GET (GET trafia do logow, historii, cache)
+- Alternatywa: `Authorization: Bearer` header dla API — nie wycieknie przez Referer
+
+### Ochrona przed wyciekiem przez Referer
+
+- Ustaw `Referrer-Policy: no-referrer` lub `same-origin` — ogranicza wysylanie Referer header
+- Uzywaj `rel="noreferrer"` na linkach zewnetrznych
+- W meta tagu: `<meta name="referrer" content="no-referrer">`
+
+### Cache i przechowywanie
+
+- Strony z danymi sesji: `Cache-Control: no-store, no-cache, must-revalidate`
+- `Pragma: no-cache` i `Expires: 0` dla kompatybilnosci wstecznej
+- Zapobiegaj cachowaniu przez proxy — token w odpowiedzi cachowalnej to wyciek
+
+### Minimalizacja danych w sesji
+
 - Nie przechowuj wrazliwych danych w zmiennych sesji bez potrzeby
+- Szyfruj dane sesji przechowywane po stronie serwera
+- Sesja powinna zawierac MINIMUM informacji — identyfikator uzytkownika, role, timestamp
+
+### CORS a wyciek sesji
+
+- Sprawdz `Access-Control-Allow-Origin` — nie ustawiaj na `*` z `Allow-Credentials: true`
+- Wildcard origin + credentials = kazda strona moze odczytac odpowiedzi z cookies sesji
+- Ogranicz CORS do zaufanych domen
 
 ## ROZSZERZENIA BURP SUITE
 

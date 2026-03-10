@@ -98,6 +98,48 @@ echo -e "JUNK / HTTP/1.0\r\n\r\n" | nc TARGET 80
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, HTTP_Headers_Cheat_Sheet.md
+
+### Fingerprinting serwera — zrodla informacji
+
+| Zrodlo | Co ujawnia | Jak ukryc |
+|--------|-----------|-----------|
+| Naglowek `Server` | Nazwa i wersja serwera | `ServerTokens Prod` (Apache), `server_tokens off` (Nginx) |
+| Naglowek `X-Powered-By` | Framework/jezyk (PHP, ASP.NET) | `expose_php=Off` (PHP), usun naglowek |
+| Naglowek `X-AspNet-Version` | Wersja ASP.NET | `<httpRuntime enableVersionHeader="false"/>` |
+| Strony bledow (404/500) | Stack trace, sciezki, wersje | Custom error pages bez informacji technicznych |
+| Kolejnosc naglowkow | Identyfikacja serwera | Trudne do ukrycia — unikalna per serwer |
+| Naglowek `ETag` | Inode number (Apache) | `FileETag None` lub `FileETag MTime Size` |
+
+### Techniki fingerprinting
+
+- **Banner grabbing**: naglowek `Server` w odpowiedzi HTTP
+- **Error page analysis**: domyslne strony bledow sa unikalne per serwer
+- **HTTP method behavior**: rozne serwery roznie obsluguja nieznane metody
+- **Header ordering**: Apache i Nginx zwracaja naglowki w roznej kolejnosci
+- **Protocol behavior**: roznice w HTTP/1.0 vs HTTP/1.1 handling
+- **Favicon hash**: hash favicony moze identyfikowac technologie (Shodan dork: `http.favicon.hash`)
+
+### Konfiguracja — ukrywanie informacji per serwer
+
+| Serwer | Konfiguracja |
+|--------|-------------|
+| Apache | `ServerTokens Prod`, `ServerSignature Off` |
+| Nginx | `server_tokens off;` |
+| IIS | Usun `X-Powered-By`, `X-AspNet-Version` via URL Rewrite |
+| Tomcat | `server` attribute w `<Connector>`, usun default error pages |
+| Node.js/Express | `app.disable('x-powered-by')` |
+
+### Obrona
+
+- Ukryj wersje serwera i frameworka — nie eliminuje ryzyka, ale spowalnia rekonesans
+- Custom error pages: 400, 401, 403, 404, 500 bez stack traces i sciezek
+- Usun domyslne strony instalacji (Apache default page, IIS welcome, Nginx welcome)
+- Usun niepotrzebne naglowki: `X-Powered-By`, `X-AspNet-Version`, `X-Generator`
+- **Security through obscurity nie wystarczy** — to dodatkowa warstwa, nie glowna obrona
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

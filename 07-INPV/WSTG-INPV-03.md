@@ -65,6 +65,47 @@ ffuf -u "https://TARGET/admin" -w Desktop/WSTG/SecLists-master/Fuzzing/http-requ
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — REST_Security_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
+
+### HTTP Verb Tampering — mechanizm ataku
+
+- Kontrola dostepu skonfigurowana tylko dla GET/POST — inne metody (PUT, DELETE, PATCH) moga ominac zabezpieczenia
+- Niestandardowe metody (JEFF, FOO) — niektore frameworki akceptuja dowolne metody jako GET
+- **TRACE** — moze ujawniac cookies i naglowki (Cross-Site Tracing / XST)
+
+### Konfiguracja serwera — prawidlowa obrona
+
+- Blokuj **wszystkie** metody HTTP ktore nie sa jawnie wymagane — allowlist, nie denylist
+- Apache: `<LimitExcept GET POST>` → deny from all
+- Nginx: `if ($request_method !~ ^(GET|POST)$) { return 405; }`
+- Sprawdz autoryzacje na **kazdej metodzie** — nie tylko na GET/POST
+- Wylacz TRACE na produkcji — zapobiega XST
+
+### Method Override Headers — bypass
+
+- `X-HTTP-Method-Override: PUT` — zmienia POST na PUT po stronie serwera
+- `X-Method-Override`, `X-HTTP-Method` — alternatywne naglowki
+- `_method=DELETE` — parametr w body (Rails, Laravel)
+- Frameworki ktore to obsluguja: Rails, Spring, Django REST Framework, Laravel
+- Testuj: wyslij POST z override header do chronionego endpointu
+
+### REST API — metody i autoryzacja
+
+- Kazda metoda HTTP na kazdym endpoincie musi byc **oddzielnie autoryzowana**
+- `GET /users/123` (odczyt) vs `DELETE /users/123` (usuwanie) — rozne uprawnienia
+- Nie zakladaj ze kontrola dostepu na GET chroni tez PUT/DELETE
+- Odpowiedz `405 Method Not Allowed` jest lepsza niz `404` — ale nie ujawnia zbytnio
+
+### Co testowac
+
+- Wyslij OPTIONS do kazdego endpointu — sprawdz `Allow` header
+- Porownaj odpowiedzi: GET 403 vs PUT 200? vs DELETE 200?
+- Testuj niestandardowe metody (FOO, JEFF) — czy omijaja auth?
+- Testuj method override headers na endpointach z ograniczonym dostepem
+- Sprawdz TRACE — czy zwraca cookies/auth headers?
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

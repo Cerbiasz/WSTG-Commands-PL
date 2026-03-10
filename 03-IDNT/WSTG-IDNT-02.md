@@ -144,6 +144,47 @@ ffuf -w Desktop/WSTG/SecLists-master/Usernames/Names/names.txt:USER -u "https://
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
+
+### Proces rejestracji — bezpieczenstwo
+
+- **Weryfikacja email**: wymagaj potwierdzenia adresu email przed aktywacja konta
+- Token weryfikacyjny: CSPRNG, jednorazowy, krotki TTL (24h max), hashowany w DB
+- **CAPTCHA/rate limiting**: zapobiegaj masowemu tworzeniu kont (bot registration)
+- Blokuj tymczasowe adresy email (mailinator, guerrillamail) jesli to wymagane biznesowo
+- Ogranicz ilosc rejestracji z jednego IP/sesji
+
+### Walidacja danych rejestracyjnych
+
+- **Username**: case-insensitive, unikalne, allowlist znakow, min/max dlugosc
+- **Email**: waliduj format, sprawdz duplikaty (case-insensitive), zweryfikuj MX record
+- **Haslo**: min. 8 znakow (z MFA) lub 15 (bez MFA), max 64+, brak ograniczen na typ znakow
+- Sprawdzaj haslo na liscie skompromitowanych (HaveIBeenPwned, SecLists)
+- **Nie ujawniaj** czy email/username juz istnieje — generyczne komunikaty
+
+### Mass Assignment / Privilege Escalation
+
+- NIE akceptuj pol `role`, `isAdmin`, `is_staff`, `permissions` z danych uzytkownika
+- Uzyj allowlist pol akceptowanych przy rejestracji (strong parameters)
+- Testuj: dodaj `"role":"admin"`, `"isAdmin":true` do request body
+- Sprawdz czy ukryte pola formularza moga byc manipulowane
+
+### Enumeracja uzytkownikow przez rejestracje
+
+- Komunikat "Username already taken" ujawnia istniejacych uzytkownikow
+- Uzyj **generycznych komunikatow**: "Jesli email jest dostepny, zostanie wyslany link weryfikacyjny"
+- **Timing attack**: porownaj czas odpowiedzi przy istniejacym vs nowym username
+- Testuj enumeracje na: rejestracji, logowaniu, forgot password — WSZYSTKIE musza byc spojne
+
+### Injection w polach rejestracji
+
+- Testuj SQLi, XSS, SSTI w polach: username, email, imie, nazwisko
+- Sprawdz czy dane sa sanityzowane i walidowane server-side
+- Testuj Unicode confusables: `Аdmin` (cyrylica A) vs `Admin` (lacinskie A)
+- Null bytes, biale znaki na poczatku/koncu, podwojne spacje
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

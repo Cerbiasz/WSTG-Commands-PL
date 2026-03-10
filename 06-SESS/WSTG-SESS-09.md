@@ -103,12 +103,50 @@ curl -s -b cookies.txt -H "User-Agent: Suspicious" -H "Accept-Language: xx" TARG
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Cookie_Theft_Mitigation_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, JSON_Web_Token_for_Java_Cheat_Sheet.md
 
-- Flagi HttpOnly i Secure na wszystkich cookies sesyjnych — klucz do ochrony przed kradziezy
-- Wymuszaj TLS wszedzie — session ID nigdy nie moze leciec plaintext
-- Powiaz sesje z IP/User-Agent jako dodatkowe zabezpieczenie (uwaga na zmienne IP)
-- Wykrywaj anomalie: dwie aktywne sesje z roznych lokalizacji
+### Wektory session hijacking
+
+- **Sniffing (siec)**: przechwycenie cookie w niezaszyfrowanym ruchu HTTP — obrona: TLS + Secure flag
+- **XSS**: JavaScript `document.cookie` wykrada cookie — obrona: HttpOnly flag
+- **Man-in-the-Middle**: atakujacy miedzy klientem a serwerem — obrona: HSTS + TLS
+- **Malware/browser extension**: odczyt cookies z przegladarki — obrona: krotki timeout + fingerprinting
+- **Physical access**: odczyt cookies z dysku/pamieci — obrona: session cookies (bez Expires)
+
+### Obrona — atrybuty cookies
+
+- **Secure** — cookie TYLKO przez HTTPS — chroni przed sniffingiem
+- **HttpOnly** — cookie niedostepne dla JavaScript — chroni przed XSS
+- **SameSite=Strict/Lax** — ogranicza cross-site wysylanie — chroni przed CSRF
+- **`__Host-` prefix** — wymusza Secure + Path=/ + brak Domain — najsilniejsza izolacja
+
+### Token Sidejacking Prevention (technika z OWASP JWT Cheat Sheet)
+
+- Przy autentykacji wygeneruj **losowy fingerprint** (min 50 bajtow, CSPRNG)
+- Wyslij fingerprint w **hardened cookie**: `__Secure-Fgp=VALUE; SameSite=Strict; HttpOnly; Secure`
+- Przechowuj **SHA-256 hash** fingerprint w JWT/sesji (nie raw value — obrona przed XSS)
+- Przy walidacji tokenu: porownaj hash fingerprint z cookie z hashem w tokenie
+- Jesli cookie brakuje lub hash sie nie zgadza — odrzuc token (replay attack)
+
+### Session binding (defence in depth)
+
+- Powiaz sesje z User-Agent jako dodatkowy sygnal (zmiana UA = podejrzane)
+- **NIE uzywaj IP** jako binding — moze sie zmieniac legitymicznie (mobilne sieci, VPN)
+- IP tracking moze tez naruszac GDPR w UE
+- Dodaj fingerprint przegladarki jako dodatkowa warstwe
+
+### Wykrywanie anomalii
+
+- Monitoruj jednoczesne sesje z roznych lokalizacji/urzadzen
+- Alertuj uzytkownika o nowym logowaniu z nieznanego urzadzenia
+- Wymagaj re-autentykacji przy wykryciu anomalii (zmiana IP, UA, lokalizacji)
+- Loguj wszystkie sesje i ich atrybuty (czas, IP, UA, geolokalizacja)
+
+### Minimalizacja okna ataku
+
+- Krotki idle timeout (15-30 min) — mniej czasu na uzycie wykradzionego tokenu
+- Krotki absolute timeout (4-8h) — sesja wygasa niezaleznie od aktywnosci
+- Re-autentykacja dla operacji wrazliwych — nawet z aktywna sesja
 
 ## ROZSZERZENIA BURP SUITE
 

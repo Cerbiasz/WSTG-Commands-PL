@@ -113,10 +113,36 @@ curl -s -b session3_cookies.txt TARGET/dashboard -o /dev/null -w "Session 3 afte
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Ogranicz Domain cookie do konkretnej domeny — nie ustawiaj na domene nadrzedna
-- Ogranicz Path cookie do wymaganego zakresu aplikacji
-- Uzywaj prefiksu `__Host-` dla cookies — wymusza Secure, Path=/, brak Domain
-- Sprawdz czy cookie sesji nie jest dostepne przez subdomeny (scope leak)
+### Kontrola jednoczesnych sesji
+
+- Zdecyduj czy aplikacja pozwala na wiele jednoczesnych sesji per uzytkownik
+- **Aplikacje wrazliwe (bankowosc, admin)**: ogranicz do 1 aktywnej sesji — nowe logowanie uniewaznia stare
+- **Aplikacje ogolne**: pozwol na wiele sesji, ale INFORMUJ uzytkownika o aktywnych sesjach
+- Implementuj widok "aktywne sesje" — uzytkownik widzi liste (IP, UA, czas, lokalizacja)
+
+### Uniewaznianie sesji przy zmianie hasla
+
+- Po zmianie hasla: uniewazni WSZYSTKIE aktywne sesje POZA biezaca
+- Chroni przed scenariuszem: wykradzione credentials → atakujacy zalogowany → uzytkownik zmienia haslo → atakujacy nadal zalogowany
+- To samo po: resetowaniu hasla, kompromitacji konta, zmianie uprawnien
+
+### "Logout everywhere" / "Wyloguj ze wszystkich urzadzen"
+
+- Implementuj endpoint do uniewaznienia WSZYSTKICH sesji uzytkownika
+- Wymaga server-side tracking wszystkich aktywnych sesji (tabela sesji w bazie)
+- Przydatne po: zmianie hasla, wykryciu naruszenia, zagubieniu urzadzenia
+
+### Powiadomienia o nowych sesjach
+
+- Wysylaj email/push notification o nowym logowaniu z nieznanego urzadzenia/lokalizacji
+- Pozwol uzytkownikowi zakonczyc podejrzana sesje z powiadomienia
+- Loguj: timestamp, IP, User-Agent, geolokalizacja — do audytu
+
+### Cookie scope i izolacja
+
+- Ogranicz **Domain** cookie do konkretnej domeny — NIE ustawiaj na domene nadrzedna
+- Uzywaj prefiksu `__Host-` — wymusza `Secure`, `Path=/`, brak `Domain` — zapobiega subdomain leakage
+- Ogranicz **Path** do minimum wymaganego zakresu aplikacji
 
 ## ROZSZERZENIA BURP SUITE
 

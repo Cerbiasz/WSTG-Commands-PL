@@ -96,13 +96,56 @@ curl -s "https://TARGET/graphql" -X POST -H "Content-Type: application/json" -d 
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — gRPC_Security_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — GraphQL_Cheat_Sheet.md
+
+### GraphQL Security — kluczowe zagrozenia
+
+### Introspection — wylacz na produkcji
+
+- Introspection ujawnia **caly schemat API** — typy, pola, argumenty, relacje
+- Atakujacy moze zmapowac cale API bez dokumentacji
+- **Wylacz introspection** na produkcji — wlacz tylko w dev/staging
+- Nawet z wylaczona introspection: testuj **field suggestions** — czesc implementacji podpowiada nazwy pol
+
+### Query Depth Limiting
+
+- GraphQL pozwala na **nieograniczone zaglezanie** zapytan: `{user{friends{friends{friends...}}}}`
+- Ustaw **max depth** (np. 10 levels) — zapobiegaj DoS
+- Odrzucaj zapytania przekraczajace limit z jasnym bledem
+
+### Query Cost Analysis
+
+- Przypisz **koszt** do kazdego pola (np. lista = 10, scalar = 1)
+- Oblicz calkowity koszt zapytania przed wykonaniem
+- Ustaw **max cost** — odrzucaj drogie zapytania
+- Alternatywa: **persisted queries** — akceptuj TYLKO pre-approved query hashes
+
+### Batching Attack Prevention
+
+- GraphQL pozwala na **wiele operacji** w jednym request (batch/aliasing)
+- 1 request = 100 queries = ominięcie rate limiting (per request)
+- Ogranicz ilosc operacji w batch (np. max 10)
+- Rate limituj na poziomie **operacji**, nie requestow
+
+### Autoryzacja
+
+- Autoryzacja musi byc na **kazdym polu/typie** — nie tylko na poziomie endpointu
+- Jeden endpoint GraphQL = wiele roznych danych = rozne uprawnienia
+- Uzyj **field-level authorization** — sprawdzaj uprawnienia na kazdym resolverze
+- N+1 problem: sprawdzaj autoryzacje na nested resources, nie tylko root
+
+### Injection w GraphQL
+
+- Argumenty GraphQL trafiaja do resolverow → **waliduj** jak kazdy input
+- Testuj SQLi, NoSQLi, LDAP injection w argumentach zapytan
+- Testuj XSS w danych zwracanych przez mutations
+
+### gRPC Security
 
 - Uzywaj TLS dla wszystkich kanalow gRPC — nie plain text
 - Waliduj wiadomosci protobuf — sprawdzaj typy i zakresy pol
-- Implementuj deadline/timeout na requestach — zapobiegaj wiszacym polaczeniom
+- Implementuj deadline/timeout na requestach
 - Uwierzytelniaj przez mTLS lub JWT w metadata
-- Waliduj naglowki metadata — moga zawierac injection payloads
 
 ## ROZSZERZENIA BURP SUITE
 

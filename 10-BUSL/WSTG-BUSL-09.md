@@ -200,10 +200,40 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 
 > Źródło: OWASP CheatSheetSeries — File_Upload_Cheat_Sheet.md
 
-- Waliduj przetwarzanie obrazow — re-enkoduj uploaded images aby usunac payloady
-- Usun metadane (EXIF) z uploadowanych plikow
-- Sandboxuj przetwarzanie plikow — izoluj procesy konwersji/parsowania
-- Testuj upload plikow z podwojnymi rozszerzeniami (file.php.jpg) i null bytes (file.php%00.jpg)
+### Walidacja przesylanych plikow — wielowarstwowa
+
+- **Rozszerzenie pliku**: allowlist dozwolonych rozszerzen (`.jpg`, `.png`, `.pdf`) — NIE denylist
+- **MIME type**: sprawdz `Content-Type` header — ALE moze byc sfalszyowany
+- **Magic bytes**: sprawdz pierwsze bajty pliku (np. `\xFF\xD8\xFF` = JPEG) — trudniejsze do obejscia
+- **Zawartosc**: re-enkoduj obrazy (ImageMagick, PIL) — usun wbudowane payloady
+- **Metadane**: usun EXIF, komentarze, metadane — moga zawierac code injection
+
+### Przechowywanie plikow — bezpieczne
+
+- Przechowuj pliki **POZA webroot** — brak bezposredniego dostepu przez URL
+- **Zmien nazwe pliku**: losowa nazwa (UUID) — zapobiegaj path traversal i name collision
+- **Osobna domena/CDN**: serwuj pliki z innej domeny — izoluj od glownej aplikacji (XSS protection)
+- **Ogranicz uprawnienia**: pliki nie powinny miec execute permission
+- **Skanuj antywirusem**: sprawdz pliki przed zapisaniem
+
+### Typowe ataki przez upload
+
+- **Web shell**: PHP/JSP/ASP shell upload → RCE na serwerze
+- **Podwojne rozszerzenie**: `shell.php.jpg` — serwer moze interpretowac jako PHP
+- **Null byte**: `shell.php%00.jpg` — starsza PHP obcina po null byte
+- **Content-Type spoof**: ustawienie `image/jpeg` na pliku PHP
+- **Polyglot**: prawidlowy obrazek z wbudowanym kodem PHP/JS
+- **SVG XSS**: SVG z `<script>alert(1)</script>` — XSS przy wyswietlaniu
+- **.htaccess upload**: `AddType application/x-httpd-php .jpg` — pliki JPG jako PHP
+- **Zip Slip**: ZIP z path traversal (`../../../tmp/evil.php`)
+- **ImageMagick exploit**: spreparowany obrazek wykorzystujacy CVE w ImageMagick
+
+### Limity uploadu
+
+- **Rozmiar pliku**: ustaw max rozmiar (np. 10 MB) — zapobiegaj DoS
+- **Ilosc plikow**: ogranicz ilosc uploadow per uzytkownik/sesje
+- **Rate limiting**: ogranicz czestotliwosc uploadow
+- **Quota**: ogranicz calkowita przestrzen dyskowa per uzytkownik
 
 ## ROZSZERZENIA BURP SUITE
 

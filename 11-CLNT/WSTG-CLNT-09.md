@@ -52,10 +52,42 @@ curl -sI "https://TARGET/" | grep -i "frame-ancestors"
 
 > Źródło: OWASP CheatSheetSeries — Clickjacking_Defense_Cheat_Sheet.md
 
-- Ustaw `X-Frame-Options: DENY` lub `SAMEORIGIN` na wszystkich odpowiedziach
-- Uzywaj CSP `frame-ancestors 'none'` lub `'self'` (silniejsze niz X-Frame-Options)
-- Implementuj framebusting JavaScript jako fallback dla starszych przegladarek
-- Ustaw cookies z SameSite=Strict jako dodatkowa warstwa ochrony
+### Trzy niezalezne mechanizmy obrony (defence in depth — implementuj WSZYSTKIE)
+
+### 1. CSP frame-ancestors (REKOMENDOWANY — primary defense)
+
+- `Content-Security-Policy: frame-ancestors 'none';` — blokuje framowanie przez KAZDA domene (ZALECANE)
+- `Content-Security-Policy: frame-ancestors 'self';` — pozwala framowanie TYLKO z tej samej domeny
+- `Content-Security-Policy: frame-ancestors 'self' *.trusted.com;` — pozwala framowanie z trusted.com
+- CSP frame-ancestors MA PRIORYTET nad X-Frame-Options (wg specyfikacji CSP)
+- Uwaga: starsze przegladarki (Chrome 40, Firefox 35) moga ignorowac CSP i sluchac X-Frame-Options
+
+### 2. X-Frame-Options (kompatybilnosc wsteczna)
+
+- `X-Frame-Options: DENY` — blokuje framowanie (ZALECANE jesli nie potrzebujesz framowania)
+- `X-Frame-Options: SAMEORIGIN` — pozwala framowanie z tej samej domeny
+- `ALLOW-FROM uri` — PRZESTARZALE, nie dziala w nowoczesnych przegladarkach — uzywaj CSP frame-ancestors zamiast
+- Dodaj header do KAZDEJ odpowiedzi z HTML — uzyj filtra/middleware aby dodac automatycznie
+- Czeste bledy: nie ustawiaj na kazdej stronie, podwójne wartosci, brak w proxy/CDN
+
+### 3. SameSite Cookie Attribute
+
+- `SameSite=Strict` lub `SameSite=Lax` na session cookies
+- Zapobiega dolaczaniu cookies sesji gdy strona jest ladowana w iframe z innej domeny
+- Skutecznie ogranicza impact clickjacking nawet jesli framing jest mozliwy
+
+### Framebusting JavaScript (fallback — NIE jako jedyna obrona)
+
+- JavaScript frame-buster moze byc obejscie — atakujacy moze uzyc `sandbox` attribute na iframe
+- Przyklad frame-buster: `if (top !== self) { top.location = self.location; }`
+- Ograniczenia: moze byc zablokowany przez `sandbox="allow-scripts"` bez `allow-top-navigation`
+- Traktuj jako dodatkowa warstwe, nie primary defense
+
+### Uwagi dot. implementacji
+
+- Ustaw headery na poziomie Web Application Firewall / Web Server / Application dla konsystencji
+- Sprawdz czy reverse proxy/CDN nie usuwa headerow bezpieczenstwa
+- Testuj w roznych przegladarkach — wsparcie moze sie roznic
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -55,10 +55,32 @@ curl -s "https://TARGET/js/config.js" | grep -i "api_key\|token\|secret\|passwor
 
 > Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md
 
-- Synchronizer token pattern — CSRF token w ukrytym polu formularza
-- SameSite cookies jako dodatkowa warstwa (nie jedyna!)
-- Custom request headers (X-Requested-With) dla AJAX
-- Weryfikuj Origin i Referer headers server-side
+### Cross-Site Script Inclusion (XSSI) — czym jest
+
+- Atakujacy importuje skrypt/JSONP z TARGET na swojej stronie: `<script src="TARGET/api/data?callback=steal">`
+- Przegladarka automatycznie dolacza cookies ofiary → dane wraca do strony atakujacego
+- Roznica od XSS: atakujacy NIE wstrzykuje kodu do TARGET — importuje dane Z TARGET
+
+### JSONP — ryzyka
+
+- JSONP wraca dane jako `callback({...})` — przegladarka wykonuje jako JavaScript
+- Atakujacy definiuje `callback` na swojej stronie — odczytuje dane ofiary
+- **Obrona**: nie uzywaj JSONP — migruj na CORS z `Access-Control-Allow-Origin`
+
+### Obrona przed XSSI
+
+- **Nie zwracaj wrazliwych danych** w JSONP/dynamic JS — uzywaj JSON + CORS
+- **Waliduj Referer/Origin** header — odrzuc requesty z nieznanych domen
+- **CSRF token** w parametrze — JSONP request bez tokenu = odrzucony
+- **Content-Type**: `application/json` (nie `text/javascript`) — zapobiega importowaniu przez `<script>`
+- **SameSite cookies**: `Lax` lub `Strict` — cookie nie bedzie dolaczane w cross-site `<script>` request
+- **JSON prefix**: dodaj `)]}'` lub `while(1);` przed JSON — zapobiega direct execution
+
+### Testowanie
+
+- Szukaj JSONP endpointow: `callback=`, `jsonp=`, `cb=` parametry
+- Stworz PoC: `<script>function callback(data){alert(JSON.stringify(data))}</script><script src="TARGET/api?callback=callback"></script>`
+- Sprawdz czy odpowiedz zawiera wrazliwe dane (PII, tokeny, dane uzytkownika)
 
 ## ROZSZERZENIA BURP SUITE
 

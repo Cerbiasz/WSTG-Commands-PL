@@ -102,6 +102,58 @@ for endpoint in /api/profile /api/account /api/billing /api/settings /api/users 
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
+
+### Naglowki Cache-Control — prawidlowa konfiguracja
+
+- Strony z wrazliwymi danymi MUSZA miec: `Cache-Control: no-store, no-cache, must-revalidate, private`
+- Dodaj `Pragma: no-cache` dla kompatybilnosci z HTTP/1.0
+- Ustaw `Expires: 0` lub date w przeszlosci
+- **no-store** jest KLUCZOWY — `no-cache` sam w sobie NIE zapobiega zapisowi na dysku
+- Nie polegaj na `private` jako jedynej ochronie — chroni przed cache proxy, ale nie przegladarki
+
+### Autocomplete — formularze z wrazliwymi danymi
+
+- Pola hasla: `autocomplete="new-password"` lub `autocomplete="current-password"`
+- Formularze logowania: `autocomplete="off"` na calym formularzu LUB na poszczegolnych polach
+- Pola kart kredytowych, SSN, dane medyczne: `autocomplete="off"`
+- Uwaga: nowoczesne przegladarki moga **ignorowac** `autocomplete="off"` na polach hasla
+- Dla kart: uzywaj `autocomplete="cc-number"` z `autocomplete="off"` zaleznie od kontekstu
+
+### Clear-Site-Data — czyszczenie po wylogowaniu
+
+- Naglowek `Clear-Site-Data` pozwala usunac dane z przegladarki po wylogowaniu:
+  - `"cache"` — czysc cache HTTP
+  - `"cookies"` — usun cookies
+  - `"storage"` — usun localStorage, sessionStorage, IndexedDB
+  - `"*"` — usun wszystko
+- Przyklad: `Clear-Site-Data: "cache", "cookies", "storage"`
+- Uzyj przy wylogowaniu i przy zmianie hasla
+
+### ETag i Last-Modified — ryzyko
+
+- **ETag** moze byc uzywany do trackingu uzytkownikow (supercookie)
+- Odpowiedzi z wrazliwymi danymi NIE powinny miec ETag ani Last-Modified
+- Jesli uzyjesz `no-store`, przegladarka nie powinna uzywac warunkowych requestow
+
+### Back button / historia przegladarki
+
+- `Cache-Control: no-store` zapobiega ladowaniu stron z cache po kliknieciu "Wstecz"
+- Bez `no-store` uzytkownik moze zobaczyc dane po wylogowaniu
+- Testuj: zaloguj → przejdz na strone z danymi → wyloguj → kliknij "Wstecz"
+- Dodatkowa ochrona: JavaScript redirect na stronach chronionych po wykryciu braku sesji
+
+### Co testowac
+
+- Sprawdz naglowki cache na KAZDEJ stronie z wrazliwymi danymi (nie tylko login)
+- Sprawdz czy API endpoints zwracaja prawidlowe naglowki cache
+- Testuj back button po wylogowaniu — czy dane sa widoczne?
+- Sprawdz czy pliki do pobrania (PDF, CSV z danymi) maja prawidlowe naglowki
+- Zweryfikuj autocomplete na formularzach z wrazliwymi danymi
+- Sprawdz czy uzywany jest Clear-Site-Data przy wylogowaniu
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

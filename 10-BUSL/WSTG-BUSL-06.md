@@ -98,6 +98,42 @@ curl -v -X POST TARGET/api/order/status -d "order_id=123&payment_status=paid"
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md, Transaction_Authorization_Cheat_Sheet.md
+
+### Workflow Circumvention — typowe ataki
+
+- **Pominiecie kroku**: bezposredni dostep do URL koncowego (np. /order/complete)
+- **Zmiana kolejnosci**: wykonanie kroku 3 przed krokiem 2
+- **Cofanie sie**: powrot do kroku 1 po zakonczeniu kroku 3, zmiana danych
+- **Modyfikacja stanu**: zmiana parametru `step=5` lub `status=completed`
+- **Pominiecie platnosci**: przejscie od koszyka bezposrednio do potwierdzenia
+
+### Server-Side State Machine — obrona
+
+- Przechowuj **stan procesu na serwerze** — nie w ukrytych polach formularza
+- Kazdy krok musi **walidowac** ze poprzedni krok zostal poprawnie ukonczony
+- Uzywaj **state tokens**: unikalny token per krok, weryfikowany server-side
+- NIE polegaj na kolejnosci URL-i — sprawdzaj logiczny stan procesu
+
+### Krytyczne workflow do testowania
+
+| Proces | Kroki | Co testowac |
+|--------|-------|-------------|
+| E-commerce | Koszyk → Platnosc → Potwierdzenie | Pominiecie platnosci |
+| Rejestracja | Formularz → Weryfikacja email → Profil | Pominiecie weryfikacji |
+| KYC | Dane osobowe → Dokument → Weryfikacja | Pominiecie weryfikacji dokumentu |
+| Platnosc | Inicjacja → 3D Secure → Callback | Falszywy callback |
+| Przelew | Dane → Autoryzacja → Wykonanie | Pominiecie autoryzacji |
+
+### Obrona szczegolowa
+
+- **Idempotency**: kazda operacja z unikalnym kluczem — powtorzenie = ignorowane
+- **Transaction authorization**: krytyczne operacje wymagaja osobnego potwierdzenia (MFA, SMS code)
+- **Audit trail**: loguj kazdy krok workflow z timestampem i user ID
+- **Timeout**: workflow z ograniczonym czasem na ukonczenie — porzucone workflow sa anulowane
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

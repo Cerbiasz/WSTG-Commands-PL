@@ -140,11 +140,51 @@ ls Desktop/WSTG/PayloadsAllTheThings-master/Cross-Site\ Request\ Forgery/Images/
 
 > Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md
 
-- Uzywaj synchronizer token pattern — unikalny token per sesja/request w ukrytym polu formularza
-- Ustaw cookies z SameSite=Strict lub Lax jako dodatkowa warstwa ochrony
-- Weryfikuj naglowki Origin i Referer po stronie serwera
-- Uzywaj custom request headers (np. X-Requested-With) dla AJAX
-- Nie polegaj na samych cookies SameSite — uzywaj tokenow CSRF jako primary defense
+### WAZNE: XSS pokonuje WSZYSTKIE zabezpieczenia CSRF
+
+- Jesli aplikacja ma XSS — atakujacy moze odczytac CSRF tokeny i ominac kazda ochrone
+- Najpierw napraw XSS, potem wdrazaj CSRF protection
+
+### Primary Defense — Token-Based Mitigation
+
+- **Synchronizer Token Pattern** (stateful): serwer generuje unikalny token per sesja, wstawia w hidden field formularza
+  - Token musi byc: unikalny per sesja, tajny, nieprzewidywalny (CSPRNG, duza wartosc losowa)
+  - Token NIE powinien byc przekazywany w cookie (w synchronizer pattern)
+  - Token NIE moze byc w URL (wyciek przez Referer, logi, historia)
+  - Bezpieczniej: wstaw CSRF token w custom HTTP header przez JavaScript (objety same-origin policy)
+- **Double Submit Cookie** (stateless): alternatywa gdy serwer nie przechowuje stanu
+  - Rekomendowany wariant: **Signed Double-Submit Cookie** z HMAC
+  - HMAC payload: sessionID + randomValue, klucz: tajny secret serwera
+  - Zwykly double-submit (bez podpisu) jest podatny na cookie injection
+
+### Defense in Depth
+
+- **SameSite Cookie Attribute**: ustaw `Strict` lub `Lax` na session cookies
+  - NIE ustawiaj cookie na domene (np. `.example.com`) — subdomeny wspoldziela cookie
+  - SameSite to dodatkowa warstwa, NIE jedyna obrona
+- **Weryfikacja Origin/Referer headers**: sprawdzaj po stronie serwera
+  - Origin jest dostepny w POST requests — weryfikuj ze pochodzi z Twojej domeny
+  - Referer moze byc usuniety — traktuj brak Referer jako podejrzany
+- **Custom Request Headers** (dla AJAX/API): dodaj `X-Requested-With` lub `X-CSRF-Token`
+  - Custom headers sa automatycznie objete same-origin policy
+
+### Fetch Metadata Headers (nowoczesne przegladarki)
+
+- `Sec-Fetch-Site`: wskazuje skad pochodzi request (same-origin, cross-site, none)
+- Blokuj state-changing requests gdzie `Sec-Fetch-Site: cross-site`
+- Go 1.25+ ma wbudowany `CrossOriginProtection` oparty na Fetch Metadata
+
+### User Interaction Based Defense (dla krytycznych operacji)
+
+- Re-autentykacja haslem przed operacjami krytycznymi (zmiana hasla, email, platnosc)
+- CAPTCHA jako dodatkowa obrona
+- One-time tokens (np. email/SMS confirmation)
+
+### Dodatkowe zasady
+
+- **NIE uzywaj GET** do operacji zmieniajacych stan — TYLKO POST/PUT/DELETE
+- Sprawdz czy framework ma wbudowana ochrone CSRF — uzyj jej zamiast wlasnej implementacji
+- .NET: wbudowane `[ValidateAntiForgeryToken]`, Django: `{% csrf_token %}`
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -93,6 +93,34 @@ nmap --script ssh2-enum-algos -p 22 TARGET -oN output_nmap_ssh_algos.txt
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Docker_Security_Cheat_Sheet.md
+
+### Hardening infrastruktury sieciowej
+
+- **Minimalizuj otwarte porty**: uruchamiaj TYLKO wymagane uslugi — zamknij wszystko inne
+- **Segmentacja sieci**: izoluj baze danych, backend, admin panel od publicznego internetu
+- **Firewall rules**: default deny — jawnie zezwalaj tylko na potrzebny ruch
+- **Patch management**: aktualizuj systemy operacyjne, serwery webowe, bazy danych regularnie
+- Wylacz **domyslne konta/hasla** na wszystkich urzadzeniach sieciowych
+
+### Konfiguracja serwera webowego
+
+- Usun domyslne strony, sample applications, dokumentacje (Apache: /manual, IIS: /iisstart)
+- Wylacz **directory listing** — nie ujawniaj struktury katalogow
+- Wylacz **Server signature** — ukryj wersje serwera (Apache: `ServerTokens Prod`)
+- Ogranicz metody HTTP do wymaganych (GET, POST) — zablokuj TRACE, DELETE, PUT
+- Ustaw prawidlowe **file permissions** — www-data nie powinien miec zapisu poza upload dir
+
+### Docker/kontenery — bezpieczenstwo
+
+- Nie uruchamiaj kontenerow jako **root** — uzyj `USER` w Dockerfile
+- Uzyj **read-only filesystem**: `--read-only` — zapobiegaj modyfikacjom
+- Skanuj obrazy pod katem CVE: Trivy, Snyk, Grype
+- Nie przechowuj sekretow w obrazie — uzyj Docker secrets / env at runtime
+- Ogranicz zasoby: `--memory`, `--cpus` — zapobiegaj DoS
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

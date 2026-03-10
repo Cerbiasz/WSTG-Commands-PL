@@ -133,6 +133,65 @@ cat /tmp/bucket_names.txt | while read bucket; do echo "Sprawdzam: $bucket"; aws
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Docker_Security_Cheat_Sheet.md, Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Cloud storage — typowe bledy konfiguracji
+
+| Blad | Usluga | Konsekwencja |
+|------|--------|-------------|
+| Public ACL (read) | S3, GCS, Azure Blob | Kazdy moze czytac pliki — wyciek danych |
+| Public ACL (write) | S3, GCS | Kazdy moze uploadowac pliki — malware hosting |
+| Public ACL (list) | S3, GCS | Kazdy moze listowac pliki — rekonesans |
+| Block Public Access wylaczony | AWS S3 | Buckety moga byc przypadkowo upublicznione |
+| SAS token z szerokim scope | Azure Blob | Trwaly dostep do danych |
+| Signed URL bez expiry | GCS | Permanentny dostep do prywatnych zasobow |
+
+### AWS S3 — bezpieczenstwo
+
+- Wlacz **S3 Block Public Access** na poziomie konta (Account-level)
+- Uzyj **bucket policy** zamiast ACL — ACL sa legacy
+- Wlacz **S3 Object Lock** dla krytycznych danych (WORM)
+- Wlacz **server-side encryption** (SSE-S3, SSE-KMS, lub SSE-C)
+- Wlacz **versioning** — ochrona przed przypadkowym usunieciem
+- Wlacz **access logging** do osobnego bucketa
+- Uzyj **VPC endpoints** zamiast publicznego dostepu
+
+### Azure Blob Storage — bezpieczenstwo
+
+- Ustaw **"Allow Blob public access"** na **Disabled** na koncie storage
+- Uzyj **Azure AD authentication** zamiast shared keys
+- Ogranicz **SAS tokeny**: krótki TTL, minimalny scope, IP restriction
+- Wlacz **Soft Delete** i **Blob Versioning**
+- Uzyj **Private Endpoints** zamiast publicznego dostepu
+
+### GCP Cloud Storage — bezpieczenstwo
+
+- Wlacz **Uniform Bucket-Level Access** (zamiast ACL per-obiekt)
+- Nie nadawaj roli `allUsers` ani `allAuthenticatedUsers`
+- Uzyj **VPC Service Controls** do ograniczenia dostepu
+- Ustaw **retention policies** na bucketach z wrazliwymi danymi
+
+### SSRF do metadata — kradzież credentials
+
+| Cloud | Metadata endpoint | Co mozna zdobyc |
+|-------|------------------|----------------|
+| AWS | `http://169.254.169.254/latest/meta-data/iam/security-credentials/` | Temporary AWS credentials |
+| Azure | `http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01` | Managed Identity token |
+| GCP | `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token` | Service account token |
+
+- AWS: wlacz **IMDSv2** (wymaga tokena PUT) — blokuje wiekszość SSRF
+- GCP: wymaga naglowka `Metadata-Flavor: Google` — czesc ochrony
+- Azure: wymaga naglowka `Metadata: true`
+
+### Obrona
+
+- Traktuj cloud storage jak publiczny endpoint — nie przechowuj danych wrazliwych bez szyfrowania
+- Regularnie skanuj buckety: `aws s3api get-bucket-acl`, `az storage account show`
+- Uzyj narzedzi: ScoutSuite, Prowler (AWS), az-security (Azure) do audytu
+- Monitoruj CloudTrail/Activity Log pod katem nieautoryzowanego dostepu
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

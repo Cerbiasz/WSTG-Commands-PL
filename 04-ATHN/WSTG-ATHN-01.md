@@ -135,11 +135,41 @@ openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
 
 > Źródło: OWASP CheatSheetSeries — Transport_Layer_Security_Cheat_Sheet.md, HTTP_Strict_Transport_Security_Cheat_Sheet.md
 
-- Wymuszaj TLS 1.2+ dla wszystkich polaczen — wylacz TLS 1.0/1.1
-- Wlacz HSTS z max-age >= 31536000, includeSubDomains i preload
-- Upewnij sie ze formularz logowania i endpoint POST sa na HTTPS
-- Wylacz slabe cipher suites (RC4, DES, NULL, EXPORT)
-- Sprawdz czy nie ma mixed content — zasoby HTTP na stronach HTTPS
+### Konfiguracja TLS
+
+- Wymuszaj **TLS 1.2+** dla wszystkich polaczen — wylacz TLS 1.0/1.1 (przestarzale, podatne na POODLE, BEAST)
+- Preferuj **TLS 1.3** — eliminuje starsze, niebezpieczne cipher suites, szybszy handshake
+- Wylacz slabe cipher suites: **RC4, DES, 3DES, NULL, EXPORT, aNULL, eNULL**
+- Preferuj **AEAD cipher suites**: AES-GCM, ChaCha20-Poly1305
+- Preferuj **ECDHE** (Elliptic Curve Diffie-Hellman Ephemeral) — zapewnia Perfect Forward Secrecy (PFS)
+- Formularz logowania i endpoint POST MUSZA byc na HTTPS — brak HTTPS ujawnia credentials w sieci
+
+### HSTS (HTTP Strict Transport Security)
+
+- Wlacz HSTS z: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- `max-age` minimum **31536000** (1 rok) — krotsza wartosc daje mniejsza ochrone
+- `includeSubDomains` — chroni wszystkie subdomeny (WAZNE: upewnij sie ze WSZYSTKIE subdomeny obsluguja HTTPS)
+- `preload` — dodaj domene do HSTS Preload List (hstspreload.org) — przegladarka wymusza HTTPS bez pierwszego HTTP request
+- HSTS chroni przed: SSL stripping (sslstrip), downgrade attacks, mixed content issues
+
+### Mixed Content
+
+- WSZYSTKIE zasoby (obrazy, CSS, JS, fonty, iframe) musza byc ladowane przez HTTPS
+- Mixed content: HTTP resources na stronie HTTPS — przegladarka moze je zablokowac lub wyswietlic ostrzezenie
+- Sprawdz: `curl -s "https://TARGET/" | grep -i "src=.http://"`
+
+### Certyfikaty
+
+- Uzyj certyfikatow od zaufanych CA (nie self-signed w produkcji)
+- Sprawdz date waznosci certyfikatu, lancuch zaufania, CN/SAN
+- Wlacz OCSP Stapling dla szybszej weryfikacji statusu certyfikatu
+- Nie lacz stron HTTP (niezabezpieczonych) z HTTPS na tej samej domenie
+
+### Session Security
+
+- Cookie session MUSI miec flage **Secure** — bez niej moze byc wyslane przez HTTP
+- Nie przechodzic sesji z HTTP na HTTPS (i odwrotnie) — regeneruj cookie PO redirect na HTTPS
+- Implementuj HSTS razem z Secure cookies — defence in depth
 
 ## ROZSZERZENIA BURP SUITE
 

@@ -98,10 +98,42 @@ curl -v -b "SESSIONID=FIXED_VALUE; Domain=.example.com" TARGET/login -d "user=te
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-- Regeneruj session ID po kazdym zalogowaniu — klucz do ochrony przed session fixation
-- Uniwaznij stary session ID po regeneracji
-- Nie akceptuj session ID z parametrow URL — tylko z cookies
-- Powiaz sesje z wlasciwosciami klienta (IP, User-Agent) jako dodatkowa weryfikacja
+### Regeneracja Session ID — kluczowa obrona
+
+- **Regeneruj session ID po KAZDYM zalogowaniu** — to PRIMARY defense przed session fixation
+- **Uniewazni stary session ID** po regeneracji — zapobiega reuse starego tokenu
+- Regeneruj tez po: zmianie uprawnien, zmianie hasla, przelogowaniu, step-up authentication
+- Implementacja: `session_regenerate_id(true)` (PHP), `request.getSession().invalidate()` (Java), `req.session.regenerate()` (Express)
+
+### Nie akceptuj session ID z URL
+
+- Session ID powinien byc TYLKO w cookies — NIGDY w URL parametrach
+- URL z session ID: moze byc zapisany w logach, referrer header, historia przegladarki, zakladki
+- Wylacz `session.use_trans_sid` (PHP), nie uzywaj `;jsessionid=` w URL (Java)
+
+### Walidacja session ID
+
+- Serwer NIE powinien akceptowac nieznanego session ID — wymus wygenerowanie nowego
+- PHP: `session.use_strict_mode = 1` — serwer odrzuca nieznane session ID
+- Waliduj format session ID — odrzuc wartosci, ktore nie pasuja do oczekiwanego formatu
+
+### Wiazanie sesji z klientem (defence in depth)
+
+- Powiaz sesje z: IP adresem, User-Agent, fingerprint przegladarki
+- UWAGA: IP moze sie zmieniac (NAT, mobilne sieci, VPN) — nie blokuj sesji wyłacznie na tej podstawie
+- Traktuj jako dodatkowy sygnal — nie jako jedyna weryfikacje
+
+### Cross-subdomain session fixation
+
+- Jesli cookie ma `Domain=.example.com` — atakujacy na `evil.example.com` moze ustawic cookie
+- Obrona: uzywaj `__Host-` prefix, nie ustawiaj Domain attribute, subdomain isolation
+- Sprawdz czy subdomeny sa bezpieczne — subdomain takeover umozliwia session fixation
+
+### Session fixation przez inne wektory
+
+- **Meta tag/JavaScript**: `<meta http-equiv="Set-Cookie" content="SID=fixed">` — przestarzale ale testuj
+- **Cross-site cooking**: atakujacy ustawia cookie z innej domeny (starsze przegladarki)
+- **Header injection**: jesli atakujacy kontroluje headery — moze wstrzyknac Set-Cookie
 
 ## ROZSZERZENIA BURP SUITE
 

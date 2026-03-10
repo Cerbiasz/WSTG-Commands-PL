@@ -112,6 +112,40 @@ curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "X-Forwarded-For: 2.
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
+
+### Limity uzycia — co ograniczac
+
+- **Kupony/rabaty**: jednorazowe — per uzytkownik, per konto, per sesje
+- **Darmowe proby**: trial period, free downloads — limit per konto/IP/urzadzenie
+- **Glosowania**: jedna osoba = jeden glos — weryfikacja tozsamosci
+- **Reset hasla**: max. X requestow na godzine — zapobiegaj email bombing
+- **Logowanie**: lockout po N blednych probach
+- **API calls**: rate limiting per API key/user/IP
+
+### Techniki obejscia limitow — co testowac
+
+| Technika | Opis |
+|----------|------|
+| Case manipulation | `COUPON50` vs `coupon50` vs `Coupon50` |
+| Spacje | `" COUPON50"`, `"COUPON50 "`, `"COUPON 50"` |
+| Encoding | `%43OUPON50` (URL encoded C) |
+| Rozne sesje | Uzyj kuponu z sesji A, potem z sesji B |
+| Rozne konta | Uzyj kuponu na koncie A, potem na koncie B |
+| IP spoofing | `X-Forwarded-For: 1.1.1.1` — obejscie IP-based limitow |
+| Race condition | Wiele requestow jednoczesnie — limit nie zdazyworkowac |
+| Unicode confusables | `СOUPON50` (cyrylica C) vs `COUPON50` (lacinskie C) |
+
+### Obrona
+
+- Limity po stronie **serwera** — nie w cookie/localStorage
+- Normalizuj dane przed sprawdzeniem: lowercase, trim, strip encoding
+- Uzyj **atomic operations**: `UPDATE coupons SET used = true WHERE code = X AND used = false`
+- Rate limiting per uzytkownik + per IP + per endpoint — warstwowo
+- Loguj i alertuj na przekroczenie limitow — moze wskazywac na atak
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

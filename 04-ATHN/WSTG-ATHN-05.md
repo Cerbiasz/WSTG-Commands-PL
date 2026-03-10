@@ -121,6 +121,51 @@ curl -s -v "https://TARGET/api/login" -X POST -d '{"username":"testuser","passwo
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
+
+### Remember Me — bezpieczna implementacja
+
+- Token remember-me musi byc **kryptograficznie losowy** (CSPRNG) — minimum 128 bitow entropii
+- Token NIE MOZE zawierac danych uzytkownika w jawnej formie (username, ID, email)
+- Przechowuj token **zahaszowany** po stronie serwera (bcrypt/SHA-256) — jak haslo
+- Kazdy token musi byc **jednorazowy** — po uzyciu generuj nowy (token rotation)
+- Ustaw rozsadny czas wygasniecia: 7-30 dni (NIE bezterminowo)
+
+### Cookie remember-me — atrybuty bezpieczenstwa
+
+- **Secure**: przesylaj TYLKO przez HTTPS
+- **HttpOnly**: niedostepny z JavaScript — chroni przed XSS
+- **SameSite=Lax/Strict**: ochrona przed CSRF
+- **Path=/**: ograniczony do niezbednych sciezek
+- Uzyj prefixu `__Secure-` lub `__Host-` dla dodatkowej ochrony
+- Cookie remember-me powinno byc **oddzielne** od session cookie
+
+### Uniewaznanie tokenow
+
+- **Zmiana hasla**: uniewaznij WSZYSTKIE tokeny remember-me dla uzytkownika
+- **Wylogowanie**: uniewaznij token powiazany z biezaca sesja
+- **Wykrycie kompromitacji**: uniewaznij wszystkie tokeny i sesje
+- Implementuj "Wyloguj ze wszystkich urzadzen" — kasuje wszystkie tokeny
+- Przechowuj timestamp utworzenia tokenu — odrzucaj tokeny starsze niz zmiana hasla
+
+### Czego NIE robic
+
+- NIE przechowuj tokenow w localStorage/sessionStorage — podatne na XSS
+- NIE koduj danych uzytkownika w tokenie (Base64 username:timestamp) — przewidywalne
+- NIE uzywaj stalego tokenu ktory sie nie zmienia — brak rotacji = wyzsze ryzyko
+- NIE implementuj remember-me dla kont o wysokich uprawnieniach (admin) — lub wymagaj MFA
+- NIE uzywaj tego samego tokenu na wiele urzadzen — kazde urzadzenie powinno miec wlasny token
+
+### Testowanie
+
+- Porownaj tokeny z wielu logowan — czy sa losowe i unikalne?
+- Sprawdz czy token dziala po: zmianie hasla, wylogowaniu, wygasnieciu sesji
+- Sprawdz czy mozna manipulowac tokenem (zmien bajty i przetestuj)
+- Zweryfikuj atrybuty cookie (Secure, HttpOnly, SameSite, Expires)
+- Sprawdz czy token zawiera zrozumiale dane (Base64 decode, JWT decode)
+
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.

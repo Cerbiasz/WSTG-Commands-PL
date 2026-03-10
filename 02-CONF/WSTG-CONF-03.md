@@ -152,6 +152,31 @@ gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Con
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
+
+### Niebezpieczne rozszerzenia plikow
+
+| Rozszerzenie | Ryzyko |
+|-------------|--------|
+| `.bak`, `.old`, `.orig`, `.save` | Kopia zapasowa — moze zawierac kod zrodlowy |
+| `.swp`, `.swo`, `.tmp` | Pliki tymczasowe edytora (vim swap) |
+| `.config`, `.env`, `.ini`, `.yml` | Pliki konfiguracyjne z credentials |
+| `.sql`, `.db`, `.sqlite` | Bazy danych z danymi |
+| `.log` | Logi — moga zawierac tokeny, hasla, dane uzytkownikow |
+| `.git/`, `.svn/` | Repozytorium kodu zrodlowego |
+| `.DS_Store`, `Thumbs.db` | Metadane systemu plikow — ujawniaja strukture katalogow |
+| `.php~`, `.php.bak` | Backup PHP — serwer moze zwrocic kod zrodlowy zamiast wykonac |
+
+### Obrona
+
+- **Blokuj dostep** do plikow z niebezpiecznymi rozszerzeniami na serwerze webowym
+- Apache: `<FilesMatch "\.(bak|old|swp|env|log|sql|git)$"> Require all denied </FilesMatch>`
+- Nginx: `location ~* \.(bak|old|swp|env|log|sql)$ { deny all; }`
+- Nie pozostawiaj plikow backup/tymczasowych w katalogu webowym
+- Skanuj regularnie: `find /var/www -name "*.bak" -o -name "*.old" -o -name "*.swp"`
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

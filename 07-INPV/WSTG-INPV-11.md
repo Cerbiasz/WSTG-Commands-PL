@@ -75,12 +75,43 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Injection_Prevention_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-- Unikaj eval(), exec(), system() i podobnych funkcji dynamicznego wykonywania kodu
-- Uzywaj sandboxed execution environments jesli dynamiczny kod jest wymagany
-- Waliduj typy danych scisle — nie akceptuj stringow gdzie oczekiwane sa liczby/bool
-- Uzywaj allowlist dopuszczalnych wartosci zamiast blacklist
+### Code Injection vs Command Injection
+
+- **Code Injection**: wstrzyknięcie kodu w jezyku aplikacji (PHP, Python, JS, Ruby)
+- **Command Injection (INPV-12)**: wstrzyknięcie komend OS (shell commands)
+- Code injection = atakujacy kontroluje KOD APLIKACJI, nie komendy systemu
+
+### Niebezpieczne funkcje — per jezyk
+
+- **PHP**: `eval()`, `assert()`, `preg_replace('/e')`, `include()`, `require()`, `create_function()`
+- **Python**: `eval()`, `exec()`, `compile()`, `__import__()`, `os.system()`
+- **JavaScript/Node**: `eval()`, `Function()`, `setTimeout(string)`, `setInterval(string)`, `vm.runInContext()`
+- **Ruby**: `eval()`, `instance_eval()`, `class_eval()`, `send()`, `public_send()`
+- **Java**: `Runtime.exec()`, `ScriptEngine.eval()`, `ProcessBuilder`
+
+### Obrona
+
+- **UNIKAJ** dynamicznego wykonywania kodu — przepisz logike bez eval/exec
+- **Allowlist wartosci** — jesli musisz wybierac dynamicznie, mapuj user input na dozwolone wartosci
+- **Sandboxed execution**: jesli dynamiczny kod jest ABSOLUTNIE wymagany — izoluj go
+  - Docker/container, seccomp, AppArmor, restricted execution environment
+- **Waliduj typy danych** scisle — nie akceptuj stringow gdzie oczekiwane sa liczby/bool
+- **Input validation**: allowlist > denylist, ogranicz dlugosc, zakres, format
+
+### Typowe wektory
+
+- Template injection (SSTI): Jinja2 `{{7*7}}`, Twig `{{7*7}}`, Freemarker `${7*7}`
+- Deserialization: niebezpieczna deserializacja obiektow (Java, Python pickle, PHP unserialize)
+- Dynamic include/require: `include($_GET['page'])` → LFI/RFI
+- Expression Language injection: Spring EL `${T(java.lang.Runtime).getRuntime().exec('cmd')}`
+
+### Testowanie
+
+- Wstrzyknij payloady specyficzne dla jezyka: `${7*7}`, `{{7*7}}`, `<%= 7*7 %>`
+- Sprawdz czy wynik (49) pojawia sie w odpowiedzi — potwierdza code injection
+- Testuj time-based: `${T(Thread).sleep(5000)}` — opoznienie potwierdza wykonanie
 
 ## ROZSZERZENIA BURP SUITE
 

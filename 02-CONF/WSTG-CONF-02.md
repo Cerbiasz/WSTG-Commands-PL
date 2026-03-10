@@ -185,6 +185,38 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/leaky-misc
 
 ---
 
+## CHEATSHEET OWASP — Kluczowe wskazówki
+
+> Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md, Logging_Cheat_Sheet.md
+
+### Konfiguracja platformy aplikacyjnej — checklist
+
+- **Debug mode OFF** na produkcji — Django: `DEBUG=False`, Rails: `config.consider_all_requests_local=false`
+- **Verbose errors OFF** — nie pokazuj stack traces, sciezek plikow, zapytan SQL
+- Usun **sample apps** i **default pages** (Tomcat: /examples, IIS: /iisstart.htm, Apache: /manual)
+- Usun **domyslne konta**: Tomcat manager (admin/admin), Jenkins (admin), phpMyAdmin (root bez hasla)
+- Zweryfikuj **error pages**: custom 404/500 bez informacji technicznych
+
+### Konfiguracja per technologia
+
+| Technologia | Kluczowe ustawienia |
+|-------------|-------------------|
+| Apache | `ServerTokens Prod`, `ServerSignature Off`, usun `/manual`, `/icons` |
+| Nginx | `server_tokens off`, usun domyslna strone |
+| IIS | Usun default pages, wylacz detailed errors, usun `.aspx` traceback |
+| Tomcat | Usun `/manager`, `/host-manager`, `/examples`, zmien domyslne credentials |
+| PHP | `display_errors=Off`, `expose_php=Off`, `error_reporting=E_ALL` (do logow) |
+| Django | `DEBUG=False`, `ALLOWED_HOSTS` ustawione, custom error handlers |
+| Spring | `server.error.include-stacktrace=never`, actuator zabezpieczony |
+| Node.js | `NODE_ENV=production`, nie ujawniaj stack traces w API |
+
+### Logging — bezpieczne
+
+- Loguj **wlasciwosci bezpieczenstwa**: login, logout, zmiana hasla, bledy autoryzacji
+- **NIE loguj**: hasel, tokenow, kluczy API, danych PII, numerow kart
+- Centralizuj logi: ELK, Splunk, Graylog — nie tylko lokalne pliki
+- Chron logi przed modyfikacja: osobne konto, append-only, integrity monitoring
+
 ## ROZSZERZENIA BURP SUITE
 
 | Rozszerzenie | Opis | Link |

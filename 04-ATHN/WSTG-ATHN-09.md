@@ -75,13 +75,49 @@ curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com" -H "H
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
-> Źródło: OWASP CheatSheetSeries — Forgot_Password_Cheat_Sheet.md
+> Źródło: OWASP CheatSheetSeries — Forgot_Password_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
 
-- Uzywaj tokenow resetowania z ograniczonym czasem waznosci (15-60 min)
-- Nie ujawniaj czy konto/email istnieje w odpowiedzi na zadanie resetu
-- Wymagaj aktualnego hasla przy zmianie hasla (nie przy resetowaniu)
-- Token resetowania powinien byc jednorazowy i o wysokiej entropii
-- Uniwaznij wszystkie sesje po zmianie hasla
+### Forgot Password — bezpieczny flow
+
+1. Uzytkownik podaje email/username
+2. Serwer zwraca **identyczny komunikat** niezaleznie czy konto istnieje ("If an account exists, a reset link has been sent")
+3. **Identyczny czas odpowiedzi** — nie ujawniaj istnienia konta przez timing
+4. Token wysylany emailem/SMS (side-channel) — NIGDY w odpowiedzi HTTP
+5. Uzytkownik klika link z tokenem → formularz zmiany hasla
+6. Po zmianie: redirect na login (NIE automatyczny login) + powiadomienie email
+
+### Tokeny resetowania — wymagania bezpieczenstwa
+
+- Generowane przez **CSPRNG** (SecureRandom, secrets, crypto.randomBytes) — min 128 bit entropii
+- **Jednorazowe** — uniewazni po uzyciu
+- **Krotki czas waznosci**: 15-60 minut
+- **Powiazane z konkretnym uzytkownikiem** w bazie danych
+- **Hashowane w bazie** (SHA-256) — nie przechowuj raw token (jak hasla)
+- **Rate limiting** na endpoincie — zapobiegaj flood tokenami (email/SMS spam)
+
+### Host Header Injection
+
+- NIE uzywaj `Host` header do budowania URL resetowania — atakujacy moze podmienić
+- URL resetowania powinien byc **hardcoded** lub zwalidowany przeciw liście zaufanych domen
+- Atak: `Host: evil.com` → email z linkiem `https://evil.com/reset?token=xxx` → atakujacy kradnie token
+
+### Zmiana hasla vs Reset hasla
+
+- **Zmiana hasla**: wymaga aktywnej sesji + podania AKTUALNEGO hasla
+- **Reset hasla**: NIE wymaga aktualnego hasla (uzytkownik go nie pamieta) — token jako dowod tozsamosci
+- Po resecie: uniewazni WSZYSTKIE aktywne sesje uzytkownika
+
+### Referrer Leakage
+
+- Strona resetowania: ustaw `Referrer-Policy: noreferrer` — token z URL nie wycieknie do stron zewnetrznych
+- Nie umieszczaj linkow zewnetrznych na stronie resetowania hasla
+
+### Dodatkowe metody odzyskiwania
+
+- **PIN przez SMS** (6-12 cyfr): OTP wysylany SMS-em + ograniczona sesja tylko do zmiany hasla
+- **Security questions**: TYLKO jako dodatkowy czynnik, NIE jako jedyny mechanizm
+- **Offline methods**: pre-generated recovery codes (np. 10 jednorazowych kodow przy setup MFA)
+- Uzytkownik MUSI miec sposob na odzyskanie konta nawet jesli straci dostep do MFA
 
 ## ROZSZERZENIA BURP SUITE
 
