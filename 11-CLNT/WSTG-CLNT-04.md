@@ -92,3 +92,21 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.7.2 | Other Browser Security Considerations | Verify that the application will only automatically redirect the user to a different hostname or domain (which is not controlled by the application) where the destination appears on an allowlist. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.7.3 | Other Browser Security Considerations | Verify that the application shows a notification when the user is being redirected to a URL outside of the application's control, with an option to cancel the navigation. |

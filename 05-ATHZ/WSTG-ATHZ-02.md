@@ -145,3 +145,23 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/403/403_ur
 | AuthMatrix | Macierz testow autoryzacji uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
 | AutoRepeater | Automatyczne powtarzanie requestow z roznymi sesjami | [GitHub](https://github.com/nccgroup/AutoRepeater) |
 | Auth Analyzer | Porownywanie odpowiedzi miedzy sesjami | [GitHub](https://github.com/simioni87/auth_analyzer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
+| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
+| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |

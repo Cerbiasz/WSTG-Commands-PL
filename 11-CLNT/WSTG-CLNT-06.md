@@ -74,3 +74,15 @@ curl -s "https://TARGET/page?link=http://evil.com/style.css"
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.6.1 | External Resource Integrity | Verify that client-side assets, such as JavaScript libraries, CSS, or web fonts, are only hosted externally (e.g., on a Content Delivery Network) if the resource is static and versioned and Subresource Integrity (SRI) is used to validate the integrity of the asset. If this is not possible, there should be a documented security decision to justify this for each resource. |

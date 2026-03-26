@@ -116,3 +116,15 @@ ffuf -u "https://TARGET/api/user" -X POST -H "Content-Type: application/json" -d
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Agartha | Generowanie dynamicznych payloadow i testowanie injection/auth | [GitHub](https://github.com/volkandindar/agartha) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V15.3.3 | Defensive Coding | Verify that the application has countermeasures to protect against mass assignment attacks by limiting allowed fields per controller and action, e.g., it is not possible to insert or update a field value when it was not intended to be part of that action. |

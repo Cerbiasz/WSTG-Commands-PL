@@ -201,3 +201,21 @@ Dla kazdego entry point dokumentuj:
 |---|---|---|
 | GAP-Burp-Extension | Automatyczne wyciaganie parametrow, endpointow i slow z odpowiedzi | [GitHub](https://github.com/xnl-h4ck3r/GAP-Burp-Extension) |
 | Attack Surface Detector | Identyfikacja endpointow przez statyczna analize kodu | [GitHub](https://github.com/secdec/attack-surface-detector-burp) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.1.1 | Configuration Documentation | Verify that all communication needs for the application are documented. This must include external services which the application relies upon and cases where an end user might be able to provide an external location to which the application will then connect. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.1.4 | Generic Web Service Security | Verify that only HTTP methods that are explicitly supported by the application or its API (including OPTIONS during preflight requests) can be used and that unused methods are blocked. |

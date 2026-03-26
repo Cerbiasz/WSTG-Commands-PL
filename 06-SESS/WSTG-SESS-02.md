@@ -178,3 +178,29 @@ nmap -p 443 --script http-cookie-flags TARGET
 |---|---|---|
 | burp-samesite-reporter | Raportowanie flag SameSite w cookies | [GitHub](https://github.com/ldionmarcil/burp-samesite-reporter) |
 | Headers Analyzer | Analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.3.1 | Cookie Setup | Verify that cookies have the 'Secure' attribute set, and if the '\__Host-' prefix is not used for the cookie name, the '__Secure-' prefix must be used for the cookie name. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.3.2 | Cookie Setup | Verify that each cookie's 'SameSite' attribute value is set according to the purpose of the cookie, to limit exposure to user interface redress attacks and browser-based request forgery attacks, commonly known as cross-site request forgery (CSRF). |
+| V3.3.3 | Cookie Setup | Verify that cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed to be shared with other hosts. |
+| V3.3.4 | Cookie Setup | Verify that if the value of a cookie is not meant to be accessible to client-side scripts (such as a session token), the cookie must have the 'HttpOnly' attribute set and the same value (e. g. session token) must only be transferred to the client via the 'Set-Cookie' header field. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.3.5 | Cookie Setup | Verify that when the application writes a cookie, the cookie name and value length combined are not over 4096 bytes. Overly large cookies will not be stored by the browser and therefore not sent with requests, preventing the user from using application functionality which relies on that cookie. |

@@ -95,3 +95,21 @@ ffuf -u "https://TARGET/page?name=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/ser
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Active Scan++ | Rozszerzony skaner z checkami SSI injection | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.1 | Injection Prevention | Verify that output encoding for an HTTP response, HTML document, or XML document is relevant for the context required, such as encoding the relevant characters for HTML elements, HTML attributes, HTML comments, CSS, or HTTP header fields, to avoid changing the message or document structure. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.3 | Sanitization | Verify that data being passed to a potentially dangerous context is sanitized beforehand to enforce safety measures, such as only allowing characters which are safe for this context and trimming input which is too long. |

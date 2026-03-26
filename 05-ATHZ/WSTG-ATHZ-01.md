@@ -164,3 +164,27 @@ ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/lfi
 |---|---|---|
 | off-by-slash | Wykrywanie alias traversal przez bledna konfiguracje NGINX | [GitHub](https://github.com/bayotop/off-by-slash) |
 | 403Bypasser | Automatyczne techniki omijania restrykcji 403 | [GitHub](https://github.com/sting8k/BurpSuite_403Bypasser) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.3.2 | File Storage | Verify that when the application creates file paths for file operations, instead of user-submitted filenames, it uses internally generated or trusted data, or if user-submitted filenames or file metadata must be used, strict validation and sanitization must be applied. This is to protect against path traversal, local or remote file inclusion (LFI, RFI), and server-side request forgery (SSRF) attacks. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.6 | Sanitization | Verify that the application protects against Server-side Request Forgery (SSRF) attacks, by validating untrusted data against an allowlist of protocols, domains, paths and ports and sanitizing potentially dangerous characters before using the data to call another service. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.3.3 | File Storage | Verify that server-side file processing, such as file decompression, ignores user-provided path information to prevent vulnerabilities such as zip slip. |

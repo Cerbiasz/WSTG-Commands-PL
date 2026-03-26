@@ -144,3 +144,22 @@ curl -s -X PUT "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN
 | AuthMatrix | Testowanie autoryzacji w macierzy uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
 | Autorize | Automatyczne wykrywanie bledow autoryzacji | [GitHub](https://github.com/Quitten/Autorize) |
 | Auth Analyzer | Analiza bledow autoryzacji przez porownywanie sesji | [GitHub](https://github.com/simioni87/auth_analyzer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.1.1 | Authorization Documentation | Verify that authorization documentation defines rules for restricting function-level and data-specific access based on consumer permissions and resource attributes. |
+| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.1.2 | Authorization Documentation | Verify that authorization documentation defines rules for field-level access restrictions (both read and write) based on consumer permissions and resource attributes. Note that these rules might depend on other attribute values of the relevant data object, such as state or status. |

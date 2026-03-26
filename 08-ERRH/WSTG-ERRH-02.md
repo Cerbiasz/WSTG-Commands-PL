@@ -187,3 +187,16 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Error Message Checks | Pasywne skanowanie pod katem ujawnionych komunikatow bledow | [GitHub](https://github.com/augustd/burp-suite-error-message-checks) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V16.5.1 | Error Handling | Verify that a generic message is returned to the consumer when an unexpected or security-sensitive error occurs, ensuring no exposure of sensitive internal system data such as stack traces, queries, secret keys, and tokens. |
+| V13.4.2 | Unintended Information Leakage | Verify that debug modes are disabled for all components in production environments to prevent exposure of debugging features and information leakage. |

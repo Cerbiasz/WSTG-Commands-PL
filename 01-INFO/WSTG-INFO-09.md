@@ -155,3 +155,15 @@ curl -s https://TARGET/misc/drupal.js | md5sum
 |---|---|---|
 | CMS Scanner | Wykrywanie podatnosci w popularnych systemach CMS | [BApp Store](https://portswigger.net/bappstore/1bf95d0be40c447b94981f5696b1a18e) |
 | Detect Dynamic JS | Porownywanie plikow JS w celu wykrycia dynamicznej zawartosci | [BApp Store](https://portswigger.net/bappstore/4a657674ebe3410b92280613aa512304) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |

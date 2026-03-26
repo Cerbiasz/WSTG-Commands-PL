@@ -147,3 +147,15 @@ echo -e "JUNK / HTTP/1.0\r\n\r\n" | nc TARGET 80
 | Software Version Reporter | Pasywne wykrywanie wersji oprogramowania w odpowiedziach | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
 | Active Scan++ | Rozszerzony skaner aktywny i pasywny z dodatkowymi checkami | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
 | Burp Retire JS | Wykrywanie podatnych wersji bibliotek JavaScript | [GitHub](https://github.com/h3xstream/burp-retire-js) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |

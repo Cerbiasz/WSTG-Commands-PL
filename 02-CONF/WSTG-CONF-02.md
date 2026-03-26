@@ -223,3 +223,17 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/leaky-misc
 |---|---|---|
 | J2EEScan | Skaner podatnosci specyficznych dla aplikacji J2EE | [GitHub](https://github.com/ilmila/J2EEScan) |
 | Software Version Reporter | Pasywne wykrywanie wersji oprogramowania | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.2 | Unintended Information Leakage | Verify that debug modes are disabled for all components in production environments to prevent exposure of debugging features and information leakage. |
+| V13.4.3 | Unintended Information Leakage | Verify that web servers do not expose directory listings to clients unless explicitly intended. |
+| V15.2.3 | Security Architecture and Dependencies | Verify that the production environment only includes functionality that is required for the application to function, and does not expose extraneous functionality such as test code, sample snippets, and development functionality. |

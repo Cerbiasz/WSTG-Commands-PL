@@ -151,3 +151,17 @@ curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "X-Forwarded-For: 2.
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Turbo Intruder | Masowe wysylanie requestow do testowania limitow | [BApp Store](https://portswigger.net/bappstore/9abfe09175d74b16842a3bbb0aa6a42c) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.2 | Business Logic Security | Verify that business logic limits are implemented per the application's documentation to avoid business logic flaws being exploited. |
+| V2.3.4 | Business Logic Security | Verify that business logic level locking mechanisms are used to ensure that limited quantity resources (such as theater seats or delivery slots) cannot be double-booked by manipulating the application's logic. |
+| V2.4.1 | Anti-automation | Verify that anti-automation controls are in place to protect against excessive calls to application functions that could lead to data exfiltration, garbage-data creation, quota exhaustion, rate-limit breaches, denial-of-service, or overuse of costly resources. |

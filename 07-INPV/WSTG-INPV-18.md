@@ -141,3 +141,16 @@ ffuf -u "https://TARGET/page?name=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/
 |---|---|---|
 | tplmap | Wykrywanie i eksploatacja Server-Side Template Injection | [GitHub](https://github.com/epinna/tplmap) |
 | Backslash Powered Scanner | Wykrywanie nieznanych klas injection w tym SSTI | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.7 | Sanitization | Verify that the application protects against template injection attacks by not allowing templates to be built based on untrusted input. Where there is no alternative, any untrusted input being included dynamically during template creation must be sanitized or strictly validated. |
+| V1.3.5 | Sanitization | Verify that the application sanitizes or disables user-supplied scriptable or expression template language content, such as Markdown, CSS or XSL stylesheets, BBCode, or similar. |

@@ -240,3 +240,30 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Upload Scanner | Testy bezpieczenstwa uploadu z roznymi payloadami | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.2.1 | File Upload and Content | Verify that the application will only accept files of a size which it can process without causing a loss of performance or a denial of service attack. |
+| V5.2.2 | File Upload and Content | Verify that when the application accepts a file, either on its own or within an archive such as a zip file, it checks if the file extension matches an expected file extension and validates that the contents correspond to the type represented by the extension. This includes, but is not limited to, checking the initial 'magic bytes', performing image re-writing, and using specialized libraries for file content validation. For L1, this can focus just on files which are used to make specific business or security decisions. For L2 and up, this must apply to all files being accepted. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.4.3 | File Download | Verify that files obtained from untrusted sources are scanned by antivirus scanners to prevent serving of known malicious content. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.2.4 | File Upload and Content | Verify that a file size quota and maximum number of files per user are enforced to ensure that a single user cannot fill up the storage with too many files, or excessively large files. |
+| V5.2.5 | File Upload and Content | Verify that the application does not allow uploading compressed files containing symlinks unless this is specifically required (in which case it will be necessary to enforce an allowlist of the files that can be symlinked to). |
+| V5.2.6 | File Upload and Content | Verify that the application rejects uploaded images with a pixel size larger than the maximum allowed, to prevent pixel flood attacks. |

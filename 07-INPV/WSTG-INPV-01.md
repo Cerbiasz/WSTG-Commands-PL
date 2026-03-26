@@ -192,3 +192,24 @@ ffuf -u "https://TARGET/search?q=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-mas
 | Reflector | Wykrywanie reflected XSS w czasie rzeczywistym | [GitHub](https://github.com/elkokc/reflector) |
 | BitBlinder | Wyszukiwanie blind XSS | [GitHub](https://github.com/BitTheByte/BitBlinder) |
 | Reflected Parameters | Monitorowanie odbitych parametrow w odpowiedziach | [GitHub](https://github.com/portswigger/reflected-parameters) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.1 | Injection Prevention | Verify that output encoding for an HTTP response, HTML document, or XML document is relevant for the context required, such as encoding the relevant characters for HTML elements, HTML attributes, HTML comments, CSS, or HTTP header fields, to avoid changing the message or document structure. |
+| V1.2.2 | Injection Prevention | Verify that when dynamically building URLs, untrusted data is encoded according to its context (e.g., URL encoding or base64url encoding for query or path parameters). Ensure that only safe URL protocols are permitted (e.g., disallow javascript: or data:). |
+| V1.2.3 | Injection Prevention | Verify that output encoding or escaping is used when dynamically building JavaScript content (including JSON), to avoid changing the message or document structure (to avoid JavaScript and JSON injection). |
+| V3.2.2 | Unintended Content Interpretation | Verify that content intended to be displayed as text, rather than rendered as HTML, is handled using safe rendering functions (such as createTextNode or textContent) to prevent unintended execution of content such as HTML or JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.1.2 | Encoding and Sanitization Architecture | Verify that the application performs output encoding and escaping either as a final step before being used by the interpreter for which it is intended or by the interpreter itself. |

@@ -204,3 +204,15 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 |---|---|---|
 | Asset Discover | Odkrywanie powiazanych zasobow i domen aplikacji | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
 | Subdomain Extractor | Wyciaganie subdomen z odpowiedzi HTTP | [GitHub](https://github.com/AonCyberLabs/BurpSuite-Team-Extension) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.1.1 | Configuration Documentation | Verify that all communication needs for the application are documented. This must include external services which the application relies upon and cases where an end user might be able to provide an external location to which the application will then connect. |

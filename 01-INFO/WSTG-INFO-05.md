@@ -216,3 +216,22 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt -m
 | Burp JS Miner | Automatyczne wyciaganie interesujacych danych z plikow JS i JSON | [GitHub](https://github.com/minamo7sen/burp-JS-Miner) |
 | Secret Finder | Odkrywanie kluczy API, tokenow i wrazliwych danych w odpowiedziach | [GitHub](https://github.com/m4ll0k/BurpSuite-Secret_Finder) |
 | Sensitive Discoverer | Wykrywanie wrazliwych informacji w wiadomosciach HTTP | [GitHub](https://github.com/CYS4srl/SensitiveDiscoverer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
+| V16.5.1 | Error Handling | Verify that a generic message is returned to the consumer when an unexpected or security-sensitive error occurs, ensuring no exposure of sensitive internal system data such as stack traces, queries, secret keys, and tokens. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |

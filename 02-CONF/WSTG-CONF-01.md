@@ -127,3 +127,24 @@ nmap --script ssh2-enum-algos -p 22 TARGET -oN output_nmap_ssh_algos.txt
 |---|---|---|
 | Active Scan++ | Rozszerzony skaner z dodatkowymi checkami infrastruktury | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
 | Collaborator Everywhere | Wykrywanie ukrytych backendowych systemow przez pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V12.1.1 | General TLS Security Guidance | Verify that only the latest recommended versions of the TLS protocol are enabled, such as TLS 1.2 and TLS 1.3. The latest version of the TLS protocol must be the preferred option. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V12.1.2 | General TLS Security Guidance | Verify that only recommended cipher suites are enabled, with the strongest cipher suites set as preferred. L3 applications must only support cipher suites which provide forward secrecy. |
+| V12.3.1 | General Service to Service Communication Security | Verify that an encrypted protocol such as TLS is used for all inbound and outbound connections to and from the application, including monitoring systems, management tools, remote access and SSH, middleware, databases, mainframes, partner systems, or external APIs. The server must not fall back to insecure or unencrypted protocols. |
+| V13.2.1 | Backend Communication Configuration | Verify that communications between backend application components that don't support the application's standard user session mechanism, including APIs, middleware, and data layers, are authenticated. Authentication must use individual service accounts, short-term tokens, or certificate-based authentication and not unchanging credentials such as passwords, API keys, or shared accounts with privileged access. |
+| V13.2.2 | Backend Communication Configuration | Verify that communications between backend application components, including local or operating system services, APIs, middleware, and data layers, are performed with accounts assigned the least necessary privileges. |

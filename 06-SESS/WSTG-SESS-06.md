@@ -152,3 +152,24 @@ curl -v -X POST TARGET/logout 2>&1
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.4.1 | Session Termination | Verify that when session termination is triggered (such as logout or expiration), the application disallows any further use of the session. For reference tokens or stateful sessions, this means invalidating the session data at the application backend. Applications using self-contained tokens will need a solution such as maintaining a list of terminated tokens, disallowing tokens produced before a per-user date and time or rotating a per-user signing key. |
+| V7.4.2 | Session Termination | Verify that the application terminates all active sessions when a user account is disabled or deleted (such as an employee leaving the company). |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.4.3 | Session Termination | Verify that the application gives the option to terminate all other active sessions after a successful change or removal of any authentication factor (including password change via reset or recovery and, if present, an MFA settings update). |
+| V7.4.4 | Session Termination | Verify that all pages that require authentication have easy and visible access to logout functionality. |
+| V7.4.5 | Session Termination | Verify that application administrators are able to terminate active sessions for an individual user or for all users. |

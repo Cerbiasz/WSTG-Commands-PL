@@ -138,3 +138,15 @@ curl -v -b "SESSIONID=FIXED_VALUE; Domain=.example.com" TARGET/login -d "user=te
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.2.4 | Fundamental Session Management Security | Verify that the application generates a new session token on user authentication, including re-authentication, and terminates the current session token. |

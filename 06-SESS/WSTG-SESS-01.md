@@ -158,3 +158,23 @@ curl -v -b "SESSIONID=$(python3 -c 'print("A"*500)')" TARGET/dashboard
 |---|---|---|
 | AuthHeader Updater | Automatyczne aktualizowanie tokenow uwierzytelnienia | [GitHub](https://github.com/sampsonc/AuthHeaderUpdater) |
 | Cookie Decrypter | Deszyfrowanie i dekodowanie roznych typow cookies | [GitHub](https://github.com/SolomonSklash/cookie-decrypter) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.2.1 | Fundamental Session Management Security | Verify that the application performs all session token verification using a trusted, backend service. |
+| V7.2.2 | Fundamental Session Management Security | Verify that the application uses either self-contained or reference tokens that are dynamically generated for session management, i.e. not using static API secrets and keys. |
+| V7.2.3 | Fundamental Session Management Security | Verify that if reference tokens are used to represent user sessions, they are unique and generated using a cryptographically secure pseudo-random number generator (CSPRNG) and possess at least 128 bits of entropy. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.1.1 | Session Management Documentation | Verify that the user's session inactivity timeout and absolute maximum session lifetime are documented, are appropriate in combination with other controls, and that the documentation includes justification for any deviations from NIST SP 800-63B re-authentication requirements. |

@@ -150,3 +150,16 @@ curl -s "https://TARGET/graphql" -X POST -H "Content-Type: application/json" -d 
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.3.1 | GraphQL | Verify that a query allowlist, depth limiting, amount limiting, or query cost analysis is used to prevent GraphQL or data layer expression Denial of Service (DoS) as a result of expensive, nested queries. |
+| V4.3.2 | GraphQL | Verify that GraphQL introspection queries are disabled in the production environment unless the GraphQL API is meant to be used by other parties. |

@@ -141,3 +141,21 @@ curl -s -I TARGET/page | grep -i "etag"
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Sensitive Discoverer | Wykrywanie wrazliwych danych w odpowiedziach HTTP | [GitHub](https://github.com/CYS4srl/SensitiveDiscoverer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V14.2.1 | General Data Protection | Verify that sensitive data is only sent to the server in the HTTP message body or header fields, and that the URL and query string do not contain sensitive information, such as an API key or session token. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V14.3.3 | Client-side Data Protection | Verify that data stored in browser storage (such as localStorage, sessionStorage, IndexedDB, or cookies) does not contain sensitive data, with the exception of session tokens. |

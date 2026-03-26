@@ -150,3 +150,21 @@ cat Desktop/WSTG/Bug-Bounty-Wordlists-main/shodan-dorks.txt
 | GAP-Burp-Extension | Automatyczne wyciaganie parametrow, linkow i slow z odpowiedzi | [GitHub](https://github.com/xnl-h4ck3r/GAP-Burp-Extension) |
 | Asset Discover | Odkrywanie powiazanych zasobow i domen | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
 | Domain Hunter | Wyszukiwanie powiazanych domen i subdomen | [GitHub](https://github.com/bit4woo/domain_hunter) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.1 | Unintended Information Leakage | Verify that the application is deployed either without any source control metadata, including the .git or .svn folders, or in a way that these folders are inaccessible both externally and to the application itself. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |

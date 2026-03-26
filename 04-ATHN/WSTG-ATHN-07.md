@@ -217,3 +217,26 @@ hashcat -m 0 -a 0 hashes.txt Desktop/WSTG/SecLists-master/Passwords/Leaked-Datab
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.2.1 | Password Security | Verify that user set passwords are at least 8 characters in length although a minimum of 15 characters is strongly recommended. |
+| V6.2.4 | Password Security | Verify that passwords submitted during account registration or password change are checked against an available set of, at least, the top 3000 passwords which match the application's password policy, e.g. minimum length. |
+| V6.2.5 | Password Security | Verify that passwords of any composition can be used, without rules limiting the type of characters permitted. There must be no requirement for a minimum number of upper or lower case characters, numbers, or special characters. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.2.9 | Password Security | Verify that passwords of at least 64 characters are permitted. |
+| V6.2.10 | Password Security | Verify that a user's password stays valid until it is discovered to be compromised or the user rotates it. The application must not require periodic credential rotation. |
+| V6.2.11 | Password Security | Verify that the documented list of context specific words is used to prevent easy to guess passwords being created. |
+| V6.2.12 | Password Security | Verify that passwords submitted during account registration or password changes are checked against a set of breached passwords. |

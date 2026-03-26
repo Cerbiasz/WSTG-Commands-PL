@@ -108,3 +108,23 @@ curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "u
 | Autorize | Automatyczne testowanie eskalacji uprawnien | [GitHub](https://github.com/Quitten/Autorize) |
 | AuthMatrix | Macierz testow autoryzacji | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
 | Burp SessionAuth | Wykrywanie podatnosci eskalacji uprawnien | [GitHub](https://github.com/thomaspatzke/Burp-SessionAuthTool) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
+| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
+| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.4.1 | Other Authorization Considerations | Verify that multi-tenant applications use cross-tenant controls to ensure consumer operations will never affect tenants with which they do not have permissions to interact. |

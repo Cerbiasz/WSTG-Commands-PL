@@ -232,3 +232,27 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 | Backup Finder | Wyszukiwanie plikow backup, starych i tymczasowych | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
 | CTFHelper | Skanowanie wrazliwych plikow (.swp, .git) na serwerze | [GitHub](https://github.com/unamer/CTFHelper) |
 | Interesting Files Scanner | Wykrywanie interesujacych plikow i katalogow | [GitHub](https://github.com/modzero/interestingFileScanner) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.1 | Unintended Information Leakage | Verify that the application is deployed either without any source control metadata, including the .git or .svn folders, or in a way that these folders are inaccessible both externally and to the application itself. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.7 | Unintended Information Leakage | Verify that the web tier is configured to only serve files with specific file extensions to prevent unintentional information, configuration, and source code leakage. |

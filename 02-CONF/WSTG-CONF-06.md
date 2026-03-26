@@ -162,3 +162,27 @@ ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-me
 |---|---|---|
 | Identity Crisis | Testowanie roznych odpowiedzi serwera na rozne User-Agenty i metody | [GitHub](https://github.com/EnableSecurity/Identity-Crisis) |
 | Bypass WAF | Obchodzenie regul Web Application Firewall | [GitHub](https://github.com/codewatchorg/bypasswaf) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.5.3 | Browser Origin Separation | Verify that HTTP requests to sensitive functionality use appropriate HTTP methods such as POST, PUT, PATCH, or DELETE, and not methods defined by the HTTP specification as "safe" such as HEAD, OPTIONS, or GET. Alternatively, strict validation of the Sec-Fetch-* request header fields can be used to ensure that the request did not originate from an inappropriate cross-origin call, a navigation request, or a resource load (such as an image source) where this is not expected. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.4 | Unintended Information Leakage | Verify that using the HTTP TRACE method is not supported in production environments, to avoid potential information leakage. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.1.4 | Generic Web Service Security | Verify that only HTTP methods that are explicitly supported by the application or its API (including OPTIONS during preflight requests) can be used and that unused methods are blocked. |

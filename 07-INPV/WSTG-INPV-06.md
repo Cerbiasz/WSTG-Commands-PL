@@ -119,3 +119,15 @@ ffuf -u "https://TARGET/search?user=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/l
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Active Scan++ | Rozszerzony skaner z checkami injection | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.6 | Injection Prevention | Verify that the application protects against LDAP injection vulnerabilities, or that specific security controls to prevent LDAP injection have been implemented. |

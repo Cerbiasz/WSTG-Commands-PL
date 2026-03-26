@@ -139,3 +139,17 @@ curl -v -b "SESSIONID=EXPIRED_SESSION_VALUE" TARGET/dashboard 2>&1
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Timeinator | Testowanie atakow opartych na czasie | [GitHub](https://github.com/FSecureLABS/timeinator) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.3.1 | Session Timeout | Verify that there is an inactivity timeout such that re-authentication is enforced according to risk analysis and documented security decisions. |
+| V7.3.2 | Session Timeout | Verify that there is an absolute maximum session lifetime such that re-authentication is enforced according to risk analysis and documented security decisions. |
+| V7.1.1 | Session Management Documentation | Verify that the user's session inactivity timeout and absolute maximum session lifetime are documented, are appropriate in combination with other controls, and that the documentation includes justification for any deviations from NIST SP 800-63B re-authentication requirements. |

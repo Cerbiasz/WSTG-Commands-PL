@@ -101,3 +101,16 @@ curl -s "https://TARGET/api/data?callback=alert" # JSONP
 |---|---|---|
 | ESLinter | Lintowanie JS z regulami bezpieczenstwa w Burp | [GitHub](https://github.com/parsiya/eslinter) |
 | JSpector | Wyciaganie endpointow i niebezpiecznych metod z plikow JS | [GitHub](https://github.com/hisxo/JSpector) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.2 | Sanitization | Verify that the application avoids the use of eval() or other dynamic code execution features such as Spring Expression Language (SpEL). Where there is no alternative, any user input being included must be sanitized before being executed. |
+| V1.2.3 | Injection Prevention | Verify that output encoding or escaping is used when dynamically building JavaScript content (including JSON), to avoid changing the message or document structure (to avoid JavaScript and JSON injection). |

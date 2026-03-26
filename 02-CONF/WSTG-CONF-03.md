@@ -183,3 +183,15 @@ gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Con
 |---|---|---|
 | Upload Scanner | Testy bezpieczenstwa uploadu plikow HTTP | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
 | Backup Finder | Wyszukiwanie plikow kopii zapasowych na serwerze | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.7 | Unintended Information Leakage | Verify that the web tier is configured to only serve files with specific file extensions to prevent unintentional information, configuration, and source code leakage. |

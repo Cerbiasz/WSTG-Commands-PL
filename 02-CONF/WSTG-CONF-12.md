@@ -146,3 +146,22 @@ shcheck https://TARGET | tee output_shcheck.txt
 |---|---|---|
 | CSP Bypass | Wykrywanie slabosci w konfiguracji Content-Security-Policy | [GitHub](https://github.com/moloch--/CSP-Bypass) |
 | CSP Auditor | Analiza i audyt naglowkow CSP | [GitHub](https://github.com/GoSecure/csp-auditor) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.4.3 | Browser Security Mechanism Headers | Verify that HTTP responses include a Content-Security-Policy response header field which defines directives to ensure the browser only loads and executes trusted content or resources, in order to limit execution of malicious JavaScript. As a minimum, a global policy must be used which includes the directives object-src 'none' and base-uri 'none' and defines either an allowlist or uses nonces or hashes. For an L3 application, a per-response policy with nonces or hashes must be defined. |
+| V3.4.6 | Browser Security Mechanism Headers | Verify that the web application uses the frame-ancestors directive of the Content-Security-Policy header field for every HTTP response to ensure that it cannot be embedded by default and that embedding of specific resources is allowed only when necessary. Note that the X-Frame-Options header field, although supported by browsers, is obsolete and may not be relied upon. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.4.7 | Browser Security Mechanism Headers | Verify that the Content-Security-Policy header field specifies a location to report violations. |

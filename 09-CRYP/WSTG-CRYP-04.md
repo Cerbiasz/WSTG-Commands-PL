@@ -189,3 +189,30 @@ openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noo
 |---|---|---|
 | AES Killer | Deszyfrowanie i analiza komunikacji AES | [GitHub](https://github.com/Ebryx/AES-Killer) |
 | BurpCrypto | Operacje kryptograficzne na payloadach w Burp | [GitHub](https://github.com/whwlsfb/BurpCrypto) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V11.3.1 | Encryption Algorithms | Verify that insecure block modes (e.g., ECB) and weak padding schemes (e.g., PKCS#1 v1.5) are not used. |
+| V11.3.2 | Encryption Algorithms | Verify that only approved ciphers and modes such as AES with GCM are used. |
+| V11.4.1 | Hashing and Hash-based Functions | Verify that only approved hash functions are used for general cryptographic use cases, including digital signatures, HMAC, KDF, and random bit generation. Disallowed hash functions, such as MD5, must not be used for any cryptographic purpose. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V11.1.1 | Cryptographic Inventory and Documentation | Verify that there is a documented policy for management of cryptographic keys and a cryptographic key lifecycle that follows a key management standard such as NIST SP 800-57. This should include ensuring that keys are not overshared (for example, with more than two entities for shared secrets and more than one entity for private keys). |
+| V11.1.2 | Cryptographic Inventory and Documentation | Verify that a cryptographic inventory is performed, maintained, regularly updated, and includes all cryptographic keys, algorithms, and certificates used by the application. It must also document where keys can and cannot be used in the system, and the types of data that can and cannot be protected using the keys. |
+| V11.2.1 | Secure Cryptography Implementation | Verify that industry-validated implementations (including libraries and hardware-accelerated implementations) are used for cryptographic operations. |
+| V11.2.2 | Secure Cryptography Implementation | Verify that the application is designed with crypto agility such that random number, authenticated encryption, MAC, or hashing algorithms, key lengths, rounds, ciphers and modes can be reconfigured, upgraded, or swapped at any time, to protect against cryptographic breaks. Similarly, it must also be possible to replace keys and passwords and re-encrypt data. This will allow for seamless upgrades to post-quantum cryptography (PQC), once high-assurance implementations of approved PQC schemes or standards are widely available. |
+| V11.2.3 | Secure Cryptography Implementation | Verify that all cryptographic primitives utilize a minimum of 128-bits of security based on the algorithm, key size, and configuration. For example, a 256-bit ECC key provides roughly 128 bits of security where RSA requires a 3072-bit key to achieve 128 bits of security. |
+| V11.3.3 | Encryption Algorithms | Verify that encrypted data is protected against unauthorized modification preferably by using an approved authenticated encryption method or by combining an approved encryption method with an approved MAC algorithm. |
+| V11.4.2 | Hashing and Hash-based Functions | Verify that passwords are stored using an approved, computationally intensive, key derivation function (also known as a "password hashing function"), with parameter settings configured based on current guidance. The settings should balance security and performance to make brute-force attacks sufficiently challenging for the required level of security. |
+| V11.5.1 | Random Values | Verify that all random numbers and strings which are intended to be non-guessable must be generated using a cryptographically secure pseudo-random number generator (CSPRNG) and have at least 128 bits of entropy. Note that UUIDs do not respect this condition. |

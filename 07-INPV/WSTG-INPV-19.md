@@ -144,3 +144,18 @@ curl -s "https://TARGET/fetch?url=http://COLLABORATOR_URL"
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Collaborator Everywhere | Wykrywanie SSRF przez out-of-band pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.6 | Sanitization | Verify that the application protects against Server-side Request Forgery (SSRF) attacks, by validating untrusted data against an allowlist of protocols, domains, paths and ports and sanitizing potentially dangerous characters before using the data to call another service. |
+| V13.2.4 | Backend Communication Configuration | Verify that an allowlist is used to define the external resources or systems with which the application is permitted to communicate (e.g., for outbound requests, data loads, or file access). This allowlist can be implemented at the application layer, web server, firewall, or a combination of different layers. |
+| V13.2.5 | Backend Communication Configuration | Verify that the web or application server is configured with an allowlist of resources or systems to which the server can send requests or load data or files from. |
+| V15.3.2 | Defensive Coding | Verify that where the application backend makes calls to external URLs, it is configured to not follow redirects unless it is intended functionality. |

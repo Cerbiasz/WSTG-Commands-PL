@@ -87,3 +87,15 @@ cat export.csv | grep -E "^[=+\-@]"
 |---|---|---|
 | SocketSleuth | Zaawansowane testowanie bezpieczenstwa WebSocket | [GitHub](https://github.com/snyk/socketsleuth) |
 | WebSocket Turbo Intruder | Fuzzowanie wiadomosci WebSocket z custom kodem | [GitHub](https://github.com/Hannah-PortSwigger/WebSocketTurboIntruder) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.10 | Injection Prevention | Verify that the application is protected against CSV and Formula Injection. The application must follow the escaping rules defined in RFC 4180 sections 2.6 and 2.7 when exporting CSV content. Additionally, when exporting to CSV or other spreadsheet formats (such as XLS, XLSX, or ODF), special characters (including '=', '+', '-', '@', '\t' (tab), and '\0' (null character)) must be escaped with a single quote if they appear as the first character in a field value. |

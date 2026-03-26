@@ -88,3 +88,16 @@ curl -s "https://TARGET/js/config.js" | grep -i "api_key\|token\|secret\|passwor
 |---|---|---|
 | CSRF Scanner | Automatyczne skanowanie podatnosci CSRF | [GitHub](https://github.com/ah8r/csrf) |
 | EasyCSRF | Wykrywanie slabej ochrony CSRF | [GitHub](https://github.com/0ang3el/EasyCSRF) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.5.6 | Browser Origin Separation | Verify that JSONP functionality is not enabled anywhere across the application to avoid Cross-Site Script Inclusion (XSSI) attacks. |
+| V3.5.7 | Browser Origin Separation | Verify that data requiring authorization is not included in script resource responses, like JavaScript files, to prevent Cross-Site Script Inclusion (XSSI) attacks. |

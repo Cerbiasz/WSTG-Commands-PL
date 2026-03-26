@@ -119,3 +119,15 @@ ffuf -u "https://TARGET/forgot-password" -X POST -d "username=admin&answer=FUZZ"
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.4.2 | Authentication Factor Lifecycle and Recovery | Verify that password hints or knowledge-based authentication (so-called "secret questions") are not present. |

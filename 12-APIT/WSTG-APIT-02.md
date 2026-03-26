@@ -119,3 +119,22 @@ ffuf -u "https://TARGET/api/users/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/
 |---|---|---|
 | Swurg | Parsowanie i testowanie API na podstawie Swagger/OpenAPI | [GitHub](https://github.com/AresS31/swurg) |
 | SwaggerParser | Import definicji Swagger do Burp | [GitHub](https://github.com/AresS31/SwaggerParser-BurpExtension) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
+| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |

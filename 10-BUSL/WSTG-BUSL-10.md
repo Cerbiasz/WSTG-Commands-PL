@@ -186,3 +186,29 @@ curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.1 | Business Logic Security | Verify that the application will only process business logic flows for the same user in the expected sequential step order and without skipping steps. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.2 | Business Logic Security | Verify that business logic limits are implemented per the application's documentation to avoid business logic flaws being exploited. |
+| V2.3.3 | Business Logic Security | Verify that transactions are being used at the business logic level such that either a business logic operation succeeds in its entirety or it is rolled back to the previous correct state. |
+| V2.3.4 | Business Logic Security | Verify that business logic level locking mechanisms are used to ensure that limited quantity resources (such as theater seats or delivery slots) cannot be double-booked by manipulating the application's logic. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.5 | Business Logic Security | Verify that high-value business logic flows require multi-user approval to prevent unauthorized or accidental actions. This could include but is not limited to large monetary transfers, contract approvals, access to classified information, or safety overrides in manufacturing. |

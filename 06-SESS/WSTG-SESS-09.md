@@ -151,3 +151,22 @@ curl -s -b cookies.txt -H "User-Agent: Suspicious" -H "Accept-Language: xx" TARG
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.5.1 | Defenses Against Session Abuse | Verify that the application requires full re-authentication before allowing modifications to sensitive account attributes which may affect authentication such as email address, phone number, MFA configuration, or other information used in account recovery. |
+| V7.5.2 | Defenses Against Session Abuse | Verify that users are able to view and (having authenticated again with at least one factor) terminate any or all currently active sessions. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V7.5.3 | Defenses Against Session Abuse | Verify that the application requires further authentication with at least one factor or secondary verification before performing highly sensitive transactions or operations. |

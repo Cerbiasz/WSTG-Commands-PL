@@ -112,3 +112,23 @@ wscat -c "wss://TARGET/ws"
 |---|---|---|
 | SocketSleuth | Zaawansowane testowanie WebSocket w Burp | [GitHub](https://github.com/snyk/socketsleuth) |
 | WebSocket Turbo Intruder | Fuzzowanie WebSocket z custom kodem | [GitHub](https://github.com/Hannah-PortSwigger/WebSocketTurboIntruder) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.4.1 | WebSocket | Verify that WebSocket over TLS (WSS) is used for all WebSocket connections. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.4.2 | WebSocket | Verify that, during the initial HTTP WebSocket handshake, the Origin header field is checked against a list of origins allowed for the application. |
+| V4.4.3 | WebSocket | Verify that, if the application's standard session management cannot be used, dedicated tokens are being used for this, which comply with the relevant Session Management security requirements. |
+| V4.4.4 | WebSocket | Verify that dedicated WebSocket session management tokens are initially obtained or validated through the previously authenticated HTTPS session when transitioning an existing HTTPS session to a WebSocket channel. |

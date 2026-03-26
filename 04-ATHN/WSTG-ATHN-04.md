@@ -217,3 +217,22 @@ ffuf -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/big.txt:PATH -u "http
 | Autorize | Automatyczne testowanie bledow autoryzacji i uwierzytelnienia | [GitHub](https://github.com/Quitten/Autorize) |
 | AuthMatrix | Macierz testow autoryzacji uzytkownik vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
 | Auth Analyzer | Porownywanie odpowiedzi miedzy sesjami roznych uzytkownikow | [GitHub](https://github.com/simioni87/auth_analyzer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.3.4 | General Authentication Security | Verify that, if the application includes multiple authentication pathways, there are no undocumented pathways and that security controls and authentication strength are enforced consistently. |
+| V6.1.3 | Authentication Documentation | Verify that, if the application includes multiple authentication pathways, these are all documented together with the security controls and authentication strength which must be consistently enforced across them. |

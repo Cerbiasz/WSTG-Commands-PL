@@ -189,3 +189,15 @@ ffuf -u "https://TARGET/login" -X POST -d "username=FUZZ&password=test" -w Deskt
 | Burptime | Pomiar czasu odpowiedzi dla time-based blind SQLi | [GitHub](https://github.com/virusdefender/burptime) |
 | SQLi Query Tampering | Generator payloadow SQLi z obfuskacja i tamperingiem | [GitHub](https://github.com/xer0days/SQLi-Query-Tampering) |
 | SQLMap DNS Collaborator | Eksfiltracja danych SQL przez DNS z Burp Collaborator | [GitHub](https://github.com/lucacapacci/SqlmapDnsCollaborator) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.4 | Injection Prevention | Verify that data selection or database queries (e.g., SQL, HQL, NoSQL, Cypher) use parameterized queries, ORMs, entity frameworks, or are otherwise protected from SQL Injection and other database injection attacks. This is also relevant when writing stored procedures. |

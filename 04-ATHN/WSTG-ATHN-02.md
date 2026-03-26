@@ -192,3 +192,21 @@ hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P D
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.3.2 | General Authentication Security | Verify that default user accounts (e.g., "root", "admin", or "sa") are not present in the application or are disabled. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.2.3 | Backend Communication Configuration | Verify that if a credential has to be used for service authentication, the credential being used by the consumer is not a default credential (e.g., root/root or admin/admin). |

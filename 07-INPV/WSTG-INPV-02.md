@@ -143,3 +143,23 @@ wfuzz -c -z file,Desktop/WSTG/fuzzdb-master/attack/xss/xss-rsnake.txt -X POST -d
 | XSS Validator | Automatyczna walidacja XSS z Phantomjs | [GitHub](https://github.com/nVisium/xssValidator) |
 | Burp Hunter | Plugin XSS Hunter do Burp | [GitHub](https://github.com/mystech7/Burp-Hunter) |
 | feminda | Automatyczne wyszukiwanie blind XSS | [GitHub](https://github.com/wish-i-was/femida) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.1 | Injection Prevention | Verify that output encoding for an HTTP response, HTML document, or XML document is relevant for the context required, such as encoding the relevant characters for HTML elements, HTML attributes, HTML comments, CSS, or HTTP header fields, to avoid changing the message or document structure. |
+| V1.3.1 | Sanitization | Verify that all untrusted HTML input from WYSIWYG editors or similar is sanitized using a well-known and secure HTML sanitization library or framework feature. |
+| V3.2.2 | Unintended Content Interpretation | Verify that content intended to be displayed as text, rather than rendered as HTML, is handled using safe rendering functions (such as createTextNode or textContent) to prevent unintended execution of content such as HTML or JavaScript. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.3 | Sanitization | Verify that data being passed to a potentially dangerous context is sanitized beforehand to enforce safety measures, such as only allowing characters which are safe for this context and trimming input which is too long. |

@@ -97,3 +97,15 @@ curl -X POST "https://TARGET/contact" -d "from=attacker%0ATo:victim@target.com&m
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.3.11 | Sanitization | Verify that the application sanitizes user input before passing to mail systems to protect against SMTP or IMAP injection. |

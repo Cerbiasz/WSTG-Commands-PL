@@ -146,3 +146,15 @@ zap-cli report -o output_zap_spider.html -f html
 |---|---|---|
 | Burp DOM Scanner | Rekursywny crawling i skanowanie Single Page Applications | [GitHub](https://github.com/fcavallarin/burp-dom-scanner) |
 | JSpector | Pasywne wyciaganie URL-i, endpointow i niebezpiecznych metod z JS | [GitHub](https://github.com/hisxo/JSpector) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.1.1 | Validation and Business Logic Documentation | Verify that the application's documentation defines input validation rules for how to check the validity of data items against an expected structure. This could be common data formats such as credit card numbers, email addresses, telephone numbers, or it could be an internal data format. |

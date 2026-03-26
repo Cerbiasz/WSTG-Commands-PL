@@ -177,3 +177,23 @@ openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
 |---|---|---|
 | TLS-Attacker-BurpExtension | Testowanie konfiguracji TLS serwera | [GitHub](https://github.com/RUB-NDS/TLS-Attacker-BurpExtension) |
 | Headers Analyzer | Analiza naglowkow bezpieczenstwa (HSTS, CSP) | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V12.1.1 | General TLS Security Guidance | Verify that only the latest recommended versions of the TLS protocol are enabled, such as TLS 1.2 and TLS 1.3. The latest version of the TLS protocol must be the preferred option. |
+| V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
+| V12.2.2 | HTTPS Communication with External Facing Services | Verify that external facing services use publicly trusted TLS certificates. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V12.1.2 | General TLS Security Guidance | Verify that only recommended cipher suites are enabled, with the strongest cipher suites set as preferred. L3 applications must only support cipher suites which provide forward secrecy. |

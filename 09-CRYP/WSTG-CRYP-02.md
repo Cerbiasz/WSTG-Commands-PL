@@ -161,3 +161,21 @@ done
 |---|---|---|
 | Padding Oracle Hunter | Wykrywanie i eksploatacja podatnosci Padding Oracle | [GitHub](https://github.com/AresS31/padding-oracle-hunter) |
 | Crypto Attacker | Narzedzie do atakow kryptograficznych | [GitHub](https://github.com/PortSwigger/crypto-attacker) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V11.3.1 | Encryption Algorithms | Verify that insecure block modes (e.g., ECB) and weak padding schemes (e.g., PKCS#1 v1.5) are not used. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V11.2.5 | Secure Cryptography Implementation | Verify that all cryptographic modules fail securely, and errors are handled in a way that does not enable vulnerabilities, such as Padding Oracle attacks. |

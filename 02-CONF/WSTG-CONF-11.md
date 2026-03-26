@@ -198,3 +198,16 @@ cat /tmp/bucket_names.txt | while read bucket; do echo "Sprawdzam: $bucket"; aws
 |---|---|---|
 | AWS Extender | Testowanie bezpieczenstwa uslug AWS (S3, IAM, EC2) | [GitHub](https://github.com/VirtueSecurity/aws-extender) |
 | Burp-AnonymousCloud | Wykrywanie publicznych zasobow chmurowych | [GitHub](https://github.com/initstring/cloud_enum) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.3.1 | Secret Management | Verify that a secrets management solution, such as a key vault, is used to securely create, store, control access to, and destroy backend secrets. These could include passwords, key material, integrations with databases and third-party systems, keys and seeds for time-based tokens, other internal secrets, and API keys. Secrets must not be included in application source code or included in build artifacts. For an L3 application, this must involve a hardware-backed solution such as an HSM. |
+| V13.3.2 | Secret Management | Verify that access to secret assets adheres to the principle of least privilege. |

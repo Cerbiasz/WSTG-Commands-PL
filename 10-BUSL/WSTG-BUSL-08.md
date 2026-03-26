@@ -233,3 +233,23 @@ curl -v -X POST TARGET/api/upload -F "file=@Desktop/WSTG/PayloadsAllTheThings-ma
 |---|---|---|
 | Upload Scanner | Kompleksowe testy bezpieczenstwa uploadu plikow | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
 | ZIP File Raider | Testowanie podatnosci w przetwarzaniu plikow ZIP | [GitHub](https://github.com/destine21/ZIPFileRaider) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.2.1 | File Upload and Content | Verify that the application will only accept files of a size which it can process without causing a loss of performance or a denial of service attack. |
+| V5.2.2 | File Upload and Content | Verify that when the application accepts a file, either on its own or within an archive such as a zip file, it checks if the file extension matches an expected file extension and validates that the contents correspond to the type represented by the extension. This includes, but is not limited to, checking the initial 'magic bytes', performing image re-writing, and using specialized libraries for file content validation. For L1, this can focus just on files which are used to make specific business or security decisions. For L2 and up, this must apply to all files being accepted. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V5.1.1 | File Handling Documentation | Verify that the documentation defines the permitted file types, expected file extensions, and maximum size (including unpacked size) for each upload feature. Additionally, ensure that the documentation specifies how files are made safe for end-users to download and process, such as how the application behaves when a malicious file is detected. |
+| V5.2.3 | File Upload and Content | Verify that the application checks compressed files (e.g., zip, gz, docx, odt) against maximum allowed uncompressed size and against maximum number of files before uncompressing the file. |

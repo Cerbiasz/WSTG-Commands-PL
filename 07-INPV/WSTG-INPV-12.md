@@ -147,3 +147,15 @@ ffuf -u "https://TARGET/ping?host=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/os-
 |---|---|---|
 | Command Injection Attacker | Generator payloadow OS command injection | [GitHub](https://github.com/portswigger/command-injection-attacker) |
 | Argument Injection Hammer | Wykrywanie argument injection | [GitHub](https://github.com/nccgroup/argumentinjectionhammer) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V1.2.5 | Injection Prevention | Verify that the application protects against OS command injection and that operating system calls use parameterized OS queries or use contextual command line output encoding. |

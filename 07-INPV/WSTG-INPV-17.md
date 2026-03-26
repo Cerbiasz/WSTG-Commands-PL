@@ -132,3 +132,21 @@ curl -s "https://TARGET/static/page" -H "Host: evil.com" -H "X-Forwarded-Host: e
 |---|---|---|
 | Host Header Inchecktion | Aktywne testowanie host header injection | [GitHub](https://github.com/fabianbinna/host_header_inchecktion) |
 | Collaborator Everywhere | Wstrzykiwanie naglowkow do wykrywania SSRF/pingbackow | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V3.4.1 | Browser Security Mechanism Headers | Verify that a Strict-Transport-Security header field is included on all responses to enforce an HTTP Strict Transport Security (HSTS) policy. A maximum age of at least 1 year must be defined, and for L2 and up, the policy must apply to all subdomains as well. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V4.1.3 | Generic Web Service Security | Verify that any HTTP header field used by the application and set by an intermediary layer, such as a load balancer, a web proxy, or a backend-for-frontend service, cannot be overridden by the end-user. Example headers might include X-Real-IP, X-Forwarded-*, or X-User-ID. |

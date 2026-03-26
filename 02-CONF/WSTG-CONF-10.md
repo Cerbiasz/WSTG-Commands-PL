@@ -180,3 +180,16 @@ cat output_gobuster_dns_5k.txt | awk '{print $2}' | while read sub; do cname=$(d
 |---|---|---|
 | Broken Link Hijacking | Pasywne wykrywanie zepsutych linkow do potencjalnego subdomain takeover | [GitHub](https://github.com/arbazkiraak/BurpBLH) |
 | Domain Hunter | Wyszukiwanie powiazanych domen i subdomen | [GitHub](https://github.com/bit4woo/domain_hunter) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
+| V12.2.2 | HTTPS Communication with External Facing Services | Verify that external facing services use publicly trusted TLS certificates. |

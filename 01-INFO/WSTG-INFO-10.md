@@ -194,3 +194,16 @@ Klient → CDN → WAF → Load Balancer → Reverse Proxy → App Server → Da
 |---|---|---|
 | Collaborator Everywhere | Wstrzykiwanie naglowkow do wykrywania backendowych systemow | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
 | Reverse Proxy Detector | Wykrywanie serwerow reverse proxy | [BApp Store](https://portswigger.net/bappstore/a112997070354d249b64b4cf68eabc04) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.1.1 | Configuration Documentation | Verify that all communication needs for the application are documented. This must include external services which the application relies upon and cases where an end user might be able to provide an external location to which the application will then connect. |
+| V12.3.1 | General Service to Service Communication Security | Verify that an encrypted protocol such as TLS is used for all inbound and outbound connections to and from the application, including monitoring systems, management tools, remote access and SSH, middleware, databases, mainframes, partner systems, or external APIs. The server must not fall back to insecure or unencrypted protocols. |

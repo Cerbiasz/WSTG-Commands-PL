@@ -139,3 +139,21 @@ curl -v -X POST TARGET/api/order/status -d "order_id=123&payment_status=paid"
 | Rozszerzenie | Opis | Link |
 |---|---|---|
 | Stepper | Multi-step repeater do testowania wieloetapowych workflowow | [GitHub](https://github.com/CoreyD97/Stepper) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.1 | Business Logic Security | Verify that the application will only process business logic flows for the same user in the expected sequential step order and without skipping steps. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.2 | Business Logic Security | Verify that business logic limits are implemented per the application's documentation to avoid business logic flaws being exploited. |

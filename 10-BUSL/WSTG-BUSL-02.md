@@ -138,3 +138,16 @@ curl -v -X POST TARGET/api/register -H "Content-Type: application/json" \
 |---|---|---|
 | Turbo Intruder | Szybkie wysylanie duzej liczby requestow z custom kodem | [BApp Store](https://portswigger.net/bappstore/9abfe09175d74b16842a3bbb0aa6a42c) |
 | AutoRepeater | Automatyczne powtarzanie requestow z modyfikacjami | [GitHub](https://github.com/nccgroup/AutoRepeater) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V2.3.1 | Business Logic Security | Verify that the application will only process business logic flows for the same user in the expected sequential step order and without skipping steps. |
+| V2.2.1 | Input Validation | Verify that input is validated to enforce business or functional expectations for that input. This should either use positive validation against an allow list of values, patterns, and ranges, or be based on comparing the input to an expected structure and logical limits according to predefined rules. For L1, this can focus on input which is used to make specific business or security decisions. For L2 and up, this should apply to all input. |

@@ -122,3 +122,23 @@ curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com" -H "H
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.2.2 | Password Security | Verify that users can change their password. |
+| V6.2.3 | Password Security | Verify that password change functionality requires the user's current and new password. |
+| V6.2.8 | Password Security | Verify that the application verifies the user's password exactly as received from the user, without any modifications such as truncation or case transformation. |
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.4.3 | Authentication Factor Lifecycle and Recovery | Verify that a secure process for resetting a forgotten password is implemented, that does not bypass any enabled multi-factor authentication mechanisms. |

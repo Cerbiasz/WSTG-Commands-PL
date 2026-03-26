@@ -184,3 +184,21 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 |---|---|---|
 | Software Version Reporter | Pasywne wykrywanie wersji oprogramowania serwera | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
 | Burp Retire JS | Identyfikacja podatnych wersji bibliotek JavaScript | [GitHub](https://github.com/h3xstream/burp-retire-js) |
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L2 (Standardowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V15.2.3 | Security Architecture and Dependencies | Verify that the production environment only includes functionality that is required for the application to function, and does not expose extraneous functionality such as test code, sample snippets, and development functionality. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |

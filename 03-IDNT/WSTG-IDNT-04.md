@@ -171,3 +171,21 @@ ffuf -w Desktop/WSTG/Bug-Bounty-Wordlists-main/user_field_names.txt:USER -u "htt
 ## ROZSZERZENIA BURP SUITE
 
 Brak dedykowanych rozszerzen Burp dla tego testu.
+
+---
+
+## Wskazówki ASVS
+
+Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+
+### L1 (Podstawowy)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.3.1 | General Authentication Security | Verify that controls to prevent attacks such as credential stuffing and password brute force are implemented according to the application's security documentation. |
+
+### L3 (Zaawansowany)
+
+| ID | Sekcja | Wymaganie |
+|---|---|---|
+| V6.3.8 | General Authentication Security | Verify that valid users cannot be deduced from failed authentication challenges, such as by basing on error messages, HTTP response codes, or different response times. Registration and forgot password functionality must also have this protection. |
