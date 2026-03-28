@@ -21,11 +21,19 @@ Kazdy plik `.md` zawiera gotowe komendy, payloady, rozszerzenia Burp Suite oraz 
 | `11-CLNT` | Client-side | DOM XSS, clickjacking, CORS, WebSocket |
 | `12-APIT` | API Testing | REST, GraphQL, BOLA |
 | `Payloads/` | Payloady | Gotowe listy payloadow do testow |
+| `Network/` | Infrastruktura sieciowa | Proxy, bazy danych, ELK, Docker, LDAP, SMTP — tipy do testow infra webowej |
+| `inne/` | Inne podatnosci | WAF bypass, dependency confusion, unicode injection, account takeover |
 
 ## Dodatkowe pliki
 
 - `Others.md` — dodatkowe naglowki bezpieczenstwa i konfiguracja transportu
 - `ASVS_WEB_APP.csv` — pelna baza wymagan OWASP ASVS 5.0
+
+## Zrodla
+
+- [OWASP WSTG v4.2](https://owasp.org/www-project-web-security-testing-guide/)
+- [OWASP ASVS 5.0](https://owasp.org/www-project-application-security-verification-standard/)
+- [HackTricks](https://book.hacktricks.wiki/) — skondensowane tipy w sekcjach "HackTricks Tips"
 
 ## TODO
 

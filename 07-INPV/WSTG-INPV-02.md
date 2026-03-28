@@ -163,3 +163,20 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.3.3 | Sanitization | Verify that data being passed to a potentially dangerous context is sanitized beforehand to enforce safety measures, such as only allowing characters which are safe for this context and trimming input which is too long. |
+
+
+---
+
+## HackTricks Tips
+
+### Persystencja i eskalacja
+
+- **Service Worker persistence**: `navigator.serviceWorker.register('/uploaded/sw.js')` — przechwytuje requesty przez 24h po naprawie XSS
+- **SW via JSONP** (bez uploadu): `navigator.serviceWorker.register("/jsonp?callback=onfetch=function(e){...}//", {scope: '/'})`
+- **Chrome Cache XSS**: jeśli bfcache wyłączony (Puppeteer boty) → cached API response renderowany jako HTML po `history.back()`
+- **WASM linear memory overwrite**: heap overflow w edycji nadpisuje template HTML w pamięci WASM → każdy kolejny render to XSS
+
+### Bypass DOMPurify
+
+- **DOMPurify + Marked parser**: sanitize-first, parse-second → markdown re-wprowadza wektory XSS po sanityzacji
+- **`cid:` protocol bypass**: `<a id=x name=y href="cid:&quot;onerror=alert(1)//">` — `&quot;` dekodowane at runtime

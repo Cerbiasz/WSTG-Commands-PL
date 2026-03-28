@@ -216,3 +216,27 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V14.2.5 | General Data Protection | Verify that caching mechanisms are configured to only cache responses which have the expected content type for that resource and do not contain sensitive, dynamic content. The web server should return a 404 or 302 response when a non-existent file is accessed rather than returning a different, valid file. This should prevent Web Cache Deception attacks. |
+
+
+---
+
+## HackTricks Tips
+
+### Cache Deception
+
+- **Basic**: `www.target.com/profile.php/nonexistent.js` → cache przechowuje bo `.js`, content = profil usera
+- **Extensions**: `.css`, `.js`, `.png`, `.json`, `/../test.js`
+
+### URL Discrepancy Exploits
+
+- **Delimiter abuse**: `/profile;.css` (Spring strips `;.css`), `/profile.css` (Rails strips `.css`), `/profile%00.js` (OpenLiteSpeed truncates)
+- **Static dir + traversal**: `/home/..%2fstatic/something` — cache key = `/static/something`, origin serves `/home`
+- **Encoding**: cache uses `/myAccount%3Fparam`, origin decodes to `/myAccount?param`
+
+### Cache Poisoning
+
+- **Param Miner (Burp)**: brute-force unkeyed headers/params
+- **Unkeyed headers**: `X-Forwarded-Host`, `X-Forwarded-Scheme`, `X-Host`
+- **Fat GET**: GET z body parameter — backend uses body, cache key = URL only
+- **Parameter cloaking (Ruby/Rack)**: `;` separuje params: `?keyed_param=value;unkeyed=evil`
+- **Cache poisoning DoS**: oversized headers (400 cached), `X-HTTP-Method-Override: POST` na GET endpoint, unkeyed port `Host: target:1`

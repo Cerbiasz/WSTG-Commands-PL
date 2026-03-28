@@ -128,3 +128,14 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V15.3.7 | Defensive Coding | Verify that the application has defenses against HTTP parameter pollution attacks, particularly if the application framework makes no distinction about the source of request parameters (query string, body parameters, cookies, or header fields). |
+
+
+---
+
+## HackTricks Tips
+
+- **PHP/Django/Tornado** używają **ostatniego** duplikatu parametru; **Flask/Go/Ruby** używają **pierwszego** → exploit payment/OTP/API-key flows
+- **Server-Side Parameter Pollution**: inject `%26` (encoded `&`) lub `%23` (encoded `#`) w parametrach reflected do wewnętrznych API
+- **JSON duplicate keys**: Go `encoding/json` bierze **ostatnią** wartość; Java Jackson bierze **pierwszą** → `{"action":"User","action":"Admin"}`
+- **JSON key collision**: `{"role":"administrator\x0d"}`, `{"role":"administrator\ud800"}` — front-end widzi inną wartość niż backend
+- **Go case-insensitive**: `{"AcTiOn":"AdminAction"}` matchuje `Action` field

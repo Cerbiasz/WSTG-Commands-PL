@@ -130,3 +130,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V1.4.1 | Memory, String, and Unmanaged Code | Verify that the application uses memory-safe string, safer memory copy and pointer arithmetic to detect or prevent stack, buffer, or heap overflows. |
 | V1.4.2 | Memory, String, and Unmanaged Code | Verify that sign, range, and input validation techniques are used to prevent integer overflows. |
 | V1.4.3 | Memory, String, and Unmanaged Code | Verify that dynamically allocated memory and resources are released, and that references or pointers to freed memory are removed or set to null to prevent dangling pointers and use-after-free vulnerabilities. |
+
+
+---
+
+## HackTricks Tips
+
+### Integer Overflow → bypass logiki
+
+**Boundary values**: `-1, 0, 127, 128, 255, 256, 32767, 32768, 65535, 65536, 2147483647, 2147483648, 4294967295`
+
+- **PHP signed overflow**: `$price=(int)$_POST['price'];` → wyślij `21474850` → `*100` wraps do `-2147483648` → bypass walidacji ceny
+- **JavaScript**: `parseInt("0xFFFFFFFF")` = 4294967295, `0xFFFFFFFF + 1` = 4294967296 (no overflow, ale uint32 truncation w typed arrays)

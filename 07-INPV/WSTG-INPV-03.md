@@ -129,3 +129,11 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V4.1.4 | Generic Web Service Security | Verify that only HTTP methods that are explicitly supported by the application or its API (including OPTIONS during preflight requests) can be used and that unused methods are blocked. |
+
+
+---
+
+## HackTricks Tips
+
+- **HEAD traktowany jako GET** w niektórych frameworkach (Oak, etc.) — może ominąć CSRF checks
+- **`X-HTTP-Method-Override: DELETE`** → dostęp do non-POST handlerów bez CSRF protection

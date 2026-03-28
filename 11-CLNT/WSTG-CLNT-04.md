@@ -110,3 +110,38 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.7.3 | Other Browser Security Considerations | Verify that the application shows a notification when the user is being redirected to a URL outside of the application's control, with an option to cancel the navigation. |
+
+
+---
+
+## HackTricks Tips
+
+### Open Redirect Bypass
+
+- `//evil.com` (scheme-relative)
+- `https://trusted.com@evil.com/`
+- `https://trusted.com\@evil.com/` (backslash — server waliduje jako trusted, browser normalizuje do evil)
+- `https://trusted.com.evil.com/` (suffix)
+- `%09//evil.com` (tab prefix)
+
+### Loopback bypass
+
+`0.0.0.0`, `127.1`, `2130706433`, `[::1]`, `lvh.me`
+
+### javascript: XSS pivot
+
+`javascript:alert(1)`, `java%0d%0ascript:alert(0)`, `javascript://%250Aalert(1)`
+
+### Go url.Parse fragment smuggling
+
+`/user/auth-tokens/rotate?redirectTo=/%23/..//\//attacker.com` → validator widzi `/` + fragment, response emituje `Location: /\//attacker.com`
+
+### Chain
+
+Open redirect w OAuth `redirect_uri` → kradzież authorization code/token
+
+### Client-Side Path Traversal (CSPT)
+
+- **Inject dot-segments**: `../`, `%2e%2e/`, `..;/`, `%252e%252e/` w route params
+- **Chain do CSRF/OSRF**: retarget authenticated POST/PUT/DELETE do sensitive endpoints
+- **Chain do cache deception**: inject `../../v1/token.css` → CDN cache'uje authenticated JSON

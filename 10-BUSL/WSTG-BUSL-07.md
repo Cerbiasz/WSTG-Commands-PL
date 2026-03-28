@@ -168,3 +168,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V2.4.2 | Anti-automation | Verify that business logic flows require realistic human timing, preventing excessively rapid transaction submissions. |
+
+
+---
+
+## HackTricks Tips
+
+### ReDoS (Regular Expression DoS)
+
+- **Evil patterns**: `(a+)+`, `([a-zA-Z]+)*`, `(a|a?)+`, `(.*a){x}` z `x>10`
+- **Trigger**: `"a"*N + "!"` — exponential backtracking
+- **Blind exfil via ReDoS**: `^(?=<flag>)((.*)*)*salt$` — page freezes tylko jeśli prefix matches → extract char-by-char
+- **Tools**: `regexploit`, `vuln-regex-detector`

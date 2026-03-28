@@ -202,3 +202,28 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V6.4.1 | Authentication Factor Lifecycle and Recovery | Verify that system generated initial passwords or activation codes are securely randomly generated, follow the existing password policy, and expire after a short period of time or after they are initially used. These initial secrets must not be permitted to become the long term password. |
 | V2.2.1 | Input Validation | Verify that input is validated to enforce business or functional expectations for that input. This should either use positive validation against an allow list of values, patterns, and ranges, or be based on comparing the input to an expected structure and logical limits according to predefined rules. For L1, this can focus on input which is used to make specific business or security decisions. For L2 and up, this should apply to all input. |
 | V2.2.2 | Input Validation | Verify that the application is designed to enforce input validation at a trusted service layer. While client-side validation improves usability and should be encouraged, it must not be relied upon as a security control. |
+
+
+---
+
+## HackTricks Tips
+
+### Account Pre-Hijacking
+
+- **Email variations**: case, dots, `+tag@`, null bytes (`%00`), trailing spaces, unicode confusables
+- **`victim@gmail.com@attacker.com`** — niektóre serwisy przetwarzają tylko pierwszy `@`
+- **Classic-Federated merge**: zarejestruj klasycznie z emailem ofiary zanim ona zarejestruje się via SSO
+- **Trojan Identifier**: dodaj secondary email/phone/IdP → ofiara resetuje hasło ale atakujący zachowuje secondary login
+- **Non-Verifying IdP**: utwórz konto IdP z `email_verified=false` → RP merguje na email
+
+### OTP/Verification
+
+- **Krótkie OTP (4-6 cyfr)** + brak rate limit → brute force z Turbo Intruder
+- **Multi-value smuggling**: `code=000000&code=123456`, `{"code":["000000","123456"]}`
+- **OTP not user-bound**: ten sam code działa dla różnych userów
+- **Race condition**: submit valid OTP w dwóch concurrent sessions
+
+### Inne
+
+- **Długie hasło (>200 chars)** → DoS
+- **`username@burpcollaborator.net`** → detect SSRF/callback z registration handlera

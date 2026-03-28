@@ -193,3 +193,25 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
 | V12.2.2 | HTTPS Communication with External Facing Services | Verify that external facing services use publicly trusted TLS certificates. |
+
+
+---
+
+## HackTricks Tips
+
+- **Detection**: CNAME/A records pointing do deleted services (S3, GitHub Pages, Heroku, Netlify, Vercel, Azure)
+- **Error signatures per provider**: `can-i-take-over-xyz` repo
+- **DNS wildcard amplification**: `*.example.com` CNAME do third-party → infinite valid subdomains
+
+### Impact
+
+- **Cookie theft**: subdomain może set/read cookies scoped do parent domain
+- **CORS bypass**: target whitelistuje `*.example.com`
+- **SameSite bypass**: subdomain wysyła cookies do main/sibling
+- **OAuth token theft**: jeśli takeover domain = valid `redirect_uri`
+- **CSP bypass**: jeśli subdomain w `script-src`
+- **NS record takeover**: kontrola DNS zone → set high TTL
+
+### Tools
+
+`subjack`, `subzy`, `tko-subs`, `bbot`, `dnsReaper`, `Subdominator`, nuclei `-tags takeover`

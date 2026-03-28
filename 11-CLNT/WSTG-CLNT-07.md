@@ -119,3 +119,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.5.4 | Browser Origin Separation | Verify that separate applications are hosted on different hostnames to leverage the restrictions provided by same-origin policy, including how documents or scripts loaded by one origin can interact with resources from another origin and hostname-based restrictions on cookies. |
+
+
+---
+
+## HackTricks Tips
+
+- **Origin reflection test**: wyślij `Origin: https://attacker.com` — jeśli echoed z `Allow-Credentials: true` = full read
+- **Null origin bypass**: sandboxed iframe (`srcdoc`) wysyła `Origin: null`
+- **Regex bypass — underscores**: Chrome/Firefox accept `_` w subdomains → `target.application_.attacker.com`
+- **Safari special chars**: `)`, `{`, `}` accepted w Origin domain
+- **DNS rebinding**: Singularity; `0.0.0.0` na Linux/macOS (providers block `127.0.0.1` ale accept `0.0.0.0`)
+- **Client-side cache poisoning**: reflect custom header z `<svg/onload=...>` bez `Vary: Origin`

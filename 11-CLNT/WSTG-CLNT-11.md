@@ -100,3 +100,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.5.5 | Browser Origin Separation | Verify that messages received by the postMessage interface are discarded if the origin of the message is not trusted, or if the syntax of the message is invalid. |
+
+
+---
+
+## HackTricks Tips
+
+- **Enumerate listeners**: DevTools → `getEventListeners(window)` lub szukaj `window.addEventListener("message"`
+- **Origin check bypass — `indexOf`/`search`**: `evil.com?trusted.com` passes `indexOf("trusted.com")`
+- **Wildcard targetOrigin leak**: jeśli page framable i wysyła postMessages z `*` → zmień iframe origin
+- **`null == null` bypass**: sandboxed iframe bez `allow-popups-to-escape-sandbox` → `null` origin obu stron → `e.origin === window.origin` = true
+- **Force `e.source` null**: create iframe → postMessage → delete iframe → `e.source` = null
+- **Trusted relay gadget**: znajdź "relay" page na trusted origin forwarding URL params via postMessage

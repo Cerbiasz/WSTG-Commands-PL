@@ -109,3 +109,13 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.3.11 | Sanitization | Verify that the application sanitizes user input before passing to mail systems to protect against SMTP or IMAP injection. |
+
+
+---
+
+## HackTricks Tips
+
+- **Header injection**: `From:sender@domain.com%0ACc:attacker@domain.com%0ABcc:attacker2@domain.com`
+- **PHP `mail()` 5th param**: inject sendmail flags → leak files lub RCE
+- **Email splitting (PortSwigger)**: `=?x?q?collab=40psres.net=3e=00?=foo@example.com` → weryfikacja idzie na `collab@psres.net`
+- **SSO ATO via Salesforce**: utwórz niezweryfikowane konto z emailem ofiary → loguj się do usług które ufają Salesforce

@@ -166,3 +166,25 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V2.4.2 | Anti-automation | Verify that business logic flows require realistic human timing, preventing excessively rapid transaction submissions. |
+
+
+---
+
+## HackTricks Tips
+
+### Race Conditions
+
+- **HTTP/2 single-packet attack**: wszystkie request frames na jednym TCP connection, wstrzymaj last byte, flush jednocześnie → sub-1ms window. Burp Turbo Intruder z `Engine.BURP2` + `gate`
+- **HTTP/1.1 last-byte sync**: pre-send 20-30 requests minus final byte, disable TCP_NODELAY, flush razem
+- **PHP session locking**: użyj różnych session tokens per request
+
+### Hidden Substates
+
+- Email verification + change: wyślij oba jednocześnie → verification token dla nowego emaila na stary
+- 2FA bypass: brief window zanim `enforce_mfa` ustawione
+- OAuth race na `authorization_code`: generuj multiple AT/RT pairs — niektóre przetrwają revoke
+
+### Timing Attacks
+
+- **Hidden parameter discovery**: ~5ms timing difference → Param Miner w Burp
+- **Scoped SSRF discovery**: timing difference między allowed vs blocked domains

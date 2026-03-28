@@ -188,3 +188,30 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V2.4.1 | Anti-automation | Verify that anti-automation controls are in place to protect against excessive calls to application functions that could lead to data exfiltration, garbage-data creation, quota exhaustion, rate-limit breaches, denial-of-service, or overuse of costly resources. |
+
+
+---
+
+## HackTricks Tips
+
+### Rate Limit Bypass
+
+**Header spoofing** (rotate):
+```
+X-Forwarded-For: 127.0.0.1
+X-Originating-IP: 127.0.0.1
+X-Remote-IP: 127.0.0.1
+X-Client-IP: 127.0.0.1
+```
+
+**Endpoint variation**: `/api/v1/sign-up`, `/Sing-up`, `/SignUp`, `/api/sign-up`, `+junk params`
+
+**Protocol-level bypass**:
+- HTTP/2 multiplexing: 100+ streams w jednym TLS connection — wiele limitów liczy connections, nie streams
+- GraphQL aliases: `mutation { a: verify(code:"111111"){token} b: verify(code:"222222"){token} ... }`
+- Batch/bulk REST: wrap w `POST /v2/batch`
+- WebSocket/gRPC: po upgrade, frames omijają per-request countery
+
+**Timing**: fire max requests tuż przed bucket reset (`X-RateLimit-Reset`). CDN PoP-sharded countery (Cloudflare) → routuj przez różne geo egress.
+
+**Key insight**: nawet po lockout, wyślij valid OTP — serwer może zwrócić 200 mimo 401 dla złych kodów.

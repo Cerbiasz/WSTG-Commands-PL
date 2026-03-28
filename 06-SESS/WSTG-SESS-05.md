@@ -208,3 +208,37 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V3.5.1 | Browser Origin Separation | Verify that, if the application does not rely on the CORS preflight mechanism to prevent disallowed cross-origin requests to use sensitive functionality, these requests are validated to ensure they originate from the application itself. This may be done by using and validating anti-forgery tokens or requiring extra HTTP header fields that are not CORS-safelisted request-header fields. This is to defend against browser-based request forgery attacks, commonly known as cross-site request forgery (CSRF). |
 | V3.5.2 | Browser Origin Separation | Verify that, if the application relies on the CORS preflight mechanism to prevent disallowed cross-origin use of sensitive functionality, it is not possible to call the functionality with a request which does not trigger a CORS-preflight request. This may require checking the values of the 'Origin' and 'Content-Type' request header fields or using an extra header field that is not a CORS-safelisted header-field. |
 | V3.5.3 | Browser Origin Separation | Verify that HTTP requests to sensitive functionality use appropriate HTTP methods such as POST, PUT, PATCH, or DELETE, and not methods defined by the HTTP specification as "safe" such as HEAD, OPTIONS, or GET. Alternatively, strict validation of the Sec-Fetch-* request header fields can be used to ensure that the request did not originate from an inappropriate cross-origin call, a navigation request, or a resource load (such as an image source) where this is not expected. |
+
+
+---
+
+## HackTricks Tips
+
+### Token Bypass
+
+- **Usuń CSRF token entirely** — niektóre apps walidują tylko jeśli parametr present
+- **Pusty token**: `csrf=`
+- **Cross-user token**: użyj tokenu z własnej sesji (global token pool)
+- **Custom header token**: test bez headera i z inną wartością
+
+### Method Bypass
+
+- **POST → GET**: jeśli endpoint czyta `$_REQUEST`, replay jako GET bez tokenu
+- **`X-HTTP-Method-Override: DELETE`** → non-POST handler bez CSRF
+- **HEAD traktowany jako GET** w niektórych frameworkach
+
+### Content-Type Bypass
+
+- `enctype="text/plain"` → wyślij JSON-like data bez triggering preflight
+- Niektóre backend'y przetwarzają JSON niezależnie od Content-Type
+
+### Referrer Bypass
+
+- `<meta name="referrer" content="never">` → suppress Referer
+- URL z trusted domain jako query: `https://attacker.com/?victim.com`
+- `history.pushState` inject trusted domain do URL przed submit
+
+### Chaining
+
+- **Login CSRF → stored XSS**: force victim do konta atakującego z stored XSS
+- **Stored CSRF via rich-text**: `<img src="...state-changing-GET...">`

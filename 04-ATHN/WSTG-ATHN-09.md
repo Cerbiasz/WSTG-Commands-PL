@@ -142,3 +142,37 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V6.4.3 | Authentication Factor Lifecycle and Recovery | Verify that a secure process for resetting a forgotten password is implemented, that does not bypass any enabled multi-factor authentication mechanisms. |
+
+
+---
+
+## HackTricks Tips
+
+### Token Leakage
+
+- **Referer**: po kliknięciu reset link → nawiguj do third-party → token w `Referer` header
+- **API response**: sprawdź JSON body na `resetToken`
+- **Wayback/gau**: szukaj wcześniej wydanych reset links
+
+### Host Header Poisoning
+
+Inject `Host: attacker.com` lub `X-Forwarded-Host: attacker.com` → ofiara dostaje reset link na domenę atakującego
+
+### Email Parameter Manipulation
+
+```
+email=victim@mail.com&email=attacker@mail.com
+email=victim@mail.com%0ACc:attacker@mail.com
+{"email":["victim@mail.com","attacker@mail.com"]}
+```
+
+### Token Weaknesses
+
+- Analizuj entropię z **Burp Sequencer**; szukaj tokenów opartych na timestamp/userID/email
+- **UUID v1**: `guidtool` do prediction/generation
+- Test czy expired tokens nadal działają
+- Test czy twój token działa dla emaila ofiary (not session-bound)
+
+### Username Collision
+
+Register `"admin "` (ze spacją) → reset → token idzie na twój email → reset konta "admin"

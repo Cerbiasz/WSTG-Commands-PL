@@ -240,3 +240,19 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V6.2.10 | Password Security | Verify that a user's password stays valid until it is discovered to be compromised or the user rotates it. The application must not require periodic credential rotation. |
 | V6.2.11 | Password Security | Verify that the documented list of context specific words is used to prevent easy to guess passwords being created. |
 | V6.2.12 | Password Security | Verify that passwords submitted during account registration or password changes are checked against a set of breached passwords. |
+
+
+---
+
+## HackTricks Tips
+
+### Captcha Bypass
+
+- **Pomiń parametr captcha** entirely; spróbuj GET zamiast POST
+- **Puste pole**: `captcha=`
+- **Sprawdź source/cookies** — captcha value leaked
+- **Reuse** poprzedniej valid captcha value
+- **Mathematical captchas**: regex parsing + automatyzacja
+- **Limited image set**: hash MD5 → lookup table
+- **OCR**: Tesseract; audio → speech-to-text APIs
+- **Serwisy**: CapSolver (reCAPTCHA v2/v3, Cloudflare Turnstile, GeeTest)

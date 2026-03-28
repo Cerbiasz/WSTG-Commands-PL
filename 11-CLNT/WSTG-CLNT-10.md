@@ -132,3 +132,16 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V4.4.2 | WebSocket | Verify that, during the initial HTTP WebSocket handshake, the Origin header field is checked against a list of origins allowed for the application. |
 | V4.4.3 | WebSocket | Verify that, if the application's standard session management cannot be used, dedicated tokens are being used for this, which comply with the relevant Session Management security requirements. |
 | V4.4.4 | WebSocket | Verify that dedicated WebSocket session management tokens are initially obtained or validated through the previously authenticated HTTPS session when transitioning an existing HTTPS session to a WebSocket channel. |
+
+
+---
+
+## HackTricks Tips
+
+- **CSWSH (Cross-Site WebSocket Hijacking)**: jeśli auth cookie-only bez CSRF token i `SameSite=None` → open cross-origin WS z malicious page
+- **Origin check disabled**: jeśli `CheckOrigin` always returns `true` (Gorilla, etc.) → any page otwiera socket
+- **Localhost port scanning**: brute ports 20000-36000 z `new WebSocket("ws://127.0.0.1:PORT/")`, detect `onopen`
+- **Prototype pollution via Socket.IO**: `{"__proto__":{"initialPacket":"Polluted"}}`
+- **DoS Ping of Death**: WS frame z `Integer.MAX_VALUE` payload length bez body → OOM crash
+- **Race conditions**: WebSocket Turbo Intruder z `THREADED` engine
+- **Tool**: STEWS (`PalindromeLabs/STEWS`) — auto-discover i fingerprint WS endpoints

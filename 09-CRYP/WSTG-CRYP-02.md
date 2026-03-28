@@ -179,3 +179,12 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V11.2.5 | Secure Cryptography Implementation | Verify that all cryptographic modules fail securely, and errors are handled in a way that does not enable vulnerabilities, such as Padding Oracle attacks. |
+
+
+---
+
+## HackTricks Tips
+
+- **Cookie**: `padbuster <url> <encrypted_cookie> <block_size> -cookies "auth=<cookie>"`
+- **ECB mode detection**: identyczne dane użytkowników → powtórzone bloki w cookie → block-swapping
+- **CBC-MAC z null IV**: sign `administ`, sign `rator\x00\x00\x00 XOR t` → forge `administrator`

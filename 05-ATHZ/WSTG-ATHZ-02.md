@@ -165,3 +165,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |
+
+
+---
+
+## HackTricks Tips
+
+### 403/401 Bypass
+
+- **Path confusion**: `/admin` → `//admin`, `/./admin`, `/admin/`, `/admin..;/`, `/%2e/admin`
+- **Nginx + Node.js**: `\xA0` za ścieżką; Flask: `\x85`; Spring Boot: `;` za ścieżką
+- **PHP-FPM**: `/admin.php/index.php` gdy tylko `/admin.php` zablokowany
+- **ModSecurity v3**: `%3f` w path — ModSec kończy path, backend dostaje `%3f` literalnie

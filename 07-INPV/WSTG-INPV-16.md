@@ -133,3 +133,32 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V4.2.2 | HTTP Message Structure Validation | Verify that when generating HTTP messages, the Content-Length header field does not conflict with the length of the content as determined by the framing of the HTTP protocol, in order to prevent request smuggling attacks. |
 | V4.2.3 | HTTP Message Structure Validation | Verify that the application does not send nor accept HTTP/2 or HTTP/3 messages with connection-specific header fields such as Transfer-Encoding to prevent response splitting and header injection attacks. |
 | V4.2.5 | HTTP Message Structure Validation | Verify that, if the application (backend or frontend) builds and sends requests, it uses validation, sanitization, or other mechanisms to avoid creating URIs (such as for API calls) or HTTP request header fields (such as Authorization or Cookie), which are too long to be accepted by the receiving component. This could cause a denial of service, such as when sending an overly long request (e.g., a long cookie header field), which results in the server always responding with an error status. |
+
+
+---
+
+## HackTricks Tips
+
+### Typy desync
+
+- **CL.TE**: front-end → Content-Length, back-end → Transfer-Encoding
+- **TE.CL**: odwrotnie
+- **TE.TE obfuskacja**: `Transfer-Encoding: xchunked`, `Transfer-Encoding\n: chunked`, duplicate TE headers
+- **CL.0 / TE.0**: back-end ignoruje CL/TE (traktuje jako 0)
+
+### Konfiguracja Burp
+
+Wyłącz "Update Content-Length" i "Normalize HTTP/1 line endings" w Repeater. Użyj HTTP Request Smuggler extension.
+
+### H2 Downgrades
+
+- **H2.TE / H2.CL**: jeśli front = HTTP/2, back = HTTP/1 → inject `Transfer-Encoding: chunked` w HTTP/2 headers
+- **h2c smuggling**: HAProxy/Traefik/Nuster forwarding `Upgrade: h2c` → bypass WAF, auth, path restrictions. Tool: `h2csmuggler.py`
+- **WebSocket smuggling**: fałszywy Upgrade z `Sec-WebSocket-Version` → proxy widzi "upgrade", otwiera tunel
+- **Connection contamination**: HTTP/2 connection coalescing — dwie domeny na tym samym CDN IP + wildcard TLS cert
+
+### Response Queue Poisoning
+
+- Wyślij 2 kompletne requesty (nie 1 + pół) → drugi response trafia do następnej ofiary
+- **HEAD injection XSS**: inject HEAD request z `Content-Length` matching attacker content
+- **Cache poisoning via desync**: injected response jest cache'owany dla wszystkich

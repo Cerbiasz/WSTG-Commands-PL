@@ -175,3 +175,21 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |
+
+
+---
+
+## HackTricks Tips
+
+### gRPC-Web
+
+- **Enumerate via reflection**: `buf curl --protocol grpcweb https://host --list-methods`
+- **Reverse JS bundle**: `python3 grpc-scan.py --file main.js` — extract service paths + schemas
+- **CORS**: `Origin: https://evil.tld` — jeśli reflects z `Allow-Credentials: true` = cross-site authenticated calls
+- **JSON transcoder bypass**: `application/json` POST do `/<pkg>.<Service>/<Method>` — auth/route mismatches
+
+### SOAP / JAX-WS ThreadLocal Auth Bypass
+
+- JAX-WS handler stores authenticated `Subject` w static `ThreadLocal`; nigdy nie czyści na missing header
+- **Attack**: spam header-less SOAP bodies → thread reuse stale admin Subject
+- **Discovery**: szukaj `ThreadLocal`, `SubjectHolder`, `@WebService` w EAR/WAR

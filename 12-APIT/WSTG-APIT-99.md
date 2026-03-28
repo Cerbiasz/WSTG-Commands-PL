@@ -163,3 +163,11 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V4.3.1 | GraphQL | Verify that a query allowlist, depth limiting, amount limiting, or query cost analysis is used to prevent GraphQL or data layer expression Denial of Service (DoS) as a result of expensive, nested queries. |
 | V4.3.2 | GraphQL | Verify that GraphQL introspection queries are disabled in the production environment unless the GraphQL API is meant to be used by other parties. |
+
+
+---
+
+## HackTricks Tips
+
+- **Rate limit bypass via aliases**: `mutation { a: verify(code:"111111"){token} b: verify(code:"222222"){token} ... }` — wiele operacji w jednym request
+- **Batch operations**: wrap w single request aby ominąć per-request rate limiting

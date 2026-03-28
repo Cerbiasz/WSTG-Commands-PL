@@ -128,3 +128,12 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V15.3.3 | Defensive Coding | Verify that the application has countermeasures to protect against mass assignment attacks by limiting allowed fields per controller and action, e.g., it is not possible to insert or update a field value when it was not intended to be part of that action. |
+
+
+---
+
+## HackTricks Tips
+
+- **Discovery**: zrób normalny update, obserwuj response na dodatkowe pola (`roles`, `isAdmin`, `status`) — schema leak
+- **Escalate**: dodaj `"roles": [{"id":1,"name":"ADMIN"}]` do body; wyloguj/zaloguj po zmianie dla nowego tokenu
+- **Grep JS bundles**: `strings app.*.js | grep -iE "role|admin|isAdmin|permission" | sort -u`

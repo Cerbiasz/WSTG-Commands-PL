@@ -104,3 +104,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.4.6 | Browser Security Mechanism Headers | Verify that the web application uses the frame-ancestors directive of the Content-Security-Policy header field for every HTTP response to ensure that it cannot be embedded by default and that embedding of specific resources is allowed only when necessary. Note that the X-Frame-Options header field, although supported by browsers, is obsolete and may not be relied upon. |
+
+
+---
+
+## HackTricks Tips
+
+- **Bypass frame-busting JS**: `sandbox="allow-forms allow-scripts"` na iframe — disables top navigation checks
+- **DoubleClickjacking**: exploit timing gap mousedown/onclick → swap victim page during double-click, bypass ALL standard defenses
+- **Popup-based** (no iframe): `window.open` + `moveTo()` pod cursor → redirect do target origin
+- **SVG filter UI redressing**: CSS `filter:url(#svg-filter)` na cross-origin iframes — warp/mask UI
+- **Self-XSS + clickjacking chain**: prepopulate form via GET z XSS payload → trick user into submit
+- **Iframe trap**: inject full-viewport iframe na initial XSS → mirror navigation via History API → credential capture

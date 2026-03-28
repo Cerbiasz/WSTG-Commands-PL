@@ -150,3 +150,13 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V4.1.3 | Generic Web Service Security | Verify that any HTTP header field used by the application and set by an intermediary layer, such as a load balancer, a web proxy, or a backend-for-frontend service, cannot be overridden by the end-user. Example headers might include X-Real-IP, X-Forwarded-*, or X-User-ID. |
+
+
+---
+
+## HackTricks Tips
+
+### Hop-by-Hop Header Abuse
+
+- **Strip security headers**: dodaj header ofiary do `Connection:` hop-by-hop listy — np. `Connection: close, X-Forwarded-For` → proxy strip'uje → bypass IP-based ACL
+- **Cache poisoning via hop-by-hop**: dodaj `Cookie` do `Connection:` header → cached response jest session-specific → session hijacking

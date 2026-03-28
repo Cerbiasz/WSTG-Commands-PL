@@ -204,3 +204,36 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.3.5 | Cookie Setup | Verify that when the application writes a cookie, the cookie name and value length combined are not over 4096 bytes. Overly large cookies will not be stored by the browser and therefore not sent with requests, preventing the user from using application functionality which relies on that cookie. |
+
+
+---
+
+## HackTricks Tips
+
+### HttpOnly Bypass
+
+- **PHPInfo page** reflects cookies w HTML → XSS fetch + regex-extract session ID
+- **Cookie Jar Overflow**: flood ~700 cookies → evict HttpOnly cookie → reset z malicious value
+- **Cookie Sandwich**: `$Version=1` + quoted-string → trap HttpOnly cookie w reflected response
+
+### Cookie Tossing
+
+- **Z controlled subdomain**: `document.cookie = "session=attacker_val; Domain=.example.com; Path=/app/login;"`
+- **Session fixation**: set known cookie value before victim login → hijack jeśli session nie rotuje
+- **CSRF token fixation** via tossing: set known CSRF cookie → forge requests
+- **Path-specific tossing**: bardziej specyficzny path cookie ma priorytet
+
+### `__Host-` / `__Secure-` Bypass
+
+- **Unicode whitespace prefix** (U+2000, U+0085, U+00A0) → browser allows, backend normalizes
+- **Java `$Version=1`**: trigger RFC2109 parsing → forge prefixed cookies
+- **PHP**: some character prefixes normalized to underscores
+
+### Cookie Bomb (DoS)
+
+Ustaw wiele dużych cookies na domenie → ofiara wysyła oversized requests → 413 → user-targeted DoS
+
+### Cryptographic Weaknesses
+
+- **Padding Oracle**: `padbuster` jeśli cookie używa CBC
+- **ECB mode**: identyczne dane → powtórzne bloki → block-swapping attacks

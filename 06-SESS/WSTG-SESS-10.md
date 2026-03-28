@@ -262,3 +262,36 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V9.2.2 | Token content | Verify that the service receiving a token validates the token to be the correct type and is meant for the intended purpose before accepting the token's contents. For example, only access tokens can be accepted for authorization decisions and only ID Tokens can be used for proving user authentication. |
 | V9.2.3 | Token content | Verify that the service only accepts tokens which are intended for use with that service (audience). For JWTs, this can be achieved by validating the 'aud' claim against an allowlist defined in the service. |
 | V9.2.4 | Token content | Verify that, if a token issuer uses the same private key for issuing tokens to different audiences, the issued tokens contain an audience restriction that uniquely identifies the intended audiences. This will prevent a token from being reused with an unintended audience. If the audience identifier is dynamically provisioned, the token issuer must validate these audiences in order to make sure that they do not result in audience impersonation. |
+
+
+---
+
+## HackTricks Tips
+
+### Algorithm Attacks
+
+- **`alg: none`**: strip signature, server może accept
+- **RS256 → HS256** (CVE-2016-5431): extract public key (`/.well-known/jwks.json` lub TLS cert), re-sign jako HMAC secret
+- **Embedded JWK** (CVE-2018-0114): generuj RSA keypair, embed public key w `jwk` header
+- **`jku`/`x5u` spoofing**: point do attacker-controlled URL z JWKS/PEM; też SSRF vector
+
+### `kid` Header Attacks
+
+- **Path traversal**: `"kid": "../../dev/null"` z pustym HMAC secret (`""` lub `AA==`)
+- **Known-content file**: `/proc/sys/kernel/randomize_va_space` = `2` → secret = `2`
+- **SQL injection**: `non-existent' UNION SELECT 'ATTACKER';-- -`
+- **OS command injection** jeśli `kid` przekazywany do shell
+
+### Secret Cracking
+
+```bash
+hashcat -a 0 -m 16500 jwt.txt wordlist.txt -r best64.rule
+python3 jwt_tool.py <JWT> -C -d wordlist.txt
+```
+
+### Inne
+
+- **Flip bytes w signature** — jeśli accepted = brak walidacji
+- **Cross-service relay**: token z App A accepted przez App B (ten sam JWT service)
+- **JTI overflow**: JTI 4 digits (0001-9999) → 10001 replays ID 0001
+- **Quick audit**: `python3 jwt_tool.py -M at -t "https://target/api" -rh "Authorization: Bearer <JWT>"`

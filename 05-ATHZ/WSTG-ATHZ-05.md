@@ -175,3 +175,45 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V10.7.1 | Consent Management | Verify that the authorization server ensures that the user consents to each authorization request. If the identity of the client cannot be assured, the authorization server must always explicitly prompt the user for consent. |
 | V10.7.2 | Consent Management | Verify that when the authorization server prompts for user consent, it presents sufficient and clear information about what is being consented to. When applicable, this should include the nature of the requested authorizations (typically based on scope, resource server, Rich Authorization Requests (RAR) authorization details), the identity of the authorized application, and the lifetime of these authorizations. |
 | V10.7.3 | Consent Management | Verify that the user can review, modify, and revoke consents which the user has granted through the authorization server. |
+
+
+---
+
+## HackTricks Tips
+
+### Redirect URI Attacks
+
+- **Brak walidacji**: `redirect_uri=https://attacker.com/`
+- **Regex bypass**: `match.com.evil.com`, `evil.com#match.com`, `match.com@evil.com`
+- **Directory traversal**: `/oauth/../anything` jeśli sprawdzany tylko prefix
+- **XSS na allowed domain**: code leaks via script execution
+- **Wildcard subdomains**: subdomain takeover → valid callback
+
+### State Parameter
+
+- **Brak `state`** → cały login jest CSRF-owalny
+- **`state` nie walidowany** w response → tamper i replay
+- **Fixation**: podaj własny `state` w crafted auth URL
+
+### Token/Code Issues
+
+- **Code reuse**: replay code dwukrotnie; race condition z Turbo Intruder
+- **Code not bound to client**: redeem App A's code na App B's token endpoint
+- **Everlasting codes**: test redemption po 5-10 minutach
+- **`access_token` w URL** → browser history, Referer, analytics logs
+
+### SAML
+
+- **Signature Removal**: Burp SAML Raider → "Remove Signatures" → forward
+- **Certificate Faking**: "Save and Self-Sign" → re-sign z self-signed cert
+- **XML Signature Wrapping (XSW #1-#8)**: forged assertion w różnych pozycjach struktury; SAML Raider automatyzuje
+- **CVE-2024-45409 (ruby-saml/GitLab)**: patch NameID, assertion IDs, references — `python3 CVE-2024-45409.py -r response -n admin@x.com`
+- **XXE w SAML**: SAMLResponse = deflate-compressed Base64 XML → inject `<!DOCTYPE>` z external entity
+- **XSLT injection**: transforms wykonywane PRZED weryfikacją podpisu
+- **Token Recipient Confusion**: replay SAMLResponse z SP-Legit na SP-Target jeśli oba ufają temu samemu IdP
+
+### Inne
+
+- **`prompt=none`**: suppress consent jeśli user zalogowany
+- **Mutable claims**: `sub` vs `email` confusion — IdP pozwala zmienić email → ATO via "Login with Google"
+- **Dynamic Client Registration SSRF**: inject attacker URLs w `logo_uri`, `jwks_uri`

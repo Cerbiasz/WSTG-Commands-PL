@@ -267,3 +267,13 @@ Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas 
 | V5.2.4 | File Upload and Content | Verify that a file size quota and maximum number of files per user are enforced to ensure that a single user cannot fill up the storage with too many files, or excessively large files. |
 | V5.2.5 | File Upload and Content | Verify that the application does not allow uploading compressed files containing symlinks unless this is specifically required (in which case it will be necessary to enforce an allowlist of the files that can be symlinked to). |
 | V5.2.6 | File Upload and Content | Verify that the application rejects uploaded images with a pixel size larger than the maximum allowed, to prevent pixel flood attacks. |
+
+
+---
+
+## HackTricks Tips
+
+- **SVG XXE**: `<image xlink:href="file:///etc/passwd">` w uploaded SVG
+- **DOCX/XLSX XXE**: unzip → inject XXE do XML → rezip i upload
+- **PDF upload → XXE/CORS bypass**: inject XXE via PDF form objects; cross-origin PDF read via Chrome PDF viewer
+- **ImageMagick**: MSL payload → arbitrary file write (np. webshell) na serwer
