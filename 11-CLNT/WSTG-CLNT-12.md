@@ -1,107 +1,107 @@
 # WSTG-CLNT-12 — Testing Browser Storage
 
-## Cele
+## Cel
 
-- Determine whether the site is storing sensitive data in client-side storage
+Audyt browser-side storage (localStorage, sessionStorage, IndexedDB, cookies bez HttpOnly) — co aplikacja przechowuje. Sensitive data (tokens, PII) w localStorage = XSS = pełen takeover. JWT w localStorage to klasyczny anti-pattern.
 
-## KOMENDY
+> **Test manual**: storage audit przez DevTools > Application > Storage. Nuclei nie ma direct testu.
 
-### Sprawdzenie browser storage z DevTools
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# F12 > Application > Storage (localStorage, sessionStorage, IndexedDB, Cookies)
+### Metodologia (5 kroków)
 
-```
+1. **DevTools storage walk**: per page (login, dashboard, settings) → DevTools > Application > Storage → przejrzyj wszystkie kategorie.
+2. **Search for secrets**: grep dla `token`, `auth`, `password`, `email`, `apikey`, `csrf`, `session`.
+3. **Logout test**: po logout, czy storage jest cleared? Pozostały data = potential leak.
+4. **XSS impact test**: jeśli token w localStorage, XSS daje pełny dostęp do tokena (niezależnie od HttpOnly cookies).
+5. **Encryption check**: czy dane w storage są encrypted (rzadko ale niektóre apps tak robią)?
 
-### Automatyczne sprawdzenie via JS console
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-# localStorage: Object.keys(localStorage).forEach(k => console.log(k, localStorage[k]))
-# sessionStorage: Object.keys(sessionStorage).forEach(k => console.log(k, sessionStorage[k]))
-
-```
-
-### Szukanie wrazliwych danych
-
-```bash
-# Tokeny, hasla, PII, klucze API, dane platnosci
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test manualny
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Otworz DevTools > Application > Storage
-2. Sprawdz localStorage pod katem tokenow, hasel, PII
-3. Sprawdz sessionStorage pod katem wrazliwych danych
-4. Sprawdz IndexedDB i WebSQL
-5. Sprawdz cookies pod katem wrazliwych danych bez flagi Secure/HttpOnly
-6. Sprawdz czy dane sa szyfrowane w storage
-
-
----
+- [ ] localStorage content per page
+- [ ] sessionStorage content per page
+- [ ] IndexedDB databases
+- [ ] Cookies (zwłaszcza bez HttpOnly)
+- [ ] JWT tokens w storage
+- [ ] PII (email, name, address) w storage
+- [ ] API keys w storage
+- [ ] CSRF tokens lokalizacja (cookie HttpOnly OK, localStorage NIE)
+- [ ] Storage cleared at logout
+- [ ] Storage encryption (rare)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — HTML5_Security_Cheat_Sheet.md, Session_Management_Cheat_Sheet.md
 
-### Ryzyka przechowywania danych w przegladarce
+### Ryzyka przechowywania danych w przeglądarce
 
-- **localStorage**: dostepne dla KAZDEGO JavaScript na tej samej domenie — XSS = pelen dostep
-- **sessionStorage**: jak localStorage ale per tab — wciaz dostepne przez XSS
-- **IndexedDB/WebSQL**: wieksza pojemnosc, te same ryzyka
-- **Cookies bez HttpOnly**: dostepne przez `document.cookie` — XSS moze je wykrasc
+- **localStorage**: dostępne dla KAŻDEGO JavaScript na tej samej domenie — XSS = pełen dostęp
+- **sessionStorage**: jak localStorage ale per tab — wciąż dostępne przez XSS
+- **IndexedDB/WebSQL**: większa pojemność, te same ryzyka
+- **Cookies bez HttpOnly**: dostępne przez `document.cookie` — XSS może je wykraść
 
-### Co NIE powinno byc w client-side storage
+### Co NIE powinno być w client-side storage
 
-- **Tokeny sesji / JWT** — uzywaj HttpOnly cookies zamiast localStorage
-- **Hasla** — NIGDY nie przechowuj hasel po stronie klienta
-- **PII** (dane osobowe): imie, email, adres, PESEL, numer karty
-- **Klucze API** — nie umieszczaj w JavaScript / storage — uzywaj backend proxy
-- **CSRF tokeny** — powinny byc w HttpOnly cookies lub ukrytych polach formularza
+- **Tokeny sesji / JWT** — używaj HttpOnly cookies zamiast localStorage
+- **Hasła** — NIGDY nie przechowuj haseł po stronie klienta
+- **PII** (dane osobowe): imię, email, adres, PESEL, numer karty
+- **Klucze API** — nie umieszczaj w JavaScript / storage — używaj backend proxy
+- **CSRF tokeny** — powinny być w HttpOnly cookies lub ukrytych polach formularza
 
 ### Obrona
 
-- **HttpOnly cookies** dla tokenow sesji — niedostepne dla JavaScript
+- **HttpOnly cookies** dla tokenów sesji — niedostępne dla JavaScript
 - **Minimalizuj dane** w storage — przechowuj MINIMUM potrzebnych informacji
-- **Czysc storage przy wylogowaniu**: `localStorage.clear()`, `sessionStorage.clear()`
-- **Waliduj dane** odczytane z storage — moga byc zmodyfikowane przez atakujacego lub malware
-- **Szyfruj wrazliwe dane** w storage jesli MUSISZ je przechowywac (Web Crypto API)
-- **Ustaw krotki TTL** na danych w storage — nie przechowuj danych bez daty wygasniecia
+- **Czyść storage przy wylogowaniu**: `localStorage.clear()`, `sessionStorage.clear()`
+- **Waliduj dane** odczytane z storage — mogą być zmodyfikowane przez atakującego lub malware
+- **Szyfruj wrażliwe dane** w storage jeśli MUSISZ je przechowywać (Web Crypto API)
+- **Ustaw krótki TTL** na danych w storage — nie przechowuj danych bez daty wygaśnięcia
 
 ### Testowanie
 
 - DevTools > Application > Storage: przejrzyj WSZYSTKIE dane w localStorage, sessionStorage, IndexedDB, cookies
-- Szukaj: tokenow, hasel, kluczy API, PII, danych finansowych
-- Sprawdz czy dane sa czyszczone po wylogowaniu
-- Sprawdz czy dane sa szyfrowane
+- Szukaj: tokenów, haseł, kluczy API, PII, danych finansowych
+- Sprawdź czy dane są czyszczone po wylogowaniu
+- Sprawdź czy dane są szyfrowane
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **JWT in localStorage debate**: większość OWASP / OAuth experts rekomenduje HttpOnly cookies > localStorage. Argumenty for localStorage (CSRF immunity) są weak vs XSS impact.
+- **IndexedDB vulnerabilities**: niektóre aplikacje używają IndexedDB jako persistent storage z encrypted user data — atakujący XSS extracts encrypted blobs.
+- **Web SQL Database** (deprecated): legacy aplikacje mogą jeszcze używać — same vulnerability profile jak localStorage.
+- **Cache API + Service Worker**: Service Worker z access do Cache API może persist sensitive responses → XSS pivots do persistent data leak.
+- **Credential Management API**: nowe API browser pozwala na storage credentials — ale wymaga proper HTTPS + scope.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **localStorage.clear() not called at logout**: tokeny zostają, atakujący XSS na following user session steals stale data.
+- **OAuth tokens w localStorage**: anti-pattern. Lepiej HttpOnly cookies + CSRF protection.
+- **Encrypted localStorage with key in JS**: jeśli encryption key jest w JS bundle, atakujący znajduje key + decrypts = pointless encryption.
 
-### L1 (Podstawowy)
+### Świeżynki z research
+
+- **OWASP HTML5 Security**: https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html
+- **HackTricks Browser Storage**: https://book.hacktricks.xyz/pentesting-web
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Storage Inspector | Per-request storage state capture | community ext |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/12-Testing_Browser_Storage
+- OWASP HTML5 Security CS: https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+- HackTricks Pentesting Web: https://book.hacktricks.xyz/pentesting-web
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V14.3.1 | Client-side Data Protection | Verify that authenticated data is cleared from client storage, such as the browser DOM, after the client or session is terminated. The 'Clear-Site-Data' HTTP response header field may be able to help with this but the client-side should also be able to clear up if the server connection is not available when the session is terminated. |
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V14.3.2 | Client-side Data Protection | Verify that the application sets sufficient anti-caching HTTP response header fields (i.e., Cache-Control: no-store) so that sensitive data is not cached in browsers. |
-| V14.3.3 | Client-side Data Protection | Verify that data stored in browser storage (such as localStorage, sessionStorage, IndexedDB, or cookies) does not contain sensitive data, with the exception of session tokens. |
+| V8.2.2 | Sensitive Data (L1) | No sensitive data in browser localStorage/sessionStorage. |
+| V8.2.3 | Sensitive Data (L2) | No tokens or session IDs in browser storage. |
+| V3.4.1 | Cookie-based Session (L1) | HttpOnly flag on session cookies. |

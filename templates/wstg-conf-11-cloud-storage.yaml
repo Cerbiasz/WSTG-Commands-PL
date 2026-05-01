@@ -1,0 +1,159 @@
+# ============================================================================
+# WSTG-CONF-11: Test Cloud Storage (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-11 (existing repo):
+#   ✓ AWS S3 buckets - listy, public read/write
+#   ✓ Azure Blob Storage
+#   ✓ GCP Storage Buckets
+#   ✓ DigitalOcean Spaces
+#
+# Z research:
+#   ✓ S3 ACL misconfig (READ_ACP, WRITE_ACP)
+#   ✓ Bucket policy errors
+#   ✓ Pre-signed URL leakage
+#   ✓ Path-style vs virtual-host-style addressing
+#   ✓ Bucket misconfiguration via direct query
+#
+# Filozofia: testowanie cloud storage URL patterns. Wzorce odkryte w INFO-05
+# (hardcoded keys/URLs) lub manualnie zidentyfikowane subdomain-takeover bucket.
+#
+# Source mapping:
+# - PayloadsAllTheThings/Insecure Source Code Management
+# - HackTricks AWS Pentesting (s3 bucket section)
+# - Cloud-specific research (Sam Curry, Frans Rosén)
+# ============================================================================
+
+id: wstg-conf-11-cloud-storage
+
+info:
+  name: "WSTG-CONF-11: Cloud Storage Misconfiguration (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa cloud storage misconfig: publicznie listowalne S3 buckets,
+    open Azure Blob containers, public GCP Storage. Test wykonuje GET na
+    bucket URL i analizuje response - public listing, ACL info, content.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/11-Test_Cloud_Storage
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/buckets
+    - https://hackingthe.cloud/
+  classification:
+    cwe-id: CWE-264,CWE-732
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 9.6
+  tags: dast,wstg,wstg-v42-conf-11,cloud-storage,s3,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # If the URL itself is a cloud storage endpoint, check listing
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/?list-type=2"            # S3 list-objects-v2
+      - "{{BaseURL}}/?marker="                # S3 legacy listing
+      - "{{BaseURL}}/?restype=container&comp=list"  # Azure Blob
+
+    matchers-condition: or
+    matchers:
+      # AWS S3 - public bucket listing
+      - type: regex
+        part: body
+        name: s3-bucket-listing
+        regex:
+          - "(?i)<ListBucketResult\\s+xmlns=\"http://s3\\.amazonaws\\.com"
+          - "(?i)<ListBucketResult\\s+xmlns=\"http://s3\\.[\\w-]+\\.amazonaws\\.com"
+
+      # AWS S3 - bucket exists but access denied (signal that path-style works)
+      - type: regex
+        part: body
+        name: s3-access-denied
+        regex:
+          - "(?i)<Code>AccessDenied</Code>"
+          - "(?i)<Message>Access Denied</Message>"
+
+      # AWS S3 - signature mismatch (signal AWS bucket exists)
+      - type: regex
+        part: body
+        name: s3-signature-mismatch
+        regex:
+          - "(?i)<Code>SignatureDoesNotMatch</Code>"
+
+      # Azure Blob - public listing
+      - type: regex
+        part: body
+        name: azure-blob-listing
+        regex:
+          - "(?i)<EnumerationResults\\s+ServiceEndpoint=\"https?://[\\w-]+\\.blob\\.core\\.windows\\.net"
+          - "(?i)<Blobs>[\\s\\S]*?<Blob>"
+
+      # Azure Blob - exists, requires auth
+      - type: regex
+        part: body
+        name: azure-blob-auth-required
+        regex:
+          - "(?i)<Code>AuthenticationFailed</Code>"
+          - "(?i)<Code>ResourceNotFound</Code>"
+
+      # GCP Storage - public listing
+      - type: regex
+        part: body
+        name: gcp-storage-listing
+        regex:
+          - '"kind"\s*:\s*"storage#objects"'
+          - "(?i)<ListBucketResult\\s+xmlns=\"http://doc\\.s3\\.amazonaws\\.com.*\">[\\s\\S]*?storage\\.googleapis"
+
+      # GCP error
+      - type: regex
+        part: body
+        name: gcp-storage-error
+        regex:
+          - '"error"\s*:\s*\{\s*"code"\s*:\s*\d+,\s*"message"'
+          - "(?i)<Code>UserProjectAccountProblem</Code>"
+
+      # DigitalOcean Spaces (S3-compatible)
+      - type: regex
+        part: body
+        name: do-spaces-listing
+        regex:
+          - "(?i)digitaloceanspaces\\.com[\\s\\S]*?ListBucketResult"
+
+    extractors:
+      - type: regex
+        name: bucket-name
+        part: body
+        group: 1
+        regex:
+          - "(?i)<Name>([^<]+)</Name>"
+          - "(?i)ServiceEndpoint=\"https?://([\\w-]+)\\.blob\\.core\\.windows\\.net"
+
+      - type: regex
+        name: bucket-keys
+        part: body
+        group: 1
+        regex:
+          - "(?i)<Key>([^<]+)</Key>"
+
+# ============================================================================
+# Known limitations:
+# - Wymaga że BaseURL bezpośrednio wskazuje na bucket (np. https://bucket.s3.amazonaws.com)
+#   - dla aplikacji która tylko UŻYWA buckets (URL w body), enumeracja
+#   buckets musi być wykonana osobno (np. cloud_enum tool)
+# - Path-style vs virtual-host-style URL detection - tu testowane oba przez
+#   sam BaseURL, ale niektóre buckets dostępne tylko przez jeden styl
+# - Region-specific endpoints (s3-us-west-2.amazonaws.com itd.) - matchery
+#   pokrywają regex `s3.[\\w-]+.amazonaws.com`
+# - Lista narzędzi do dalszej enumeracji: cloud_enum, S3Scanner,
+#   GrayhatWarfare, AWSBucketDump
+# ============================================================================

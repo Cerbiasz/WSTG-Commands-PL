@@ -1,178 +1,126 @@
 # WSTG-ATHN-06 — Testing for Browser Cache Weaknesses
 
-## Cele
+## Cel
 
-- Sprawdzic czy wrazliwe dane sa przechowywane w cache przegladarki
-- Zweryfikowac naglowki kontrolujace cache
-- Ocenic ryzyko nieautoryzowanego dostepu do danych z cache
+Sprawdzenie że wrażliwe responses (login, password reset, account settings) mają `Cache-Control: no-store` i nie są cache'owane przez przeglądarkę. Cached sensitive data w shared environment (kawiarnia internet) = leak.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Sprawdzenie naglowkow cache na stronie logowania
+### Nasz dedykowany szablon
 
 ```bash
-curl -s -I "https://TARGET/login" | grep -iE "cache-control|pragma|expires|etag|last-modified"
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-athn-06-browser-cache.yaml
 ```
 
-### Sprawdzenie naglowkow cache na chronionych stronach
+Wykrywa sensitive endpoints (login, account, password) bez `Cache-Control: no-store` i `Pragma: no-cache`.
+
+### Cross-reference
 
 ```bash
-curl -s -I "https://TARGET/api/profile" -H "Authorization: Bearer TOKEN" | grep -iE "cache-control|pragma|expires|etag|last-modified"
-
-curl -s -I "https://TARGET/dashboard" -b "session=SESSION_ID" | grep -iE "cache-control|pragma|expires|etag|last-modified"
-
-curl -s -I "https://TARGET/api/account" -H "Authorization: Bearer TOKEN" | grep -iE "cache-control|pragma|expires|etag|last-modified"
-
+# Pełen security headers audit
+nuclei -l burp-export.xml -im burp -t templates/wstg-conf-14-security-headers.yaml
 ```
 
-### Sprawdzenie pelnych naglowkow odpowiedzi
+## Coverage Matrix
 
-```bash
-curl -s -I "https://TARGET/login"
-curl -s -I "https://TARGET/api/profile" -H "Authorization: Bearer TOKEN"
+| Wymiar | Pokryte |
+|---|---|
+| Sensitive page bez Cache-Control: no-store | ✓ |
+| Login/account/password paths | ✓ |
+| autocomplete attribute na formularzach | manual |
+| Clear-Site-Data po logout | manual |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Sprawdzenie strony logowania pod katem autocomplete
+### Metodologia (4 kroki)
 
-```bash
-curl -s "https://TARGET/login" | grep -iE "autocomplete"
+1. **Per sensitive endpoint**: GET /login, /account, /password/reset → sprawdzić Cache-Control header.
+2. **Browser cache test**: po wylogowaniu, naciśnij Back button → czy widać cached page z user data?
+3. **Disk cache test**: `chrome://view-http-cache` (legacy) lub DevTools Network tab `Disable cache=off`.
+4. **autocomplete check**: na password fields, czy `autocomplete="new-password"` ustawione?
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-### Sprawdzenie formularzy pod katem autocomplete
-
-```bash
-curl -s "https://TARGET/login" | grep -iE "input.*password|input.*user|autocomplete"
-
-```
-
-### Sprawdzenie czy odpowiedzi API maja prawidlowe naglowki cache
-
-```bash
-curl -s -I "https://TARGET/api/users" -H "Authorization: Bearer TOKEN" | grep -iE "cache-control|pragma|expires"
-curl -s -I "https://TARGET/api/transactions" -H "Authorization: Bearer TOKEN" | grep -iE "cache-control|pragma|expires"
-
-```
-
-### Sprawdzenie naglowkow po wylogowaniu
-
-```bash
-curl -s -I "https://TARGET/logout" -b "session=SESSION_ID" | grep -iE "cache-control|pragma|expires|clear-site-data"
-
-```
-
-### Sprawdzenie czy uzyto Clear-Site-Data
-
-```bash
-curl -s -I "https://TARGET/logout" -b "session=SESSION_ID" | grep -i "Clear-Site-Data"
-
-```
-
-### Test back button po wylogowaniu (symulacja)
-
-```bash
-curl -s -I "https://TARGET/dashboard" -H "If-None-Match: ETAG_VALUE" -b "session=EXPIRED_SESSION"
-
-```
-
-### Sprawdzenie roznych endpointow z wrazliwymi danymi
-
-```bash
-for endpoint in /api/profile /api/account /api/billing /api/settings /api/users /dashboard /account; do echo "--- $endpoint ---"; curl -s -I "https://TARGET$endpoint" -H "Authorization: Bearer TOKEN" 2>/dev/null | grep -iE "cache-control|pragma|expires"; echo; done
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak wordlist - test konfiguracji naglowkow cache
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zaloguj sie do aplikacji i przejdz na strony z wrazliwymi danymi
-2. Wyloguj sie i kliknij przycisk "Wstecz" w przegladarce - sprawdz czy dane sa widoczne z cache
-3. W DevTools (Network tab) sprawdz naglowki Cache-Control na kazdej odpowiedzi
-4. Sprawdz czy formularze logowania maja autocomplete="off" na polach hasla
-5. W DevTools (Application tab) sprawdz Cache Storage i Session/Local Storage
-6. Sprawdz czy naglowek Cache-Control zawiera: no-store, no-cache, must-revalidate, private
-7. Sprawdz czy naglowek Pragma: no-cache jest ustawiony
-8. Przetestuj czy po wylogowaniu dane sa usuwane z pamieci przegladarki (Clear-Site-Data)
-
-
----
+- [ ] Cache-Control: no-store na login/account/password pages
+- [ ] Pragma: no-cache (HTTP/1.0 backward compat)
+- [ ] Expires: 0 lub past date
+- [ ] autocomplete="off" lub autocomplete="new-password" na password fields
+- [ ] Back button test po logout
+- [ ] Cache-Control: private nie wystarcza (cache na disk allowed)
+- [ ] Clear-Site-Data: cookies, cache po logout
+- [ ] Sensitive data NIE w localStorage/sessionStorage (cross WSTG-CLNT-12)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
 
-### Naglowki Cache-Control — prawidlowa konfiguracja
+### Nagłówki Cache-Control — prawidłowa konfiguracja
 
-- Strony z wrazliwymi danymi MUSZA miec: `Cache-Control: no-store, no-cache, must-revalidate, private`
-- Dodaj `Pragma: no-cache` dla kompatybilnosci z HTTP/1.0
-- Ustaw `Expires: 0` lub date w przeszlosci
+- Strony z wrażliwymi danymi MUSZĄ mieć: `Cache-Control: no-store, no-cache, must-revalidate, private`
+- Dodaj `Pragma: no-cache` dla kompatybilności z HTTP/1.0
+- Ustaw `Expires: 0` lub date w przeszłości
 - **no-store** jest KLUCZOWY — `no-cache` sam w sobie NIE zapobiega zapisowi na dysku
-- Nie polegaj na `private` jako jedynej ochronie — chroni przed cache proxy, ale nie przegladarki
+- Nie polegaj na `private` jako jedynej ochronie — chroni przed cache proxy, ale nie przeglądarki
 
-### Autocomplete — formularze z wrazliwymi danymi
+### Autocomplete — formularze z wrażliwymi danymi
 
-- Pola hasla: `autocomplete="new-password"` lub `autocomplete="current-password"`
-- Formularze logowania: `autocomplete="off"` na calym formularzu LUB na poszczegolnych polach
+- Pola hasła: `autocomplete="new-password"` lub `autocomplete="current-password"`
+- Formularze logowania: `autocomplete="off"` na całym formularzu LUB na poszczególnych polach
 - Pola kart kredytowych, SSN, dane medyczne: `autocomplete="off"`
-- Uwaga: nowoczesne przegladarki moga **ignorowac** `autocomplete="off"` na polach hasla
-- Dla kart: uzywaj `autocomplete="cc-number"` z `autocomplete="off"` zaleznie od kontekstu
+- Uwaga: nowoczesne przeglądarki mogą **ignorować** `autocomplete="off"` na polach hasła
+- Dla kart: używaj `autocomplete="cc-number"` z `autocomplete="off"` zależnie od kontekstu
 
 ### Clear-Site-Data — czyszczenie po wylogowaniu
 
-- Naglowek `Clear-Site-Data` pozwala usunac dane z przegladarki po wylogowaniu:
-  - `"cache"` — czysc cache HTTP
-  - `"cookies"` — usun cookies
-  - `"storage"` — usun localStorage, sessionStorage, IndexedDB
-  - `"*"` — usun wszystko
-- Przyklad: `Clear-Site-Data: "cache", "cookies", "storage"`
-- Uzyj przy wylogowaniu i przy zmianie hasla
+- Nagłówek `Clear-Site-Data` pozwala usunąć dane z przeglądarki po wylogowaniu:
+  - `"cache"` — czyść cache HTTP
+  - `"cookies"` — usuń cookies
+  - `"storage"` — usuń localStorage, sessionStorage, IndexedDB
+  - `"executionContexts"` — przeładuj wszystkie strony
+- Ustaw na endpoincie wylogowania: `Clear-Site-Data: "cache", "cookies", "storage"`
 
-### ETag i Last-Modified — ryzyko
+### Browser Cache — co pamięta przeglądarka
 
-- **ETag** moze byc uzywany do trackingu uzytkownikow (supercookie)
-- Odpowiedzi z wrazliwymi danymi NIE powinny miec ETag ani Last-Modified
-- Jesli uzyjesz `no-store`, przegladarka nie powinna uzywac warunkowych requestow
+- HTTP cache (na dysku/RAM) — Cache-Control kontroluje
+- Form autocomplete — passwordy zapisane w password manager
+- Browser history — URL z parametrami sensitive (token w URL = bad)
+- Back button cache (bfcache) — szybki back/forward bez network request
 
-### Back button / historia przegladarki
+## Pentesterskie deep dive
 
-- `Cache-Control: no-store` zapobiega ladowaniu stron z cache po kliknieciu "Wstecz"
-- Bez `no-store` uzytkownik moze zobaczyc dane po wylogowaniu
-- Testuj: zaloguj → przejdz na strone z danymi → wyloguj → kliknij "Wstecz"
-- Dodatkowa ochrona: JavaScript redirect na stronach chronionych po wykryciu braku sesji
+### Mniej znane techniki
 
-### Co testowac
+- **Back-Forward Cache (bfcache)**: nawet z proper Cache-Control, niektóre browsers cache pages w bfcache. CSP `no-store` w combination z page content może opt out.
+- **Service Worker cache**: SW może cache responses bypass-ujący HTTP Cache-Control. Audyt registered SWs.
+- **Modern autocomplete bypass**: Chrome ignoruje `autocomplete="off"` na password fields - "Autofill in production code might not be acceptable" but ignored anyway.
+- **Sensitive data in URL**: `?token=...`, `?reset_code=...` - URL trafia do browser history nawet bez cache.
 
-- Sprawdz naglowki cache na KAZDEJ stronie z wrazliwymi danymi (nie tylko login)
-- Sprawdz czy API endpoints zwracaja prawidlowe naglowki cache
-- Testuj back button po wylogowaniu — czy dane sa widoczne?
-- Sprawdz czy pliki do pobrania (PDF, CSV z danymi) maja prawidlowe naglowki
-- Zweryfikuj autocomplete na formularzach z wrazliwymi danymi
-- Sprawdz czy uzywany jest Clear-Site-Data przy wylogowaniu
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **Cache-Control: private myślony jako wystarczający**: chroni tylko przed shared proxy cache, NIE przed disk cache.
+- **Logout doesn't trigger Clear-Site-Data**: simple session destruction bez clear of client-side state.
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Świeżynki z research
 
----
+- **OWASP Session Management CS**: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+- **MDN Clear-Site-Data**: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Clear-Site-Data
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Software Version Reporter | Detect insecure cache configs |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V14.3.1 | Client-side Data Protection | Verify that authenticated data is cleared from client storage, such as the browser DOM, after the client or session is terminated. The 'Clear-Site-Data' HTTP response header field may be able to help with this but the client-side should also be able to clear up if the server connection is not available when the session is terminated. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/06-Testing_for_Browser_Cache_Weaknesses
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+- MDN Clear-Site-Data: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Clear-Site-Data
 
-### L2 (Standardowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V14.3.2 | Client-side Data Protection | Verify that the application sets sufficient anti-caching HTTP response header fields (i.e., Cache-Control: no-store) so that sensitive data is not cached in browsers. |
-| V14.3.3 | Client-side Data Protection | Verify that data stored in browser storage (such as localStorage, sessionStorage, IndexedDB, or cookies) does not contain sensitive data, with the exception of session tokens. |
+| ID | Wymaganie |
+|---|---|
+| V14.4.7 | Application sets sufficient anti-caching headers for sensitive data. |
+| V8.2.1 | Cache control headers on sensitive responses. |

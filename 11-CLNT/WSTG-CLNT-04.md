@@ -1,52 +1,62 @@
 # WSTG-CLNT-04 — Testing for Client-side URL Redirect
 
-## Cele
+## Cel
 
-- Identify injection points that handle URLs or paths
-- Assess the locations that the system could redirect to
+Wykrycie open redirect — server-side (302 z reflected URL) lub client-side (`window.location = userInput`). Pivot do phishing (zaufana domena → evil), OAuth attacks (kradzież authorization code), SSRF (jeśli internal URL akceptowany).
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Open redirect testing
-
-```bash
-curl -v "https://TARGET/redirect?url=https://evil.com" 2>&1 | grep "Location:"
-curl -v "https://TARGET/login?next=https://evil.com" 2>&1 | grep "Location:"
-curl -v "https://TARGET/goto?url=//evil.com" 2>&1 | grep "Location:"
-curl -v "https://TARGET/redirect?url=https://evil.com%23.TARGET" 2>&1 | grep "Location:"
-curl -v "https://TARGET/redirect?url=https://TARGET@evil.com" 2>&1 | grep "Location:"
-curl -v "https://TARGET/redirect?url=javascript:alert(1)" 2>&1 | grep "Location:"
-
-```
-
-### Parametry typowe dla redirectow
+### Nasz dedykowany szablon
 
 ```bash
-# url=, redirect=, next=, return=, returnUrl=, goto=, destination=, redir=, out=, view=, to=
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-clnt-04-url-redirect.yaml
 ```
 
-## KOMENDY Z WORDLISTAMI
+Szablon fuzzuje typowe redirect parameter names (`redirect`, `url`, `next`, `return`, `goto`, `callback`) ze szerokim zestawem bypass payloads (//, @, backslash, encoding, schema bypass). Detekcja: Location header z attacker host.
 
-### PayloadsAllTheThings Open Redirect
+### Cross-reference
 
 ```bash
-ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Open Redirect/Intruder/Open-Redirect-payloads.txt" -mc 301,302 -o output_ffuf_openredir.json
-
-ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Open Redirect/Intruder/open_redirect_wordlist.txt" -mc 301,302 -o output_ffuf_openredir2.json
-
+# DOM XSS markers - client-side window.location patterns
+nuclei -l burp-export.xml -im burp -t templates/wstg-clnt-01-dom-xss.yaml
 ```
 
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+## Coverage Matrix
 
-1. Zidentyfikuj parametry URL w requestach (url=, redirect=, next=)
-2. Testuj przekierowanie na zewnetrzna domene
-3. Testuj bypass: //evil.com, /\evil.com, /%09/evil.com
-4. Sprawdz client-side redirect w JavaScript (location.href, location.assign)
-5. Testuj data: i javascript: URI schemes
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Server-side redirect (Location header) | ✓ | — |
+| URL parser confusion bypass (`@`, `//`, `\\`) | ✓ | — |
+| Schema bypass (`javascript:`, `data:`) | ✓ | — |
+| URL encoding bypass | ✓ | — |
+| Whitespace bypass | ✓ | — |
+| Client-side redirect (window.location) | częściowe | wymaga DOM Invader |
+| Whitelisted domain bypass | — | wymaga subdomain takeover analysis |
+| Numeric ID-based redirect | — | manual |
 
+## Standard pentesterski — jak to robi się wzorowo
 
----
+### Metodologia (5 kroków)
+
+1. **Identify redirect endpoints**: szukać paths typu `/redirect`, `/login` (po success), `/logout` (po success).
+2. **Common param names**: `?url=`, `?next=`, `?return=`, `?continue=`, `?goto=` — fuzz z evil URL.
+3. **Bypass techniques**: `//evil.com`, `https://target.com@evil.com`, `https://target.com.evil.com`.
+4. **OAuth flow**: `redirect_uri=` na OAuth endpointach — często mają whitelisted domains.
+5. **Client-side check**: w JS bundle szukać `window.location.href = ...` z user input.
+
+### Co MUSI być sprawdzone (10 punktów)
+
+- [ ] Wszystkie redirect param names testowane evil URL
+- [ ] OAuth `redirect_uri` flexibility
+- [ ] Login redirect (po success → user-controlled URL?)
+- [ ] Logout redirect
+- [ ] Email confirmation links (?next=)
+- [ ] Schema bypass (javascript:, data:)
+- [ ] @ bypass (`https://target.com@evil.com`)
+- [ ] // protocol-relative
+- [ ] Encoding bypass (%2f%2f, %5c%5c)
+- [ ] Client-side `window.location` patterns w JS
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -54,21 +64,21 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 
 ### Open Redirect — ryzyka
 
-- **Phishing**: atakujacy wysyla link `trusted.com/redirect?url=evil.com` — ofiara ufa domenie
-- **OAuth token theft**: redirect_uri → atakujacy kradnie authorization code
-- **SSO bypass**: redirect po logowaniu do strony atakujacego
+- **Phishing**: atakujący wysyła link `trusted.com/redirect?url=evil.com` — ofiara ufa domenie
+- **OAuth token theft**: redirect_uri → atakujący kradnie authorization code
+- **SSO bypass**: redirect po logowaniu do strony atakującego
 - **Chaining**: open redirect + SSRF, open redirect + XSS
 
 ### Obrona — hierarchia
 
-1. **Unikaj user input w URL przekierowan** — najlepsza obrona
-2. **Mapping IDs**: zamiast `?url=https://...` uzywaj `?id=1` → mapuj do dozwolonych URL
+1. **Unikaj user input w URL przekierowań** — najlepsza obrona
+2. **Mapping IDs**: zamiast `?url=https://...` używaj `?id=1` → mapuj do dozwolonych URL
 3. **Allowlist domen**: jawna lista dozwolonych domen do przekierowania
-4. **Walidacja URL server-side**: sprawdz scheme (tylko https), host (tylko zaufane domeny)
+4. **Walidacja URL server-side**: sprawdź scheme (tylko https), host (tylko zaufane domeny)
 
 ### Typowe bypass techniki (testowanie)
 
-- `//evil.com` — protocol-relative URL, przegladarka uzupelnia protokol
+- `//evil.com` — protocol-relative URL, przeglądarka uzupełnia protokół
 - `/\evil.com` — backslash jako separator
 - `/%09/evil.com` — tab character bypass
 - `https://trusted.com@evil.com` — userinfo w URL (user=trusted.com, host=evil.com)
@@ -79,69 +89,55 @@ ffuf -u "https://TARGET/redirect?url=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings
 ### Client-Side Redirect (DOM-based)
 
 - JavaScript: `location.href = userInput`, `location.assign()`, `location.replace()`
-- Waliduj URL PRZED przypisaniem do location — sprawdz czy zaczyna sie od `/` (relative) lub zaufanej domeny
-- NIGDY nie przypisuj user input bezposrednio do `location.*`
+- Waliduj URL PRZED przypisaniem do location — sprawdź czy zaczyna się od `/` (relative) lub zaufanej domeny
+- NIGDY nie przypisuj user input bezpośrednio do `location.*`
 
 ### Walidacja URL — bezpieczna implementacja
 
-- Parsuj URL (np. `new URL(input)`) — sprawdz `.hostname` przeciw allowlist
-- Odrzuc: `javascript:`, `data:`, `vbscript:` schemes
-- Sprawdz ze URL jest absolute i zaczyna sie od `https://`
-- Uzywaj server-side walidacji — client-side mozna ominac
+- Parsuj URL (np. `new URL(input)`) — sprawdź `.hostname` przeciw allowlist
+- Odrzuć: `javascript:`, `data:`, `vbscript:` schemes
+- Sprawdź że URL jest absolute i zaczyna się od `https://`
+- Używaj server-side walidacji — client-side można ominąć
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Subdomain takeover + whitelist**: aplikacja whitelisty `*.target.com` → atakujący przejmuje `wycofana.target.com` → legit redirect.
+- **OAuth state confusion**: open redirect na callback URL po OAuth → atakujący steal authorization code z URL fragment.
+- **DNS rebinding**: redirect do attacker-controlled domain z short TTL → po pierwszym fetch zmienia rekord na internal IP = SSRF.
+- **Triple-slash URL**: `///evil.com` traktowane różnie przez parsers — czasami jako `evil.com`, czasem jako relative path.
+- **Userinfo + path bypass**: `https://target.com\\@evil.com/path` — różne URL parsers traktują różnie (depends on Standard).
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Whitelist sprawdza hostname startswith**: `target.com` matches `target.com.evil.com` → bypass.
+- **Whitelist sprawdza endsWith**: `target.com` matches `evil.target.com` ALE też `eviltarget.com` (bez kropki).
+- **Server-side validation OK, client-side weak**: server validates ale client-side JS akceptuje user input → DOM XSS via redirect.
 
-### L2 (Standardowy)
+### Świeżynki z research
+
+- **Sam Curry OAuth research**: https://samcurry.net/
+- **PortSwigger OAuth labs**: https://portswigger.net/web-security/oauth
+- **HackTricks Open Redirect**: https://book.hacktricks.xyz/pentesting-web/open-redirect
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Reflector | Detekcja reflected user input | [GitHub](https://github.com/elkokc/reflector) |
+| Param Miner | Hidden parameter discovery | [GitHub](https://github.com/PortSwigger/param-miner) |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/04-Testing_for_Client-side_URL_Redirect
+- OWASP Unvalidated Redirects CS: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+- PortSwigger OAuth: https://portswigger.net/web-security/oauth
+- HackTricks Open Redirect: https://book.hacktricks.xyz/pentesting-web/open-redirect
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.7.2 | Other Browser Security Considerations | Verify that the application will only automatically redirect the user to a different hostname or domain (which is not controlled by the application) where the destination appears on an allowlist. |
-
-### L3 (Zaawansowany)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.7.3 | Other Browser Security Considerations | Verify that the application shows a notification when the user is being redirected to a URL outside of the application's control, with an option to cancel the navigation. |
-
-
----
-
-## HackTricks Tips
-
-### Open Redirect Bypass
-
-- `//evil.com` (scheme-relative)
-- `https://trusted.com@evil.com/`
-- `https://trusted.com\@evil.com/` (backslash — server waliduje jako trusted, browser normalizuje do evil)
-- `https://trusted.com.evil.com/` (suffix)
-- `%09//evil.com` (tab prefix)
-
-### Loopback bypass
-
-`0.0.0.0`, `127.1`, `2130706433`, `[::1]`, `lvh.me`
-
-### javascript: XSS pivot
-
-`javascript:alert(1)`, `java%0d%0ascript:alert(0)`, `javascript://%250Aalert(1)`
-
-### Go url.Parse fragment smuggling
-
-`/user/auth-tokens/rotate?redirectTo=/%23/..//\//attacker.com` → validator widzi `/` + fragment, response emituje `Location: /\//attacker.com`
-
-### Chain
-
-Open redirect w OAuth `redirect_uri` → kradzież authorization code/token
-
-### Client-Side Path Traversal (CSPT)
-
-- **Inject dot-segments**: `../`, `%2e%2e/`, `..;/`, `%252e%252e/` w route params
-- **Chain do CSRF/OSRF**: retarget authenticated POST/PUT/DELETE do sensitive endpoints
-- **Chain do cache deception**: inject `../../v1/token.css` → CDN cache'uje authenticated JSON
+| V5.1.5 | Input Validation (L1) | URL redirects only allow whitelisted destinations. |
+| V13.2.1 | RESTful (L1) | Documented HTTP methods. |

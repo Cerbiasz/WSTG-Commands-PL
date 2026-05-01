@@ -1,105 +1,33 @@
 # WSTG-BUSL-04 — Test for Process Timing
 
-## Cele
+## Cel
 
-- Przetestowac funkcjonalnosc wrazliwa na czas (timing)
-- Wykryc race conditions (wyscigi)
+Wykrycie race conditions (TOCTOU): podwójne realizacje kuponów, double charging, double voting, dwie rejestracje z tym samym username, podwójna rezerwacja produktu.
 
-## KOMENDY
+> **Test manual-only**: race conditions wymagają precise timing - Burp Turbo Intruder lub Single Packet Attack (James Kettle).
 
-### Testowanie race condition z curl (rownolegle requesty)
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# Wyslij 10 rownoczesnych requestow:
-for i in $(seq 1 10); do
-    curl -s -X POST TARGET/api/redeem-coupon -d "code=COUPON123" &
-done
-wait
+### Metodologia (5 kroków)
 
-```
+1. **Identify atomic operations**: każda operacja "redeem coupon", "transfer money", "register user", "purchase".
+2. **Single Packet Attack**: wyślij 50 simultaneous requests w jednym TCP packet → race window.
+3. **Burp Turbo Intruder**: high-performance race condition tester.
+4. **Result observation**: czy aplikacja allows multiple successful operations (np. coupon reused 50 razy)?
+5. **Defense check**: czy aplikacja używa DB transactions z `SELECT FOR UPDATE` lub idempotency keys?
 
-### Testowanie race condition z GNU parallel
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-seq 1 20 | parallel -j20 "curl -s -X POST TARGET/api/transfer -d 'amount=100&to=attacker'"
-
-```
-
-### Testowanie TOCTOU (Time of Check Time of Use)
-
-```bash
-# Krok 1: Sprawdz saldo
-curl -v TARGET/api/balance
-# Krok 2: Natychmiastowo wyslij dwa przelewy:
-curl -s -X POST TARGET/api/transfer -d "amount=1000&to=user1" &
-curl -s -X POST TARGET/api/transfer -d "amount=1000&to=user2" &
-wait
-
-```
-
-### Burp Turbo Intruder - race condition
-
-```bash
-# 1. Przechwytuj request w Burp Suite
-# 2. Wyslij do Turbo Intruder (Extensions -> Turbo Intruder)
-# 3. Uzyj skryptu race condition:
-# def queueRequests(target, wordlists):
-#     engine = RequestEngine(endpoint=target.endpoint,
-#                            concurrentConnections=30,
-#                            requestsPerConnection=100,
-#                            pipeline=False)
-#     for i in range(30):
-#         engine.queue(target.req, target.baseInput)
-#
-# def handleResponse(req, interesting):
-#     table.add(req)
-
-```
-
-### Pomiar czasu odpowiedzi (timing attack)
-
-```bash
-for i in $(seq 1 10); do
-    TIME=$(curl -s -o /dev/null -w "%{time_total}" -X POST TARGET/api/login -d "user=admin&pass=wrong_${i}")
-    echo "Attempt $i: ${TIME}s"
-done
-
-```
-
-### Testowanie race condition na glosowaniu
-
-```bash
-seq 1 50 | parallel -j50 "curl -s -X POST TARGET/api/vote -d 'option=A' -H 'Cookie: session=SESSION_TOKEN'"
-
-```
-
-### Testowanie race condition na rejestracji
-
-```bash
-seq 1 5 | parallel -j5 "curl -s -X POST TARGET/api/register -d 'username=testuser&email=test@test.com'"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na logice czasowej
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Uzyj Burp Suite -> Turbo Intruder do wysylania wielu requestow jednoczesnie
-2. Testuj race conditions na: realizacji kuponow, transferach srodkow, glosowaniach
-3. Zmierz czasy odpowiedzi dla roznych danych - roznice moga wskazac timing leaks
-4. Sprawdz czy operacje krytyczne sa atomowe (transakcje bazodanowe)
-5. Testuj TOCTOU: sprawdz wartosc -> zmien wartosc w innym urzadzeniu -> kontynuuj
-6. Sprawdz czy limity sa egzekwowane poprawnie przy rownoczesnych requestach
-7. Testuj race condition na procesie platnosci (double spending)
-
-
----
+- [ ] Coupon redemption race
+- [ ] Money transfer double-spending
+- [ ] Voting (2 votes from same user)
+- [ ] Username registration race (2 accounts same name)
+- [ ] Product purchase race (2 buyers same item)
+- [ ] Like/follow race (multiple likes)
+- [ ] Withdrawal race (overdrafting)
+- [ ] Single Packet Attack (50 simultaneous)
+- [ ] Burp Turbo Intruder testing
+- [ ] DB transaction isolation level review (with dev team)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -108,83 +36,65 @@ seq 1 5 | parallel -j5 "curl -s -X POST TARGET/api/register -d 'username=testuse
 ### Race Condition — mechanizm
 
 - **TOCTOU** (Time of Check to Time of Use): warunek sprawdzany w czasie T1, operacja wykonywana w T2
-- Miedzy T1 a T2 stan moze sie zmienic — np. saldo sprawdzone, ale zmienione przed przelewem
-- Skutek: podwojne wykorzystanie kuponow, podwojna platnosc, przekroczenie limitow
+- Między T1 a T2 stan może się zmienić — np. saldo sprawdzone, ale zmienione przed przelewem
+- Skutek: podwójne wykorzystanie kuponów, podwójna płatność, przekroczenie limitów
 
 ### Typowe scenariusze race condition w web
 
 | Scenariusz | Skutek |
 |------------|--------|
-| Realizacja kuponu | Wielokrotne uzycie jednorazowego kodu |
-| Transfer srodkow | Podwojne obciazenie / double spending |
-| Glosowanie | Wielokrotne glosy na te sama opcje |
+| Realizacja kuponu | Wielokrotne użycie jednorazowego kodu |
+| Transfer środków | Podwójne obciążenie / double spending |
+| Głosowanie | Wielokrotne głosy na tę samą opcję |
 | Rejestracja unikalnego username | Dwa konta z tą samą nazwą |
-| Rezerwacja / zakup | Dwa zamowienia na ten sam przedmiot |
+| Rezerwacja / zakup | Dwa zamówienia na ten sam przedmiot |
 | Like / follow | Wielokrotne polubienia |
 
 ### Obrona przed race conditions
 
 - **Transakcje bazodanowe**: `SELECT ... FOR UPDATE` z `SERIALIZABLE` isolation level
 - **Distributed locks**: Redis SETNX, database advisory locks
-- **Idempotency keys**: unikalny klucz per operacja — powtorzony request = ignorowany
-- **Optimistic locking**: version counter w rekordzie — UPDATE WHERE version = N
-- **Atomic operations**: `UPDATE balance SET amount = amount - 100 WHERE amount >= 100`
+- **Optimistic locking**: version column w DB - update fails jeśli version changed
+- **Idempotency keys**: unique key per operation - duplicate ignored
+- **Atomic operations**: `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL), `INSERT IGNORE` (MySQL)
+- **Single-flight pattern**: deduplicate concurrent requests dla same key
 
-### Timing Attacks
+## Pentesterskie deep dive
 
-- **Timing leak**: rozny czas odpowiedzi ujawnia informacje (np. czy username istnieje)
-- Porownywanie hasel/tokenow musi byc **constant-time** — `hmac.compare_digest()`, `crypto.timingSafeEqual()`
-- Roznica 50ms miedzy "user exists" a "user doesn't exist" pozwala na enumeracje
+### Mniej znane techniki
 
-### Testowanie
+- **Single Packet Attack** (James Kettle, PortSwigger 2023): https://portswigger.net/research/smashing-the-state-machine - send 50+ HTTP/2 requests w jednym TCP packet, all arriving at server with sub-millisecond timing.
+- **Compensation logic abuse**: w microservices saga pattern, atakujący może exploit window przed compensation.
+- **Distributed cache race**: Redis cache invalidation race - stale data ważne briefly post-update.
+- **JWT race**: token issued in one node, validated in another bez sync.
 
-- Uzyj **Burp Turbo Intruder** z `concurrentConnections=30+` do race condition
-- `GNU parallel -j50` do rownoczesnych requestow z terminala
-- Zmierz czas odpowiedzi dla 100+ requestow — szukaj roznic wskazujacych na timing leak
-- Testuj na operacjach krytycznych: platnosci, kupony, limity, glosowania
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **Single-instance lock for distributed system**: mutex lokalny nie działa cross-server.
+- **Eventual consistency w distributed DB**: reads from replica show stale data.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Timeinator | Testowanie atakow timing-based i race conditions | [GitHub](https://github.com/FSecureLABS/timeinator) |
+### Świeżynki z research
 
----
+- **PortSwigger Race Conditions Lab**: https://portswigger.net/web-security/race-conditions
+- **Smashing the State Machine** (James Kettle): https://portswigger.net/research/smashing-the-state-machine
+- **HackTricks Race Conditions**: https://book.hacktricks.xyz/pentesting-web/race-condition
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Turbo Intruder | High-performance race testing |
+| Race the Web | Burp built-in race tester |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.1 | Business Logic Security | Verify that the application will only process business logic flows for the same user in the expected sequential step order and without skipping steps. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/04-Test_for_Process_Timing
+- PortSwigger Smashing the State Machine: https://portswigger.net/research/smashing-the-state-machine
+- HackTricks Race Conditions: https://book.hacktricks.xyz/pentesting-web/race-condition
 
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.4.2 | Anti-automation | Verify that business logic flows require realistic human timing, preventing excessively rapid transaction submissions. |
-
-
----
-
-## HackTricks Tips
-
-### Race Conditions
-
-- **HTTP/2 single-packet attack**: wszystkie request frames na jednym TCP connection, wstrzymaj last byte, flush jednocześnie → sub-1ms window. Burp Turbo Intruder z `Engine.BURP2` + `gate`
-- **HTTP/1.1 last-byte sync**: pre-send 20-30 requests minus final byte, disable TCP_NODELAY, flush razem
-- **PHP session locking**: użyj różnych session tokens per request
-
-### Hidden Substates
-
-- Email verification + change: wyślij oba jednocześnie → verification token dla nowego emaila na stary
-- 2FA bypass: brief window zanim `enforce_mfa` ustawione
-- OAuth race na `authorization_code`: generuj multiple AT/RT pairs — niektóre przetrwają revoke
-
-### Timing Attacks
-
-- **Hidden parameter discovery**: ~5ms timing difference → Param Miner w Burp
-- **Scoped SSRF discovery**: timing difference między allowed vs blocked domains
+| ID | Wymaganie |
+|---|---|
+| V11.1.6 | Application protects against race conditions. |
+| V11.1.4 | Anti-automation controls. |

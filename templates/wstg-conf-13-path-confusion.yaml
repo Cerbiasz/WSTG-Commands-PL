@@ -1,0 +1,173 @@
+# ============================================================================
+# WSTG-CONF-13: Test for Path Confusion (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z research (CHEATSHEET WSTG-CONF-13 to nowy test, mniej w istniejącym repo):
+#   ✓ Web Cache Deception (CSS/JS/static extension on dynamic content)
+#   ✓ Path normalization differences (frontend vs backend)
+#   ✓ Trailing slash handling differences
+#   ✓ URL encoding bypass (%2e%2e, %252e%252e)
+#   ✓ Path parameter injection (;jsessionid, ;param=)
+#   ✓ Double-slash normalization (// → /)
+#   ✓ Backslash variants (\, %5c)
+#
+# Source mapping:
+# - PortSwigger Web Cache Deception research (Omer Gil + community)
+# - HackTricks Cache Deception
+# - PortSwigger Web Cache Vulnerabilities labs
+# ============================================================================
+
+id: wstg-conf-13-path-confusion
+
+info:
+  name: "WSTG-CONF-13: Path Confusion / Cache Deception (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa Web Cache Deception - serwer dostarcza dynamiczną zawartość
+    pod URL który wygląda na statyczny (`.css`, `.js`), CDN cache'uje
+    response publicznie. Atakujący może uzyskać cached authenticated content
+    poprzez URL victim'a + cache buster.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/13-Test_for_Path_Confusion
+    - https://portswigger.net/research/practical-web-cache-poisoning
+    - https://book.hacktricks.xyz/pentesting-web/cache-deception
+  classification:
+    cwe-id: CWE-444,CWE-525
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:N/A:N
+    cvss-score: 7.4
+  tags: dast,wstg,wstg-v42-conf-13,cache-deception,path-confusion,burp-history
+
+variables:
+  canary: "wstg-{{rand_text_alpha(10)}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Cache Deception via static-like extension on dynamic path
+  # Strategia: jeśli /me lub podobne authenticated endpoint zwraca dane
+  # użytkownika, to /me/anything.css może być cached publicznie
+  # =========================================================================
+  - method: GET
+    path:
+      # Common authenticated endpoints + fake static extension
+      - "{{BaseURL}}/me/{{canary}}.css"
+      - "{{BaseURL}}/me/{{canary}}.js"
+      - "{{BaseURL}}/me/{{canary}}.png"
+      - "{{BaseURL}}/account/{{canary}}.css"
+      - "{{BaseURL}}/profile/{{canary}}.css"
+      - "{{BaseURL}}/api/me/{{canary}}.json"
+      - "{{BaseURL}}/api/user/{{canary}}.css"
+      - "{{BaseURL}}/dashboard/{{canary}}.css"
+      - "{{BaseURL}}/settings/{{canary}}.css"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      # Body NIE jest CSS/JS/PNG (więc serwer ignoruje extension)
+      - type: regex
+        part: header
+        name: response-not-static-content-type
+        regex:
+          # Content-Type wskazuje na HTML/JSON ZAMIAST CSS/JS/image
+          - "(?i)content-type:\\s*(text/html|application/json|text/plain)(?:[;\\s]|$)"
+
+      # Markery wskazujące że odpowiedź jest dynamiczna/cache'owalna
+      - type: regex
+        part: body
+        name: dynamic-content-markers
+        regex:
+          - "(?i)<title>"
+          - "(?i)\"user\"\\s*:"
+          - "(?i)\"email\"\\s*:"
+          - "(?i)logged\\s+in"
+        condition: or
+
+      # Cache headers wskazujące że response jest cacheable
+      - type: regex
+        part: header
+        name: cacheable-response
+        regex:
+          - "(?i)cache-control:[^\\r\\n]*\\b(public|max-age=[1-9])"
+          - "(?i)x-cache:[^\\r\\n]*HIT"
+
+  # =========================================================================
+  # Path normalization differences - URL encoding bypass
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin/..%2f"                    # URL-encoded ../
+      - "{{BaseURL}}/admin/%2e%2e/"
+      - "{{BaseURL}}/admin/%2e%2e%2f"
+      - "{{BaseURL}}/admin/%252e%252e/"              # Double URL-encoded
+      - "{{BaseURL}}/admin//"                        # Double slash
+      - "{{BaseURL}}/admin/./"                       # Self-reference
+      - "{{BaseURL}}/admin\\..%2f"                   # Backslash
+      - "{{BaseURL}}/.%2e/admin"                     # Mixed
+      - "{{BaseURL}}/%2e/admin"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: admin-content-bypassed
+        regex:
+          - "(?i)<title>[^<]*(admin|management|dashboard)"
+          - "(?i)(authentication|authorization|csrf[_-]token)"
+        condition: or
+
+      # Anti-FP: ten sam request bez bypass MUSI dać inny status (np. 401/403)
+      # Trudno tu sprawdzić bez multi-request, ale presence of admin content
+      # przy bypass-ie jest silnym sygnałem
+
+  # =========================================================================
+  # jsessionid / matrix params injection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin;jsessionid={{rand_text_alpha(16)}}"
+      - "{{BaseURL}}/admin;param=value"
+      - "{{BaseURL}}/admin/..;/public/"               # Tomcat path bypass classic
+      - "{{BaseURL}}/admin/..;jsessionid=x/public/"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: matrix-param-bypass
+        regex:
+          - "(?i)<title>[^<]*(admin|management)"
+          - "(?i)Tomcat[/\\s]"
+
+# ============================================================================
+# Known limitations:
+# - Cache Deception verification wymaga multi-request: GET /me/x.css zwróci
+#   user content, drugi GET z innego User-Agent powinien zwrócić cached. Tu
+#   tylko detekcja "dynamiczna treść pod static URL".
+# - Path normalization bypass jest funkcją proxy + backend; różne kombinacje
+#   (Apache + Tomcat, Nginx + Express) mają różne wektory - tu testowane
+#   najpopularniejsze.
+# - Anti-FP dla matrix params trudne bez baseline - rate of false positive
+#   wyższy niż w innych szablonach
+# ============================================================================

@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Suite outputs
+results-*/
+validation-results-*/
+*.jsonl
+
+# Burp exports (sensitive)
+*-export.xml
+burp-*.xml
+
+# Test scratch
+.scratch/

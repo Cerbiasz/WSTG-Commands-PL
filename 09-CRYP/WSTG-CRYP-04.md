@@ -1,155 +1,70 @@
 # WSTG-CRYP-04 — Testing for Weak Encryption
 
-## Cele
+## Cel
 
-- Zidentyfikowac uzycie slabych algorytmow szyfrowania lub hashowania
+Weryfikacja że aplikacja używa nowoczesnej kryptografii: AES-128/256 GCM (lub ChaCha20-Poly1305) dla symmetric, ECC Curve25519/RSA 2048+ z OAEP dla asymmetric, Argon2id/bcrypt dla password hashing, brak MD5/SHA-1/DES/RC4/ECB.
 
-## KOMENDY
+> **Test manual / code review**: weak encryption wymaga analizy implementacji (source code, decompiled binaries, libraries used). Nuclei nie ma direct testu — niektóre wskaźniki HTTP-side (np. cookie format, JWT alg).
 
-### hash-identifier - identyfikacja typu hash
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-hash-identifier
-# Wklej znaleziony hash i narzedzie zidentyfikuje typ
+### Metodologia (6 kroków)
 
-```
+1. **Identify crypto in HTTP traffic**: ciphertext patterns w cookies/params (base64 length 16/32/64 bytes hint AES/SHA), JWT tokens (header `alg`).
+2. **JWT analysis**: JWT `alg` header — `none`, `HS256` z public key, `RS256` ale weak key. Burp JWT Editor.
+3. **Library version check**: cross WSTG-INFO-09 — niektóre wersje libraries (OpenSSL, BouncyCastle) miały CVE w crypto.
+4. **Test code paths z input**: jeśli aplikacja przyjmuje encrypted data od użytkownika → test podatności jak padding oracle (CRYP-02).
+5. **Source code review**: jeśli dostępny, grep `MD5`, `SHA1`, `DES`, `RC4`, `ECB`, `Math.random`, `rand()`.
+6. **Crypto behavior tests**: identyczne plaintext daje identyczne ciphertext = ECB lub no IV. Test przez 2 identyczne registrations / 2 password resets.
 
-### hashid - identyfikacja typu hash
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-hashid 'HASH_VALUE'
-hashid -m 'HASH_VALUE'
+- [ ] JWT alg header (nie `none`, nie `HS256` z guessable secret)
+- [ ] Hashed passwords (jeśli dostępne via SQL injection / DB leak): bcrypt/argon2 vs MD5/SHA-1
+- [ ] Encrypted cookies length divisible by 16 (AES) — test za pomocą bit flipping
+- [ ] CSRF tokens — random per session vs predictable
+- [ ] Reset password tokens — UUID v4 (random) vs UUID v1 (timestamp-based)
+- [ ] Session tokens — sufficiently long (>= 128 bits entropy)
+- [ ] OAuth state parameter — random per request
+- [ ] Captcha solutions — server-side validated, not client-side
+- [ ] Library versions (cross WSTG-INFO-09) — outdated libs z crypto CVE
+- [ ] Random number generation — secrets/SecureRandom vs Math.random
+- [ ] ECB pattern test (identical plaintext → identical ciphertext)
+- [ ] Custom crypto algorithm (red flag - never roll your own)
 
-```
+### Per scenario — typowe wskaźniki
 
-### Sprawdzenie czy hasla sa przechowywane jako MD5
-
-```bash
-echo -n "password123" | md5sum
-# Porownaj z hashem znalezionym w aplikacji
-
-```
-
-### Sprawdzenie czy hasla sa przechowywane jako SHA-1
-
-```bash
-echo -n "password123" | sha1sum
-
-```
-
-### Sprawdzenie sily bcrypt hash (prawidlowe podejscie)
-
-```bash
-# bcrypt hash powinien wygladac jak: $2b$12$...
-# Sprawdz cost factor - powinien byc >= 10
-
-```
-
-### john - lamanie slabych hashy
-
-```bash
-john --format=raw-md5 hash_file.txt
-john --format=raw-sha1 hash_file.txt
-john --format=raw-sha256 hash_file.txt
-
-```
-
-### hashcat - lamanie slabych hashy
-
-```bash
-hashcat -m 0 hash_file.txt wordlist.txt    # MD5
-hashcat -m 100 hash_file.txt wordlist.txt  # SHA-1
-hashcat -m 1400 hash_file.txt wordlist.txt # SHA-256
-hashcat -m 3200 hash_file.txt wordlist.txt # bcrypt
-
-```
-
-### Sprawdzenie uzycia Base64 jako "szyfrowania"
-
-```bash
-echo "ENCODED_VALUE" | base64 -d
-
-```
-
-### Sprawdzenie uzycia ROT13
-
-```bash
-echo "ENCODED_VALUE" | tr 'A-Za-z' 'N-ZA-Mn-za-m'
-
-```
-
-### Sprawdzenie sily kluczy w JWT
-
-```bash
-# Dekodowanie JWT header:
-echo "JWT_HEADER_PART" | base64 -d 2>/dev/null
-# Sprawdz algorytm: HS256, RS256, none
-
-```
-
-### jwt_tool - testowanie JWT
-
-```bash
-python3 jwt_tool.py "JWT_TOKEN" -C -d wordlist.txt
-python3 jwt_tool.py "JWT_TOKEN" -X a    # test alg:none
-python3 jwt_tool.py "JWT_TOKEN" -X k    # key confusion
-
-```
-
-### Sprawdzenie certyfikatow z slabymi algorytmami
-
-```bash
-openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noout -text | grep -E "Signature Algorithm|Public-Key"
-
-```
-
-### CyberChef offline - analiza encodingow
-
-```bash
-# Uzyj CyberChef do identyfikacji wielowarstwowego kodowania
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na analizie kryptograficznej
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Przeanalizuj cookies i tokeny - zidentyfikuj typ kodowania/szyfrowania
-2. Sprawdz czy hasla w bazie danych sa hashowane z salt (bcrypt, scrypt, argon2)
-3. Szukaj uzycia MD5 lub SHA-1 do hashowania hasel (slabe)
-4. Sprawdz czy kody resetowania hasla sa przewidywalne
-5. Sprawdz JWT: algorytm (unikaj HS256 z slabym kluczem, none), klucz
-6. Sprawdz czy API klucze sa Base64 encoded zamiast zaszyfrowanych
-7. Sprawdz czy dane wrazliwe w bazie sa szyfrowane (nie zakodowane)
-8. Zweryfikuj dlugosc kluczy: RSA >= 2048bit, AES >= 128bit
-
-
----
+| Wskaźnik | Algorytm | Ryzyko |
+|---|---|---|
+| `eyJhbGciOiJub25lIn0...` | JWT `alg: none` | Token forgery (krytyczne) |
+| `eyJhbGciOiJIUzI1NiIs...` | JWT HS256 | Brute-force secret jeśli simple |
+| `0d4c4...` 32 hex chars | MD5 hash | Rainbow table attack na passwords |
+| `a94a8...` 40 hex chars | SHA-1 | Collision attacks (deprecated) |
+| `$2y$10$...` | bcrypt | Bezpieczne (jeśli cost ≥ 10) |
+| `$argon2id$v=19$m=...` | Argon2id | Bezpieczne (gold standard) |
+| `pbkdf2_sha256$...` | PBKDF2 | OK (jeśli iterations ≥ 100k) |
+| Identical plaintext → identical ciphertext | ECB | Patterns visible (zła) |
+| UUID v1 (`...:1ee:...`) | timestamp-based | Predictable |
+| UUID v4 (`...:4...`) | random | OK if CSPRNG |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md, Key_Management_Cheat_Sheet.md
 
-### Algorytmy — co uzywac, czego unikac
+### Algorytmy — co używać, czego unikać
 
 - **Szyfrowanie symetryczne**: AES-128 minimum, AES-256 preferowany, tryb **GCM** (authenticated encryption)
 - **Szyfrowanie asymetryczne**: ECC Curve25519 (preferowany) lub RSA >= 2048 bit
-- **Hashowanie hasel**: Argon2id (rekomendowany), bcrypt (cost >= 10), scrypt, PBKDF2 (FIPS)
-- **Hashowanie integralnosci**: SHA-256+, SHA-3
-- **NIGDY nie uzywaj**: MD5, SHA-1 (do hasel), DES, 3DES, RC4, Blowfish, ECB mode
-- **NIGDY**: custom/wlasne algorytmy kryptograficzne
+- **Hashowanie haseł**: Argon2id (rekomendowany), bcrypt (cost >= 10), scrypt, PBKDF2 (FIPS)
+- **Hashowanie integralności**: SHA-256+, SHA-3
+- **NIGDY nie używaj**: MD5, SHA-1 (do haseł), DES, 3DES, RC4, Blowfish, ECB mode
+- **NIGDY**: custom/własne algorytmy kryptograficzne
 
 ### Tryby szyfrowania blokowego
 
-- **GCM** (REKOMENDOWANY) — authenticated encryption, zapewnia poufnosc + integralnosc
+- **GCM** (REKOMENDOWANY) — authenticated encryption, zapewnia poufność + integralność
 - **CCM** — alternatywa dla GCM
-- **CTR/CBC** — jesli GCM niedostepny, ALE wymagaja osobnego MAC (Encrypt-then-MAC)
+- **CTR/CBC** — jeśli GCM niedostępny, ALE wymagają osobnego MAC (Encrypt-then-MAC)
 - **ECB** — NIGDY (ten sam plaintext → ten sam ciphertext, wzorce widoczne)
 
 ### Secure Random Number Generation (CSPRNG)
@@ -158,61 +73,80 @@ openssl s_client -connect TARGET:443 < /dev/null 2>/dev/null | openssl x509 -noo
 - .NET: `RandomNumberGenerator` | Go: `crypto/rand` | C: `getrandom(2)` | Ruby: `SecureRandom`
 - **NIGDY**: `Math.random()`, `rand()`, `random()`, `mt_rand()` — przewidywalne
 
-### Zarzadzanie kluczami
+### Zarządzanie kluczami
 
 - **Separacja kluczy od danych**: klucze na filesystem, dane w DB (lub odwrotnie)
 - **Envelope encryption**: Data Encryption Key (DEK) szyfrowany Key Encryption Key (KEK)
 - **Przechowywanie kluczy**: HSM, AWS KMS, Azure Key Vault, HashiCorp Vault, GCP Cloud KMS
 - **NIE**: hardkoduj w kodzie, NIE commituj do VCS, NIE w env vars (ryzyko phpinfo/proc/environ)
-- **Rotacja kluczy**: po kompromitacji, po uplywie cryptoperiod, po zaszyfrowaniu duzej ilosci danych
+- **Rotacja kluczy**: po kompromitacji, po upływie cryptoperiod, po zaszyfrowaniu dużej ilości danych
 
-### RSA — bezpieczne uzycie
+### RSA — bezpieczne użycie
 
 - **OAEP padding** (Optimal Asymmetric Encryption Padding) — ZAWSZE
 - NIGDY: PKCS#1 v1.5 padding — podatny na Bleichenbacher attack
 
-### UUID/GUID a bezpieczenstwo
+### UUID/GUID a bezpieczeństwo
 
-- UUID v4 — losowe, bezpieczne jesli generowane przez CSPRNG
-- UUID v1 — oparte na timestamp + MAC address — NIE losowe, mozliwe do odgadniecia
-- NIE polegaj na "randomowosci" UUID bez weryfikacji implementacji
+- UUID v4 — losowe, bezpieczne jeśli generowane przez CSPRNG
+- UUID v1 — oparte na timestamp + MAC address — NIE losowe, możliwe do odgadnięcia
+- NIE polegaj na "randomowości" UUID bez weryfikacji implementacji
 
 ### Defence in Depth
 
-- Zaszyfrowane dane powinny byc chronione tez przez access control
-- NIE polegaj na bezpieczenstwie zaszyfrowanych URL parameters
-- Kazda warstwa obrony moze zawodzic — redundancja jest kluczowa
+- Zaszyfrowane dane powinny być chronione też przez access control
+- NIE polegaj na bezpieczeństwie zaszyfrowanych URL parameters
+- Każda warstwa obrony może zawodzić — redundancja jest kluczowa
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **JWT `none` algorithm bypass**: starsze biblioteki JWT akceptowały `{"alg": "none"}` bez signature → atakujący tworzy dowolny token. Klasyk z 2015. Test: zmień `alg: HS256` → `alg: none`, usuń signature.
+- **JWT HS256 → RS256 confusion**: jeśli aplikacja akceptuje `alg: HS256` ale używa public key jako HMAC secret, atakujący zna public key (z `/jwks.json`) i forguje token.
+- **HMAC bypass via type juggling (PHP)**: `==` zamiast `===` w PHP może być bypassowany typami (`0 == "abc"` to `true` w PHP < 8.0).
+- **CSRF token reuse across users**: aplikacja generuje token raz i reuseuje — atakujący zdobywa token raz i używa go zawsze.
+- **Predictable session ID via PHP rand()**: PHP `rand()` jest seeded by current time → atakujący przewiduje session IDs (Schneier classic).
+- **ECB mode pattern visibility**: encrypt obrazka ECB pokazuje structure obrazu w ciphertext (klasyczny "ECB Penguin" example).
+
+### Common pitfalls
+
+- **MD5 dla password hashing wciąż występuje**: nawet w 2024+ legacy aplikacje używają MD5(`password + salt`) — natychmiastowy crack.
+- **Custom crypto "for added security"**: developers myślą że własna XOR-based encryption jest "bezpieczniejsza" → trywialny crack.
+- **`Math.random()` dla CSRF token**: nawet w nowoczesnych frameworkach, niektórzy developers ignorują warnings i używają non-CSPRNG.
+- **Hardcoded encryption key w JS bundle**: dla "client-side encryption" — beztroski client-side encryption z hardcoded key = false sense of security.
+
+### Świeżynki z research
+
+- **JWT cracking** — community pattern; HS256 z weak secret → `hashcat -m 16500` brute-force.
+- **Post-quantum cryptography migration** — NIST PQC standards (Kyber, Dilithium) zaczynają się pojawiać.
+- **Web Crypto API misuse** — community research; niektóre patterns w client-side crypto są fundamentally insecure.
+- **HackTricks Cryptography**: https://book.hacktricks.xyz/cryptography
+- **PortSwigger JWT Lab**: https://portswigger.net/web-security/jwt
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| AES Killer | Deszyfrowanie i analiza komunikacji AES | [GitHub](https://github.com/Ebryx/AES-Killer) |
-| BurpCrypto | Operacje kryptograficzne na payloadach w Burp | [GitHub](https://github.com/whwlsfb/BurpCrypto) |
+| JWT Editor | Edycja, podpisywanie, łamanie JWT | [GitHub](https://github.com/PortSwigger/jwt-editor) |
+| JWT Heartbreaker | Detekcja CVE-2018-0114 (none, weak HS256) | community ext |
+| Hackvertor | Encoding/decoding/decrypt manipulation | [GitHub](https://github.com/PortSwigger/hackvertor) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/04-Testing_for_Weak_Encryption
+- OWASP Cryptographic Storage CS: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+- OWASP Key Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html
+- OWASP Password Storage CS: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+- HackTricks Cryptography: https://book.hacktricks.xyz/cryptography
+- PortSwigger JWT: https://portswigger.net/web-security/jwt
+- jwt.io (decoder + cracker): https://jwt.io/
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V11.3.1 | Encryption Algorithms | Verify that insecure block modes (e.g., ECB) and weak padding schemes (e.g., PKCS#1 v1.5) are not used. |
-| V11.3.2 | Encryption Algorithms | Verify that only approved ciphers and modes such as AES with GCM are used. |
-| V11.4.1 | Hashing and Hash-based Functions | Verify that only approved hash functions are used for general cryptographic use cases, including digital signatures, HMAC, KDF, and random bit generation. Disallowed hash functions, such as MD5, must not be used for any cryptographic purpose. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V11.1.1 | Cryptographic Inventory and Documentation | Verify that there is a documented policy for management of cryptographic keys and a cryptographic key lifecycle that follows a key management standard such as NIST SP 800-57. This should include ensuring that keys are not overshared (for example, with more than two entities for shared secrets and more than one entity for private keys). |
-| V11.1.2 | Cryptographic Inventory and Documentation | Verify that a cryptographic inventory is performed, maintained, regularly updated, and includes all cryptographic keys, algorithms, and certificates used by the application. It must also document where keys can and cannot be used in the system, and the types of data that can and cannot be protected using the keys. |
-| V11.2.1 | Secure Cryptography Implementation | Verify that industry-validated implementations (including libraries and hardware-accelerated implementations) are used for cryptographic operations. |
-| V11.2.2 | Secure Cryptography Implementation | Verify that the application is designed with crypto agility such that random number, authenticated encryption, MAC, or hashing algorithms, key lengths, rounds, ciphers and modes can be reconfigured, upgraded, or swapped at any time, to protect against cryptographic breaks. Similarly, it must also be possible to replace keys and passwords and re-encrypt data. This will allow for seamless upgrades to post-quantum cryptography (PQC), once high-assurance implementations of approved PQC schemes or standards are widely available. |
-| V11.2.3 | Secure Cryptography Implementation | Verify that all cryptographic primitives utilize a minimum of 128-bits of security based on the algorithm, key size, and configuration. For example, a 256-bit ECC key provides roughly 128 bits of security where RSA requires a 3072-bit key to achieve 128 bits of security. |
-| V11.3.3 | Encryption Algorithms | Verify that encrypted data is protected against unauthorized modification preferably by using an approved authenticated encryption method or by combining an approved encryption method with an approved MAC algorithm. |
-| V11.4.2 | Hashing and Hash-based Functions | Verify that passwords are stored using an approved, computationally intensive, key derivation function (also known as a "password hashing function"), with parameter settings configured based on current guidance. The settings should balance security and performance to make brute-force attacks sufficiently challenging for the required level of security. |
-| V11.5.1 | Random Values | Verify that all random numbers and strings which are intended to be non-guessable must be generated using a cryptographically secure pseudo-random number generator (CSPRNG) and have at least 128 bits of entropy. Note that UUIDs do not respect this condition. |
+| V6.2.1 | Cryptography (L1) | All cryptographic modules fail securely. |
+| V6.2.3 | Cryptography (L2) | Approved cryptographic algorithms used. |
+| V6.2.5 | Cryptography (L2) | Authenticated encryption (e.g. GCM). |
+| V2.4.1 | Authenticator (L1) | Passwords stored using approved password hashing functions. |

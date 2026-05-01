@@ -1,0 +1,113 @@
+# ============================================================================
+# WSTG-CLNT-04: Client-side URL Redirect (Universal)
+# ============================================================================
+#
+# Coverage: open redirect przez client-side JS (window.location = userInput)
+# oraz przez server-side 302 z reflected param. Open redirect to klasyczny
+# pivot do phishing + OAuth attacks.
+# ============================================================================
+
+id: wstg-clnt-04-url-redirect
+
+info:
+  name: "WSTG-CLNT-04: Client-side URL Redirect / Open Redirect (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa open redirect: server-side (302/301 z reflected URL w Location)
+    oraz client-side (window.location.href = userInput). Pivot do phishing,
+    OAuth state confusion, SSRF (jeśli internal URL).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/04-Testing_for_Client-side_URL_Redirect
+    - https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html
+    - https://book.hacktricks.xyz/pentesting-web/open-redirect
+  classification:
+    cwe-id: CWE-601
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 6.1
+  tags: dast,wstg,wstg-v42-clnt-04,open-redirect,phishing,burp-history
+
+variables:
+  canary: "wstg{{rand_text_alpha(8)}}"
+  redirect_target: "//{{canary}}.example.com"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|logout|signout)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      redirect:
+        # Plain redirect targets
+        - "//{{canary}}.example.com"
+        - "https://{{canary}}.example.com"
+        - "http://{{canary}}.example.com"
+        # Schema bypass
+        - "javascript:alert({{canary}})"
+        - "data:text/html,<script>{{canary}}</script>"
+        # @ bypass (URL parser confusion)
+        - "https://target.com@{{canary}}.example.com"
+        - "https://target.com.{{canary}}.example.com"
+        # Backslash bypass (Windows / IE legacy)
+        - "\\\\{{canary}}.example.com"
+        - "/\\{{canary}}.example.com"
+        # Triple slash
+        - "///{{canary}}.example.com"
+        - "////{{canary}}.example.com"
+        # URL encoding
+        - "%2f%2f{{canary}}.example.com"
+        - "%2F%2F{{canary}}.example.com"
+        - "%5C%5C{{canary}}.example.com"
+        # Whitespace bypass
+        - " //{{canary}}.example.com"
+        - "//{{canary}}.example.com %20"
+        # Dot bypass
+        - "//.@{{canary}}.example.com"
+        - "/redirect?url=//{{canary}}.example.com"
+
+    fuzzing:
+      - parts: [query, body, cookie]
+        type: replace
+        mode: single
+        # Targetowanie typowych redirect param names
+        keys-regex:
+          - "(?i)^(redirect|url|next|return|returnto|return_url|continue|destination|dest|redir|redir_url|forward|goto|target|callback|callback_url|location|to)"
+        fuzz:
+          - "{{redirect}}"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      # Detect Location header redirect
+      - type: regex
+        part: header
+        name: location-redirect-to-attacker
+        regex:
+          - "(?i)location:\\s*[^\\r\\n]*{{canary}}"
+
+      - type: status
+        status:
+          - 301
+          - 302
+          - 303
+          - 307
+          - 308
+
+# ============================================================================
+# Known limitations:
+# - Detekcja TYLKO server-side redirect przez Location header. Client-side
+#   redirect (window.location = userInput) wymaga headless browser do
+#   weryfikacji - tu pokrywany przez WSTG-CLNT-01 markery.
+# - Whitelist redirect (np. tylko *.target.com) wymaga próby subdomain
+#   takeover dla bypass - to manual.
+# - Aplikacje używające numeric IDs zamiast URLs (`?redirect=1` → lookup tabela)
+#   nie są tym pokryte.
+# ============================================================================

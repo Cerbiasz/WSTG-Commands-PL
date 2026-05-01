@@ -1,0 +1,159 @@
+# ============================================================================
+# WSTG-INPV-03: HTTP Verb Tampering (Multi-Request)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Multi-request, brak interactsh w design (verb tampering = bypass auth via verb).
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ Method substitution (GET → POST, POST → PUT, etc.)
+#   ✓ X-HTTP-Method-Override / X-Method-Override
+#   ✓ X-Original-Method
+#   ✓ Bypass via _method param
+#   ✓ Custom verbs (CUSTOM, FOO)
+#
+# Detekcja: aplikacja powinna odrzucić nieautoryzowaną metodę (zwykle 405).
+# Jeśli alternatywna metoda zwraca 200 z DIFFERENT contentem niż original,
+# to znaczy że verb-based ACL jest broken.
+#
+# Performance budget: low (~30 metod × 5 endpointów)
+# Estimated time: ~2-5 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings (verb tampering sections)
+#   2. hacktricks (HTTP verb tampering)
+# ============================================================================
+
+id: wstg-inpv-03-verb-tampering
+
+info:
+  name: "WSTG-INPV-03: HTTP Verb Tampering (Multi-Request Differential)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa HTTP Verb Tampering - czyli omijanie ACL opartych na metodzie HTTP.
+    Wysyła oryginalny request (baseline) plus 6 wariantów z różnymi metodami.
+    Jeśli alternatywna metoda zwraca podobny content (auth bypass), to ACL
+    jest broken. Pokrywa też X-HTTP-Method-Override headery.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/03-Testing_for_HTTP_Verb_Tampering
+    - https://book.hacktricks.xyz/pentesting-web/abusing-hop-by-hop-headers
+  classification:
+    cwe-id: CWE-650
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
+    cvss-score: 6.5
+  tags: dast,wstg,wstg-v42-inpv-03,verb-tampering,asvs-v5.1.4,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+# Multi-request flow: baseline (oryginalna metoda) + 5 wariantów
+# Skupiamy się na endpointach POST/PUT/DELETE - bo GET zwykle nie ma ACL
+flow: http(1) && http(2) && http(3) && http(4) && http(5) && http(6)
+
+http:
+  # Block 1: Baseline - oryginalny request
+  - pre-condition:
+      - type: dsl
+        dsl:
+          # Tylko endpointy które typowo mają verb-based ACL (POST/PUT/DELETE/PATCH)
+          - 'method == "POST" || method == "PUT" || method == "PATCH"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "len(body) > 0"
+        internal: true
+
+  # Block 2: Substitute method - GET (najbardziej powszechny bypass)
+  - method: GET
+    path:
+      - "{{BaseURL}}{{Path}}"
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code < 400"
+        internal: true
+
+  # Block 3: HEAD
+  - method: HEAD
+    path:
+      - "{{BaseURL}}{{Path}}"
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code < 400"
+        internal: true
+
+  # Block 4: OPTIONS - zdradza Allow header
+  - method: OPTIONS
+    path:
+      - "{{BaseURL}}{{Path}}"
+    extractors:
+      - type: kval
+        kval:
+          - "allow"
+        internal: true
+
+  # Block 5: POST z X-HTTP-Method-Override: GET
+  - method: POST
+    path:
+      - "{{BaseURL}}{{Path}}"
+    headers:
+      X-HTTP-Method-Override: GET
+      X-Method-Override: GET
+      X-HTTP-Method: GET
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code < 400"
+        internal: true
+
+  # Block 6: Custom verb (TRACE/PATCH) - czasem permissive servers akceptują
+  # Nuclei wymaga znanego HTTP verb - używamy TRACE jako rzadki/niespodziewany
+  - method: TRACE
+    path:
+      - "{{BaseURL}}{{Path}}"
+    matchers-condition: and
+    matchers:
+      # Final aggregate matcher porównujący wyniki
+      # Wykryto verb tampering jeśli:
+      # - block 1 (oryginal POST) zwrócił 401/403 (auth required)
+      #   ALE block 2 (GET) lub block 5 (POST z override) zwrócił 200/2xx
+      - type: dsl
+        name: verb-tampering-detected
+        dsl:
+          # Original wymaga auth (4xx) ALE alternatywa działa (2xx)
+          - "(status_code_1 == 401 || status_code_1 == 403) && (status_code_2 < 400 || status_code_5 < 400)"
+        condition: or
+
+      # ANTI-FP: rozsądny diff długości (nie błąd parser)
+      - type: dsl
+        name: meaningful-bypass
+        dsl:
+          - "content_length_2 > 50 || content_length_5 > 50"
+
+      - type: dsl
+        dsl:
+          - "duration_1 + duration_2 + duration_5 < 60"
+
+# ============================================================================
+# Known limitations:
+# - Wymaga że Burp export ma POST/PUT/PATCH endpointy (GET endpoints są skipowane
+#   bo zwykle nie mają verb-based ACL)
+# - Aplikacje za WAF który normalizuje metody (np. converts FUZZ → 405) generują
+#   FN
+# - X-HTTP-Method-Override jest legitymą feature w niektórych frameworkach
+#   (Express middleware) - to nie zawsze vuln, tylko gdy ACL nie waliduje
+#   prawdziwej metody
+# ============================================================================

@@ -1,0 +1,381 @@
+# ============================================================================
+# WSTG-INFO-08: Fingerprint Web Application Framework (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-INFO-08 (existing repo):
+#   ✓ Cookie-based fingerprint (PHPSESSID, JSESSIONID, ASP.NET, Laravel,
+#     Django, Rails, ColdFusion, connect.sid)
+#   ✓ Framework markers w body (Drupal.settings, Spring Actuator, ViewState)
+#   ✓ Path-based markers (/wp-content/, /administrator/, /actuator/, /_next/,
+#     /sites/default/files/)
+#   ✓ Header markers (X-Drupal-Cache, X-Generator, X-Powered-By: Express)
+#   ✓ Meta generator
+#
+# Z research:
+#   ✓ Specific framework artifacts (Vue __vue_app__, Angular ng-version,
+#     React __REACT_DEVTOOLS, Svelte __svelte_meta__)
+#   ✓ Static asset paths (/_next/static/, /_nuxt/, /_astro/, /assets/)
+#   ✓ HTMX, Alpine.js, Stimulus markers
+#   ✓ Build tool fingerprint (Vite, Webpack, Parcel, esbuild)
+#   ✓ Server-side rendering hydration markers
+#
+# Filozofia: jeden szablon → wiele matcherów (każdy framework = osobny matcher
+# z OR), oficjalne nuclei-templates http/technologies/* uzupełniają konkretne
+# frameworki ze szczegółową detekcją wersji.
+#
+# Performance budget: very low (~1-2 requests per host)
+# Estimated time: ~5s per host
+#
+# Source mapping:
+# - WSTG-INFO-08 CHEATSHEET (existing): cookie-based, generator meta
+# - HackTricks pentesting-web/<framework>/ pages
+# - Wappalyzer fingerprint database (concept)
+# - Recent SPA framework markers (researcher community)
+# ============================================================================
+
+id: wstg-info-08-framework-fingerprint
+
+info:
+  name: "WSTG-INFO-08: Web App Framework Fingerprint (Universal)"
+  author: pentest-team
+  severity: info
+  description: |
+    Wykrywa framework aplikacji webowej przez analizę cookie names, body markers,
+    static asset paths, meta tagów i specyficznych headerów. Pokrywa: WordPress,
+    Drupal, Joomla, Magento, Spring (Boot/MVC), Django, Rails, Laravel, Symfony,
+    Express, ASP.NET MVC/Core, ColdFusion, oraz frontend SPA: React, Vue,
+    Angular, Svelte, Next.js, Nuxt, Astro.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/08-Fingerprint_Web_Application_Framework
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+    - https://www.wappalyzer.com/
+  classification:
+    cwe-id: CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-info-08,fingerprint,framework,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # CMS - WordPress
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-wordpress
+        regex:
+          - "(?i)/wp-content/"
+          - "(?i)/wp-includes/"
+          - "(?i)<meta name=[\"']generator[\"'] content=[\"']WordPress\\s"
+          - "(?i)wp-emoji-release\\.min\\.js"
+
+      # =====================================================================
+      # CMS - Drupal
+      # =====================================================================
+      - type: regex
+        name: framework-drupal
+        regex:
+          - "(?i)<meta name=[\"']Generator[\"'] content=[\"']Drupal\\s"
+          - "(?i)Drupal\\.settings"
+          - "(?i)/sites/default/files/"
+          - "(?i)X-Drupal-(Cache|Dynamic-Cache):"
+
+      # =====================================================================
+      # CMS - Joomla
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-joomla
+        regex:
+          - "(?i)<meta name=[\"']generator[\"'] content=[\"']Joomla"
+          - "(?i)/components/com_"
+          - "(?i)/templates/[a-z0-9_-]+/css/template\\.css"
+
+      # =====================================================================
+      # CMS - Magento
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-magento
+        regex:
+          - "(?i)/skin/frontend/"
+          - "(?i)Mage\\.Cookies"
+          - "(?i)Magento_"
+          - "(?i)/static/version\\d+/frontend/"
+
+      # =====================================================================
+      # PHP - Laravel
+      # =====================================================================
+      - type: regex
+        part: header
+        name: framework-laravel
+        regex:
+          - "(?i)set-cookie:\\s*laravel_session="
+          - "(?i)set-cookie:\\s*XSRF-TOKEN="
+
+      - type: regex
+        part: body
+        name: framework-laravel-body
+        regex:
+          - "(?i)<meta name=[\"']csrf-token[\"']"
+          - "(?i)Laravel\\."
+          - "(?i)/_ignition/"
+
+      # =====================================================================
+      # PHP - Symfony
+      # =====================================================================
+      - type: regex
+        name: framework-symfony
+        regex:
+          - "(?i)X-Debug-Token-Link:"
+          - "(?i)/_profiler"
+          - "(?i)/_wdt/"
+          - "(?i)X-Symfony-Cache:"
+
+      # =====================================================================
+      # Python - Django
+      # =====================================================================
+      - type: regex
+        part: header
+        name: framework-django
+        regex:
+          - "(?i)set-cookie:\\s*csrftoken="
+          - "(?i)set-cookie:\\s*sessionid="
+
+      - type: regex
+        part: body
+        name: framework-django-body
+        regex:
+          - "(?i)<input[^>]*name=[\"']csrfmiddlewaretoken[\"']"
+          - "(?i)Django\\.\\d"
+
+      # =====================================================================
+      # Python - Flask / Werkzeug
+      # =====================================================================
+      - type: regex
+        name: framework-flask
+        regex:
+          - "(?i)set-cookie:\\s*session="
+          - "(?i)server:\\s*Werkzeug"
+          - "(?i)Flask"
+
+      # =====================================================================
+      # Ruby - Rails
+      # =====================================================================
+      - type: regex
+        name: framework-rails
+        regex:
+          - "(?i)X-Runtime:"
+          - "(?i)X-Request-Id:"
+          - "(?i)set-cookie:\\s*_[a-z0-9_-]+_session="
+          - "(?i)<meta name=[\"']csrf-param[\"']"
+
+      # =====================================================================
+      # Java - Spring Boot
+      # =====================================================================
+      - type: regex
+        name: framework-spring
+        regex:
+          - "(?i)X-Application-Context:"
+          - "(?i)set-cookie:\\s*JSESSIONID="
+          - "(?i)set-cookie:\\s*SESSION="
+          - '"_links"\\s*:\\s*\\{\\s*"self"'
+
+      # =====================================================================
+      # Node - Express
+      # =====================================================================
+      - type: regex
+        part: header
+        name: framework-express
+        regex:
+          - "(?i)X-Powered-By:\\s*Express"
+          - "(?i)set-cookie:\\s*connect\\.sid="
+
+      # =====================================================================
+      # ASP.NET / .NET Core
+      # =====================================================================
+      - type: regex
+        name: framework-aspnet
+        regex:
+          - "(?i)set-cookie:\\s*ASP\\.NET_SessionId="
+          - "(?i)set-cookie:\\s*\\.AspNetCore\\."
+          - "(?i)X-AspNet(?:Mvc)?-Version:"
+          - "(?i)<input[^>]*name=[\"']__VIEWSTATE[\"']"
+          - "(?i)<input[^>]*name=[\"']__RequestVerificationToken[\"']"
+
+      # =====================================================================
+      # ColdFusion
+      # =====================================================================
+      - type: regex
+        name: framework-coldfusion
+        regex:
+          - "(?i)set-cookie:\\s*CFID="
+          - "(?i)set-cookie:\\s*CFTOKEN="
+
+      # =====================================================================
+      # Frontend SPA - React
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-react
+        regex:
+          - "__REACT_DEVTOOLS_GLOBAL_HOOK__"
+          - "data-react(?:root|helmet)"
+          - "react-dom"
+
+      # =====================================================================
+      # Frontend - Vue
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-vue
+        regex:
+          - "(?i)data-v-[a-f0-9]{8}"
+          - "(?i)\\bVue\\.config\\b"
+          - "(?i)__vue_app__"
+          - "(?i)<!-- Vue component"
+
+      # =====================================================================
+      # Frontend - Angular
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-angular
+        regex:
+          - "(?i)ng-version=[\"']\\d"
+          - "(?i)ng-controller="
+          - "(?i)<app-root"
+          - "(?i)data-ng-app"
+
+      # =====================================================================
+      # Frontend - Svelte / SvelteKit
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-svelte
+        regex:
+          - "(?i)svelte-[a-z0-9]{6}"
+          - "(?i)__svelte_meta__"
+          - "(?i)<!-- HEAD_svelte-"
+
+      # =====================================================================
+      # Meta-frameworks - Next.js / Nuxt / Astro / Remix
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-nextjs
+        regex:
+          - "(?i)__NEXT_DATA__\\s*="
+          - "(?i)/_next/static/"
+          - "(?i)<div id=[\"']__next[\"']"
+
+      - type: regex
+        part: body
+        name: framework-nuxt
+        regex:
+          - "(?i)window\\.__NUXT__"
+          - "(?i)/_nuxt/"
+          - "(?i)<div id=[\"']__nuxt[\"']"
+
+      - type: regex
+        part: body
+        name: framework-astro
+        regex:
+          - "(?i)/_astro/"
+          - "(?i)astro-island"
+
+      - type: regex
+        part: body
+        name: framework-remix
+        regex:
+          - "(?i)__remixContext"
+          - "(?i)__remixManifest"
+
+      # =====================================================================
+      # Hypermedia / progressive enhancement
+      # =====================================================================
+      - type: regex
+        part: body
+        name: framework-htmx
+        regex:
+          - "(?i)hx-(get|post|put|delete|patch|swap|target|trigger)="
+
+      - type: regex
+        part: body
+        name: framework-alpine
+        regex:
+          - "(?i)x-data="
+          - "(?i)x-init="
+          - "(?i)Alpine\\.start\\(\\)"
+
+      - type: regex
+        part: body
+        name: framework-stimulus
+        regex:
+          - "(?i)data-controller="
+          - "(?i)data-action="
+
+      # =====================================================================
+      # Build tools (signals not framework but useful)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: build-tool-vite
+        regex:
+          - "(?i)/@vite/client"
+          - "(?i)__vite__"
+
+      - type: regex
+        part: body
+        name: build-tool-webpack
+        regex:
+          - "(?i)__webpack_require__\\."
+          - "(?i)webpackJsonp"
+
+    extractors:
+      - type: regex
+        name: meta-generator
+        part: body
+        group: 1
+        regex:
+          - "(?i)<meta name=[\"']generator[\"'] content=[\"']([^\"']+)"
+
+      - type: regex
+        name: framework-version
+        part: body
+        group: 1
+        regex:
+          - "(?i)ng-version=[\"']([\\d.]+)"
+          - "(?i)Vue\\.version\\s*=\\s*[\"']([\\d.]+)"
+          - "(?i)React.{0,30}version[\"']?\\s*[:=]\\s*[\"']([\\d.]+)"
+
+      - type: regex
+        name: cookies-fingerprint
+        part: header
+        group: 1
+        regex:
+          - "(?i)set-cookie:\\s*([A-Za-z_.]+)="
+
+# ============================================================================
+# Known limitations:
+# - WAF / reverse proxy może wstrzykiwać sztuczne cookies (np. Akamai)
+# - SPA z lazy-loading może mieć framework markery dopiero po hydration
+# - Fingerprintowanie wersji frameworka wymaga oficjalnych nuclei-templates
+#   http/technologies/<framework>/ - tu identyfikujemy TYP, nie wersję
+# - Headless aplikacje (API-only) bez HTML body - tylko cookie/header markers
+# ============================================================================

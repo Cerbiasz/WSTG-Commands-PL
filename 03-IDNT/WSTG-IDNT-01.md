@@ -1,165 +1,114 @@
 # WSTG-IDNT-01 — Test Role Definitions
 
-## Cele
+## Cel
 
-- Zidentyfikowac i udokumentowac role uzytkownikow w aplikacji
-- Sprawdzic mozliwosc przelaczania sie miedzy rolami
-- Ocenic granularnosc uprawnien przypisanych do rol
+Audyt definicji ról i uprawnień w aplikacji: czy role są jasno zdefiniowane, czy uprawnienia są granularne, czy nie ma role explosion (zbyt wiele ról). Test prerekursywny dla całego ATHZ — bez mapy ról nie można testować autoryzacji.
 
-## KOMENDY
+> **Test manual**: wymaga rozumienia business logic + dostępu do dokumentacji ról. Nuclei nie ma direct testu - cross-ref WSTG-ATHZ dla aktywnych testów uprawnień.
 
-### Pobranie strony logowania i analiza dostepnych rol
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -v -b cookies.txt -c cookies.txt "https://TARGET/login" 2>&1 | grep -iE "role|admin|user|moderator|manager"
+### Metodologia (5 kroków)
 
-```
+1. **Documentation review**: zebrać role matrix z docs / dev team. Każda rola → expected permissions.
+2. **Login as each role**: uzyskać accounts dla każdej zdefiniowanej roli. Nawigacja → mapowanie endpoints accessible per role.
+3. **Cross-role test**: dla każdego endpointu `/api/admin/*` testować dostęp jako nie-admin (BOLA/IDOR).
+4. **Privilege escalation**: spróbować mass assignment (`role=admin` w request body), JWT manipulation (zmiana `role` claim).
+5. **Audit trail check**: czy aplikacja loguje permission checks i naruszenia?
 
-### Logowanie jako uzytkownik o niskich uprawnieniach
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testpass"}' -c cookies_user.txt -v
-
-```
-
-### Logowanie jako administrator
-
-```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"adminpass"}' -c cookies_admin.txt -v
-
-```
-
-### Proba dostepu do panelu admina z tokenem zwyklego uzytkownika
-
-```bash
-curl -s -b cookies_user.txt "https://TARGET/admin/dashboard" -v
-
-```
-
-### Proba zmiany roli w parametrze zapytania
-
-```bash
-curl -s -X POST "https://TARGET/api/profile" -H "Content-Type: application/json" -H "Authorization: Bearer USER_TOKEN" -d '{"role":"admin"}' -v
-
-```
-
-### Proba zmiany roli przez cookie
-
-```bash
-curl -s -b "role=admin; session=USER_SESSION_ID" "https://TARGET/admin/dashboard" -v
-
-```
-
-### Proba zmiany roli w uktytym polu formularza
-
-```bash
-curl -s -X POST "https://TARGET/api/update-profile" -H "Authorization: Bearer USER_TOKEN" -d "username=testuser&role=administrator&email=test@test.com" -v
-
-```
-
-### Proba eskalacji uprawnien przez manipulacje JWT
-
-```bash
-# Dekodowanie JWT tokena
-echo "USER_JWT_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null
-
-```
-
-### Sprawdzenie roznych endpointow z tokenami roznych rol
-
-```bash
-for endpoint in /admin /admin/users /api/admin/settings /manager /moderator/panel; do echo "--- $endpoint ---"; curl -s -o /dev/null -w "%{http_code}" -b cookies_user.txt "https://TARGET$endpoint"; echo; done
-
-```
-
-### Testowanie RBAC - proba wywolania akcji admina jako user
-
-```bash
-curl -s -X DELETE "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN" -v
-curl -s -X PUT "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN" -H "Content-Type: application/json" -d '{"role":"admin"}' -v
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak wordlist - test logiczny oparty na analizie rol i uprawnien
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zaloguj sie na konto z kazda dostepna rola i zmapuj dostepne funkcje
-2. W Burp Suite Repeater zmien tokeny/cookie sesji miedzy rolami i sprawdz odpowiedzi
-3. Uzyj Burp Intruder do testowania roznych wartosci parametru "role" (admin, user, moderator, manager, superadmin)
-4. Sprawdz czy aplikacja ujawnia role w odpowiedziach API (np. GET /api/me)
-5. W DevTools (F12) sprawdz localStorage/sessionStorage pod katem przechowywanych informacji o rolach
-6. Sprawdz czy zmiana roli po stronie klienta (np. w JavaScript) wplywa na logike aplikacji
-7. Przetestuj kazdy endpoint z tokenami roznych rol i porownaj odpowiedzi HTTP
-8. Zainstaluj rozszerzenie Autorize w Burp Suite do automatycznego testowania autoryzacji miedzy rolami
-
-
----
+- [ ] Lista wszystkich ról udokumentowana
+- [ ] Per role: expected permissions matrix
+- [ ] Login jako każda rola - dostępne endpointy
+- [ ] Horizontal escalation: user A → resources of user B
+- [ ] Vertical escalation: user → admin
+- [ ] Mass assignment in request body (role=admin)
+- [ ] JWT `role` claim manipulation
+- [ ] Hidden form fields containing role/permission
+- [ ] Audit logging permission denials
+- [ ] Role inheritance hierarchy (admin includes user permissions?)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Access_Control_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
 
-### Definicja rol i uprawnien
+### Definicja ról i uprawnień
 
-- **Role**: grupuja uprawnienia (admin, user, moderator, manager, readonly)
+- **Role**: grupują uprawnienia (admin, user, moderator, manager, readonly)
 - **Uprawnienia**: granularne akcje (create_user, delete_order, view_report)
-- Unikaj **role explosion** — zbyt wiele rol = trudne do zarzadzania
+- Unikaj **role explosion** — zbyt wiele ról = trudne do zarządzania
 - Preferuj **ABAC/ReBAC** nad RBAC dla fine-grained permissions
 
 ### Wymuszanie autoryzacji
 
 - **Server-side ONLY** — NIGDY nie polegaj na client-side (JavaScript, hidden fields, localStorage)
-- **Deny by default** — dostep tylko jesli jawnie przyznany
-- **Centralny middleware** — unikaj rozproszonych checkow w kodzie (latwe do pominiecia)
-- **Kazdego request** waliduj — nie zakladaj ze sesja = autoryzacja
+- **Deny by default** — dostęp tylko jeśli jawnie przyznany
+- **Centralny middleware** — unikaj rozproszonych checków w kodzie (łatwe do pominięcia)
+- **Każdego request** waliduj — nie zakładaj że sesja = autoryzacja
 
-### Separacja uprawnien
+### Separacja uprawnień
 
 - Oddzielne panele admin od user interface (inna subdomena/port)
 - Funkcje administracyjne w oddzielnym module/kontrolerze
-- Osobny middleware autoryzacji dla admin endpointow
+- Osobny middleware autoryzacji dla admin endpointów
 
-### Testowanie zdefiniowanych rol
+### Testowanie zdefiniowanych ról
 
 - Zmapuj WSZYSTKIE role w systemie i ich oczekiwane uprawnienia
-- Zaloguj sie jako kazda rola → testuj dostep do endpointow innych rol
+- Zaloguj się jako każda rola → testuj dostęp do endpointów innych ról
 - Testuj **horizontal** (user A → zasoby user B) i **vertical** (user → admin) escalation
 - Manipuluj parametry: `role=admin`, `isAdmin=true`, JWT claims
-- Uzyj Burp Autorize/AuthMatrix do automatycznego porownywania
+- Użyj Burp Autorize/AuthMatrix do automatycznego porównywania
 
 ### Logging i audit
 
-- Loguj WSZYSTKIE proby dostepu i naruszenia autoryzacji
-- Loguj zmiany uprawnien (kto, kiedy, co zmieniono)
-- Alertuj na powtarzajace sie proby eskalacji
-- Regularny audit rol i uprawnien — usun nieuzywane konta i nadmiarowe uprawnienia
+- Loguj WSZYSTKIE próby dostępu i naruszenia autoryzacji
+- Loguj zmiany uprawnień (kto, kiedy, co zmieniono)
+- Alertuj na powtarzające się próby eskalacji
+- Regularny audit ról i uprawnień — usuń nieużywane konta i nadmiarowe uprawnienia
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **ABAC bypass via attribute manipulation**: ABAC (Attribute-Based Access Control) decisions polegają na user attributes (department, project). Manipulacja attributes (np. via SAML response) = bypass.
+- **JWT role claim escalation**: jeśli `alg: HS256` z weak secret + atakujący zna public key → forge JWT z `role: admin`.
+- **Role caching exploitation**: niektóre aplikacje cache role decisions per session - po elevation, zmiana roli nie effective do następnego login. Może być inverse też - downgrade nie disconnects session.
+- **Multi-tenant role isolation**: gdy aplikacja serwuje multiple orgs, role w org A musi być isolated od org B. Testować cross-tenant access.
+- **GraphQL field-level authz bypass**: niektóre GraphQL implementations check authz na query level ale nie na nested fields - bypass via fragment.
+
+### Common pitfalls
+
+- **Frontend hides admin button = security**: false sense - backend musi enforce. Atakujący direct API call.
+- **Role check w controller, brak w service layer**: jeśli inne endpoints używają same service, bypass via alternative entry point.
+- **Default role "user" can be changed by self**: rejestracja user może edit own role w PUT /me request body.
+
+### Świeżynki z research
+
+- **OWASP Authorization Testing Cheat Sheet**: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Testing_Automation_Cheat_Sheet.html
+- **Burp AuthMatrix / Autorize**: tooling for automated authz testing
+- **HackTricks Privilege Escalation**: https://book.hacktricks.xyz/pentesting-web
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| AuthMatrix | Testowanie autoryzacji w macierzy uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
-| Autorize | Automatyczne wykrywanie bledow autoryzacji | [GitHub](https://github.com/Quitten/Autorize) |
-| Auth Analyzer | Analiza bledow autoryzacji przez porownywanie sesji | [GitHub](https://github.com/simioni87/auth_analyzer) |
+| AuthMatrix | Matrix testing of authz across roles | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
+| Autorize | Automated authz bypass detection | [GitHub](https://github.com/Quitten/Autorize) |
+| JWT Editor | Manipulacja JWT roles | [GitHub](https://github.com/PortSwigger/jwt-editor) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/03-Identity_Management_Testing/01-Test_Role_Definitions
+- OWASP Access Control CS: https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html
+- OWASP Authorization CS: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+- HackTricks Privilege Escalation: https://book.hacktricks.xyz/pentesting-web
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.1.1 | Authorization Documentation | Verify that authorization documentation defines rules for restricting function-level and data-specific access based on consumer permissions and resource attributes. |
-| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V8.1.2 | Authorization Documentation | Verify that authorization documentation defines rules for field-level access restrictions (both read and write) based on consumer permissions and resource attributes. Note that these rules might depend on other attribute values of the relevant data object, such as state or status. |
+| V4.1.1 | General Access Control (L1) | Application enforces access control rules at trusted layer. |
+| V4.1.3 | General Access Control (L1) | Principle of least privilege exists. |
+| V4.2.1 | Operation Level (L1) | Authorization checks not bypassed by parameter tampering. |

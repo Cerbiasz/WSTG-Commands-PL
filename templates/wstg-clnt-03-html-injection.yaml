@@ -1,0 +1,116 @@
+# ============================================================================
+# WSTG-CLNT-03: HTML Injection (Universal)
+# ============================================================================
+#
+# Coverage: HTML injection bez wykonania JS - wstrzyknięcie tagów strukturalnych
+# (form, iframe, base) w body. Różni się od XSS że nie zawiera <script>/event
+# handlers - wystarczy wstrzyknięty tag żeby zmienić strukturę strony.
+#
+# Use cases:
+# - Phishing form injection (`<form action="evil.com">`)
+# - Base href injection (`<base href="//evil.com/">`)
+# - Iframe injection (overlay, clickjacking complement)
+# ============================================================================
+
+id: wstg-clnt-03-html-injection
+
+info:
+  name: "WSTG-CLNT-03: HTML Injection (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa HTML injection - reflection user input bez script execution
+    ale z możliwością wstrzyknięcia tagów strukturalnych (form, iframe,
+    base, meta refresh) co umożliwia phishing, clickjacking pivot, redirect.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/03-Testing_for_HTML_Injection
+    - https://book.hacktricks.xyz/pentesting-web/dangling-markup-html-scriptless-injection
+  classification:
+    cwe-id: CWE-79,CWE-80
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N
+    cvss-score: 4.3
+  tags: dast,wstg,wstg-v42-clnt-03,html-injection,xss,burp-history
+
+variables:
+  canary: "wstg{{rand_text_alpha(8)}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|logout)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # Structural HTML tags - reflection signal bez script execution
+        - "<{{canary}}>"
+        - "<{{canary}}/>"
+        - "<form>{{canary}}</form>"
+        - "<iframe src=//{{canary}}.example>"
+        - "<base href=//{{canary}}.example/>"
+        - "<meta http-equiv=refresh content=0;url=//{{canary}}.example>"
+        - "<a href=//{{canary}}.example>{{canary}}</a>"
+        # Dangling markup (Frans Rosén research) - data exfil via partial tag
+        - "<img src='{{canary}}"
+        - "'<img src='{{canary}}"
+        - "\"><img src='{{canary}}"
+        # Unclosed attribute = data exfil through attribute boundary
+
+    fuzzing:
+      - parts: [query, body, cookie, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(injection)}}"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      # Primary: canary jako fragment HTML tag w body
+      - type: regex
+        part: body
+        name: html-tag-injection-confirmed
+        regex:
+          - "<[^>\\s]*{{canary}}"
+          - "<form[^>]*>[^<]*{{canary}}"
+          - "<iframe[^>]*{{canary}}"
+          - "<base[^>]*{{canary}}"
+        condition: or
+
+      # Secondary: response renderable
+      - type: regex
+        part: header
+        name: html-content-type
+        regex:
+          - "(?i)content-type:\\s*(?:text/html|application/xhtml)"
+
+      # Anti-FP: WAF block
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Anti-FP: not fully escaped
+      - type: regex
+        part: body
+        name: not-fully-escaped
+        negative: true
+        regex:
+          - "&lt;{{canary}}&gt;"
+        condition: and
+
+# ============================================================================
+# Known limitations:
+# - HTML injection bez script jest mniej critical niż XSS, ale signal
+# - Aplikacje używające DOMPurify lub similar sanitizers eliminują wszystkie
+#   < > tags = brak findings
+# - Markdown rendering może akceptować subset HTML (np. <a>, <img>) - to
+#   może być intended behavior, false positive
+# ============================================================================

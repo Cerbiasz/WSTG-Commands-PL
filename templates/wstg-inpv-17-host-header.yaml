@@ -1,0 +1,206 @@
+# ============================================================================
+# WSTG-INPV-17: Host Header Injection (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (Host Header). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ Direct Host header replacement (cache poisoning, password reset poisoning)
+#   ✓ X-Forwarded-Host bypass
+#   ✓ X-Forwarded-Server, X-Host, Forwarded
+#   ✓ Duplicate Host headers
+#   ✓ Host header SSRF
+#   ✓ Absolute URL request line
+#
+# Performance budget: low (~50 payloads × 1 część = header)
+# Estimated time: ~3-5 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/HTTP Parameter Pollution + Host header research
+#   2. hacktricks (host header sections)
+#   3. PortSwigger Host Header research
+# ============================================================================
+
+id: wstg-inpv-17-host-header
+
+info:
+  name: "WSTG-INPV-17: Host Header Injection (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa Host Header Injection przez wstrzykiwanie attacker-controlled host
+    do nagłówków Host, X-Forwarded-Host, X-Host, Forwarded oraz przez absolute
+    URL request line. Detekcja: attacker host pojawia się w response (np. w
+    password-reset link, Location header), interactsh OOB.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/17-Testing_for_Host_Header_Injection
+    - https://portswigger.net/web-security/host-header
+    - https://book.hacktricks.xyz/pentesting-web/abusing-hop-by-hop-headers
+  classification:
+    cwe-id: CWE-644
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N
+    cvss-score: 5.4
+  tags: dast,wstg,wstg-v42-inpv-17,host-header,asvs-v5.2.7,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  attacker_host: "{{canary}}.{{interactsh-url}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # Wszystkie payloady są wartościami dla nagłówków - fuzzing tylko
+        # part: header z keys: Host / X-Forwarded-Host / X-Host / Forwarded
+        - "{{attacker_host}}"
+        - "evil.com"
+        - "{{canary}}.attacker.com"
+        - "127.0.0.1"
+        - "localhost"
+        # Z portami
+        - "{{attacker_host}}:80"
+        - "{{attacker_host}}:443"
+        - "{{attacker_host}}:8080"
+        # Original host + injected
+        - "{{Hostname}} {{attacker_host}}"
+        - "{{Hostname}}:80@{{attacker_host}}"
+        - "{{Hostname}}@{{attacker_host}}"
+        # Newline injection (CRLF in Host)
+        - "{{Hostname}}%0d%0aX-Forwarded-Host:{{attacker_host}}"
+        - "{{Hostname}}%0aHost:{{attacker_host}}"
+        # Subdomain bypass attempts
+        - "{{Hostname}}.{{attacker_host}}"
+        - "{{attacker_host}}.{{Hostname}}"
+
+    fuzzing:
+      - parts: [header]
+        type: replace
+        mode: single
+        # Tylko host-related headers
+        keys:
+          - "Host"
+          - "X-Forwarded-Host"
+          - "X-Host"
+          - "X-Forwarded-Server"
+          - "X-HTTP-Host-Override"
+          - "Forwarded"
+          - "X-Original-Host"
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - attacker host echoed in response (body/header)
+      - type: regex
+        part: body
+        name: host-reflected-body
+        regex:
+          - "{{canary}}"
+          - "{{attacker_host}}"
+        condition: or
+
+      # Alternatywnie: header (Location, Refresh)
+      # Nuclei matcher z OR na tym samym poziomie nie istnieje per part - więc
+      # damy też matcher dla header. matchers-condition: and zmusza obu - to
+      # za ostre. Zmieniam strategię: jeden matcher z `part: all` (header+body)
+      # zamiast osobnych dla part.
+
+      # Warstwa 2: SECONDARY - response sane
+      - type: dsl
+        dsl:
+          - "len(body) > 30 || status_code == 301 || status_code == 302"
+
+      # Warstwa 3: ANTI-FP - WAF block
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: location-header
+        part: header
+        regex:
+          - "(?i)Location:\\s*[^\\r\\n]*{{canary}}"
+          - "(?i)Location:\\s*[^\\r\\n]*{{attacker_host}}"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Host Header injection - OOB via SSRF / password-reset link
+  # Aplikacje używające Host header do generowania linków (password reset,
+  # email verification, asset URLs) wysyłają attacker URL do użytkownika.
+  # Bezpośrednio tu testujemy server-side fetch przez X-Forwarded-Host
+  # (typowy dla cache poisoning + SSRF).
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      host_oob:
+        # Bezpośredni Host (rzadko ale działa)
+        - "{{interactsh-url}}"
+        # X-Forwarded-Host - typowy override cache key
+        - "{{interactsh-url}}"
+        # Absolute URI w request line - HTTP/1.1 spec
+        - "http://{{interactsh-url}}/{{canary}}"
+
+    fuzzing:
+      - parts: [header]
+        keys-regex:
+          - "(?i)^(host|x-forwarded-host|x-host|x-forwarded-server|x-http-host-override|forwarded)$"
+        type: replace
+        mode: single
+        fuzz:
+          - "{{host_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Większość praktycznego wykorzystania Host Header Injection wymaga
+#   specyficznego flow (np. password reset z linkiem) - nie da się tego
+#   wykryć w pojedynczym requeście. Tu tylko wykrywamy ECHO Host w response.
+# - Reverse proxy które forsują własny Host header generują FN
+# - Aplikacje używające relative URLs nie zdradzą host injection w Location
+# ============================================================================

@@ -1,0 +1,120 @@
+# ============================================================================
+# WSTG-IDNT-04: Account Enumeration & Guessable User Account (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-05-01
+#
+# Coverage: detekcja enumeracji userów przez markery w response body / status:
+#   ✓ "User not found" / "User does not exist" w response body
+#   ✓ "Username already taken" / "Email already registered"
+#   ✓ Różny status code (200 vs 404) per existing/non-existing user
+#   ✓ Username/Email reflectowane w error response
+#
+# Filozofia: pasywna detekcja markerów enumeracji w istniejących responses.
+# Active testing (login z istniejącym vs nieistniejącym account) wymaga znania
+# valid username = to manual.
+# ============================================================================
+
+id: wstg-idnt-04-account-enumeration
+
+info:
+  name: "WSTG-IDNT-04: Account Enumeration Markers (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Pasywnie wykrywa markery account enumeration w odpowiedziach HTTP:
+    "User not found", "Email already taken", differential status codes.
+    Aplikacja nie powinna ujawniać czy konto istnieje. Aktywny test
+    (login z znanym vs nieznanym user) wymaga manual testing.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/03-Identity_Management_Testing/04-Testing_for_Account_Enumeration_and_Guessable_User_Account
+    - https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-203,CWE-204
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-idnt-04,account-enumeration,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # Login error markers - differential response
+      # =====================================================================
+      - type: regex
+        part: body
+        name: login-user-not-found
+        regex:
+          - "(?i)user (?:does )?not (?:exist|found)"
+          - "(?i)account (?:does )?not (?:exist|found)"
+          - "(?i)no account (?:found|with that)"
+          - "(?i)email (?:not |is not )?(?:registered|recognized|in our)"
+          - "(?i)username (?:not |does not )?exist"
+          - "(?i)invalid username\\b(?!\\s+or password)"     # "invalid username" without "or password"
+
+      # =====================================================================
+      # Wrong password specifically (vs user not found)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: login-wrong-password
+        regex:
+          - "(?i)wrong password\\b"
+          - "(?i)incorrect password\\b"
+          - "(?i)password (?:is )?(?:not )?correct"
+          - "(?i)invalid password\\b"
+
+      # =====================================================================
+      # Registration enumeration
+      # =====================================================================
+      - type: regex
+        part: body
+        name: registration-username-taken
+        regex:
+          - "(?i)username (?:already |is )?(?:taken|exists|in use)"
+          - "(?i)this username is unavailable"
+          - "(?i)email (?:already |is )?(?:registered|in use|exists)"
+          - "(?i)account with (?:this |that )?email (?:already )?exists"
+          - "(?i)duplicate (?:email|username|account)"
+
+      # =====================================================================
+      # Forgot password enumeration
+      # =====================================================================
+      - type: regex
+        part: body
+        name: forgot-password-email-not-found
+        regex:
+          - "(?i)email (?:not |is not )?(?:registered|recognized|in our system)"
+          - "(?i)no (?:account|user) (?:found |with )"
+          - "(?i)reset (?:link|password) (?:sent|sent to)"      # signal that email exists
+
+      # =====================================================================
+      # Username/Email reflection in error
+      # =====================================================================
+      - type: regex
+        part: body
+        name: username-reflection-in-error
+        regex:
+          - "(?is)<.*?>([^<>]{2,30})<.*?>(?:does not exist|not found|invalid|already taken)"
+
+# ============================================================================
+# Known limitations:
+# - Pasywna detekcja markerów - wymaga że error response jest w aktualnej
+#   sesji. Aktywny test (probowanie znanego/nieznanego user) wymaga manual.
+# - Timing attack detection - nie zaimplementowane (wymaga statystycznej
+#   analizy multiple requests). Manual test: porownaj czas response dla
+#   znanego vs nieznanego user (powinien być identyczny - app powinien
+#   dummy hash check).
+# - Aplikacje używające generic message ("Invalid credentials") - bez
+#   findings.
+# ============================================================================

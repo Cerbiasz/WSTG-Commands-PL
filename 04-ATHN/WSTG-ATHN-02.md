@@ -1,212 +1,135 @@
 # WSTG-ATHN-02 — Testing for Default Credentials
 
-## Cele
+## Cel
 
-- Okreslenie czy aplikacja posiada domyslne hasla
-- Przetestowanie znanych domyslnych kombinacji login/haslo
-- Sprawdzenie kont serwisowych i administracyjnych
+Wykrycie kont z domyślnymi/wbudowanymi credentials: admin/admin (Tomcat manager), root/root (legacy systems), guest/guest (RabbitMQ), Tomcat/Jenkins/JBoss panele bez zmiany defaults po deploy.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Proba logowania z domyslnymi credentials
+### Nasz dedykowany szablon
 
 ```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"password"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"root","password":"root"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"test","password":"test"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"administrator","password":"administrator"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}' -v
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"123456"}' -v
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-athn-02-default-credentials.yaml
 ```
 
-### Nmap sprawdzenie domyslnych kont HTTP
+Pasywnie wykrywa markery default creds w HTML/JS (komentarze, prefilled values, documentation).
+
+### Active default-login testing
 
 ```bash
-nmap --script http-default-accounts -p 80,443,8080,8443 TARGET
-nmap --script http-default-accounts --script-args http-default-accounts.fingerprintfile=http-default-accounts-fingerprints.lua -p 80,443 TARGET
+# Pełna baza default credentials per service
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/default-logins/
 
+# Konkretne wysokorezykowne:
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/default-logins/tomcat/ \
+       -t resources/nuclei-templates/http/default-logins/jenkins/ \
+       -t resources/nuclei-templates/http/default-logins/jboss/ \
+       -t resources/nuclei-templates/http/default-logins/grafana/
+
+# Hydra brute-force z SecLists
+hydra -l admin -P resources/seclists/Passwords/Common-Credentials/10-million-password-list-top-1000.txt \
+      target.com http-post-form "/login:user=^USER^&pass=^PASS^:Invalid"
 ```
 
-### Nuclei - szablony domyslnych loginow
+## Coverage Matrix
 
-```bash
-nuclei -u https://TARGET -t default-logins/
-nuclei -u https://TARGET -tags default-login
-nuclei -u https://TARGET -t http/default-logins/
+| Wymiar | Pokryte |
+|---|---|
+| Markery default creds w HTML | ✓ |
+| Prefilled login form | ✓ |
+| Active default-login per service | http/default-logins/ |
+| Common Credentials brute-force | hydra + SecLists |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Sprawdzenie znanych paneli administracyjnych
+### Metodologia (5 kroków)
 
-```bash
-for path in /admin /administrator /wp-admin /phpmyadmin /manager/html /console /jenkins /webmail; do echo -n "$path: "; curl -s -o /dev/null -w "%{http_code}" "https://TARGET$path"; echo; done
+1. **Tech-stack identification**: WSTG-INFO-08 → wiemy jaki framework / panel.
+2. **Per-service defaults**: dla każdego service uruchomić odpowiedni `default-logins/<service>` template.
+3. **Common credentials brute-force**: `admin/admin`, `admin/password`, `admin/admin123`, `root/root`, `tomcat/tomcat`.
+4. **Application-specific defaults**: WordPress (admin/admin), Jenkins (admin/admin po install), Grafana (admin/admin).
+5. **Document and recommend**: zmiana wszystkich defaults pre-prod.
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-## KOMENDY Z WORDLISTAMI
-
-### Hydra brute force z domyslnymi credentials
-
-```bash
-hydra -C Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt TARGET ftp
-hydra -C Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt TARGET ssh
-hydra -C Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/telnet-betterdefaultpasslist.txt TARGET telnet
-
-```
-
-### Hydra HTTP POST form z domyslnymi loginami
-
-```bash
-hydra -L Desktop/WSTG/SecLists-master/Usernames/cirt-default-usernames.txt -P Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/ftp-betterdefaultpasslist.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Medusa z domyslnymi credentials
-
-```bash
-medusa -h TARGET -U Desktop/WSTG/SecLists-master/Usernames/cirt-default-usernames.txt -P Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/ssh-betterdefaultpasslist.txt -M ssh
-
-```
-
-### ffuf z parami user:pass z cirt-net collection
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/cirt-net_collection.txt:CREDS -u "https://TARGET/api/login" -X POST -H "Content-Type: application/json" -d '{"username":"CREDS","password":"CREDS"}' -mc 200
-
-```
-
-### fuzzdb domyslne credentials HTTP
-
-```bash
-hydra -C Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/generic-listpairs/http_default_userpass.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### fuzzdb domyslne credentials Tomcat
-
-```bash
-hydra -C Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/tomcat/tomcat_mgr_default_userpass.txt TARGET http-get "/manager/html"
-
-```
-
-### fuzzdb domyslne credentials PostgreSQL
-
-```bash
-hydra -C Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/postgres/postgres_default_userpass.txt TARGET postgres
-
-```
-
-### fuzzdb domyslne credentials MySQL
-
-```bash
-hydra -L Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/generic-listpairs/http_default_users.txt -P Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/generic-listpairs/http_default_pass.txt TARGET mysql
-
-```
-
-### Tomcat default credentials (base64 encoded)
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Passwords/Default-Credentials/tomcat-betterdefaultpasslist_base64encoded.txt:CREDS -u "https://TARGET/manager/html" -H "Authorization: Basic CREDS" -mc 200
-
-```
-
-### Oracle default passwords
-
-```bash
-hydra -C Desktop/WSTG/fuzzdb-master/wordlists-user-passwd/oracle/_oracle_default_passwords.txt TARGET oracle-listener
-
-```
-
-### Leaked databases passwords for spray attack
-
-```bash
-hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/rockyou-10.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz dokumentacje technologii uzywanej przez aplikacje pod katem domyslnych credentials
-2. Wyszukaj w Google "default credentials [nazwa_aplikacji]"
-3. Sprawdz panele administracyjne (Tomcat Manager, phpMyAdmin, Jenkins) z domyslnymi hasalmi
-4. Przetestuj konta serwisowe i systemowe z domyslnymi haslami
-5. Sprawdz czy aplikacja wymusza zmiane domyslnego hasla po pierwszym logowaniu
-6. W Burp Intruder przetestuj kombinacje domyslnych credentials
-7. Sprawdz pliki konfiguracyjne pod katem zakodowanych credentials
-8. Przetestuj domyslne credentials dla baz danych, serwerow pocztowych i innych uslug
-
-
----
+- [ ] Tomcat manager: `admin/admin`, `tomcat/tomcat`, `manager/manager`, `admin/`
+- [ ] Jenkins: `admin/admin` po fresh install
+- [ ] phpMyAdmin: `root/` (no password)
+- [ ] Adminer: `root/`
+- [ ] Grafana: `admin/admin`
+- [ ] Kibana: `elastic/changeme`
+- [ ] WordPress: `admin/admin`
+- [ ] JBoss: `admin/admin` (admin-console)
+- [ ] WebLogic: `weblogic/welcome1`
+- [ ] Cisco devices: `cisco/cisco`, `admin/admin`
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Credential_Stuffing_Prevention_Cheat_Sheet.md
 
-### Domyslne credentials — eliminacja
+### Domyślne credentials — eliminacja
 
-- **Zmien WSZYSTKIE** domyslne dane logowania PRZED wdrozeniem na produkcje
-- Sprawdz: panele administracyjne, bazy danych, serwery aplikacji, middleware, IoT, routery
-- Wymus zmiane domyslnego hasla przy pierwszym logowaniu — nie pozwol na uzywanie defaults
-- Regularnie audytuj systemy pod katem kont z domyslnymi credentials
+- **Zmień WSZYSTKIE** domyślne dane logowania PRZED wdrożeniem na produkcję
+- Sprawdź: panele administracyjne, bazy danych, serwery aplikacji, middleware, IoT, routery
+- Wymuś zmianę domyślnego hasła przy pierwszym logowaniu — nie pozwól na używanie defaults
+- Regularnie audytuj systemy pod kątem kont z domyślnymi credentials
 
 ### Credential Stuffing Prevention
 
-- **Credential stuffing**: atakujacy uzywa wycieknietych par login:haslo z innych serwisow
-- **Multi-Factor Authentication (MFA)** — PRIMARY defense — nawet ze znanym haslem atakujacy nie przejdzie
+- **Credential stuffing**: atakujący używa wycieknietych par login:hasło z innych serwisów
+- **Multi-Factor Authentication (MFA)** — PRIMARY defense — nawet ze znanym hasłem atakujący nie przejdzie
 - **CAPTCHA**: bot detection na stronie logowania — reCAPTCHA v3, hCaptcha
-  - CAPTCHA po N nieudanych probach (np. 3) — nie irytuj legalnych uzytkownikow
-- **Rate limiting**: ogranicz proby logowania per IP, per konto, per globalnie
-  - Progresywne opoznienia: 1s, 2s, 4s, 8s po kolejnych bledach
-  - Lockout konta po N nieudanych prob (np. 10) z automatycznym odblokowaniem po X minutach
-- **Device fingerprinting**: identyfikuj znane urzadzenia uzytkownika — wymagaj MFA z nowych
-- **IP reputation**: blokuj znane adresy IP botnetow, VPN, proxy
+  - CAPTCHA po N nieudanych próbach (np. 3) — nie irytuj legalnych użytkowników
+- **Rate limiting**: ogranicz próby logowania per IP, per konto, per globalnie
+  - Progresywne opóźnienia: 1s, 2s, 4s, 8s po kolejnych błędach
+  - Lockout konta po N nieudanych prób (np. 10) z automatycznym odblokowaniem po X minutach
+- **Device fingerprinting**: identyfikuj znane urządzenia użytkownika — wymagaj MFA z nowych
+- **IP reputation**: blokuj znane adresy IP botnetów, VPN, proxy
 
-### Blokowanie znanych wycieknietych hasel
+### Blokowanie znanych wycieknietych haseł
 
-- Sprawdzaj nowe hasla przeciw **HaveIBeenPwned Passwords API** (k-anonymity — bezpieczne)
-- Blokuj top-N najpopularniejszych hasel — listy dostepne w SecLists
-- Blokuj hasla identyczne z username, email, nazwa aplikacji
+- HaveIBeenPwned Passwords API — sprawdzaj czy hasło wystąpiło w breach
+- Blokuj top-N najpopularniejszych haseł z list (rockyou, SecLists)
+- Blokuj hasła identyczne z username, email, nazwą aplikacji
 
-### Wykrywanie anomalii
+## Pentesterskie deep dive
 
-- Logowania z nowych lokalizacji (geolokalizacja IP)
-- Nietypowe User-Agent (np. curl, skrypt zamiast przegladarki)
-- Wiele kont logowanych z jednego IP w krotkim czasie
-- Logowania w nietypowych godzinach
-- Powiadomienie uzytkownika o nowym logowaniu z nieznanego urzadzenia
+### Mniej znane techniki
 
-### Komunikaty bledow
+- **Tomcat manager via path bypass**: `/manager/html/..;/` na niektórych Tomcat versions może bypass auth filter.
+- **Jenkins script console after default login**: po `admin/admin`, `/script` daje Groovy console = pełen RCE.
+- **Default creds via Wayback Machine**: stare deploys sometimes documented w internal wiki cached on Wayback.
+- **API key as default**: niektóre aplikacje używają znanego "first API key" do bootstrap → atakujący może zgadnąć.
 
-- **Generyczne komunikaty** — "Invalid username or password" — nie ujawniaj czy uzytkownik istnieje
-- Identyczny czas odpowiedzi dla istniejacego i nieistniejacego uzytkownika — obrona timing attacks
-- Nie ujawniaj informacji o polityce blokowania konta w komunikatach bledow
+### Common pitfalls
 
-### Logging i monitoring
+- **"We changed admin password but tomcat:tomcat works"**: każdy service ma własne defaults - Tomcat manager users w `tomcat-users.xml` separate.
+- **First-login password change ignorowany**: aplikacja prosi o zmianę ale nie wymusza.
 
-- Loguj WSZYSTKIE proby logowania (udane i nieudane) z: timestamp, IP, UA, username
-- Alertuj na: nagly wzrost nieudanych logow, credential stuffing patterns, brute force
-- Integruj z SIEM do centralnego monitorowania
+### Świeżynki z research
 
-## ROZSZERZENIA BURP SUITE
+- **DefaultCreds-cheat-sheet**: https://github.com/ihebski/DefaultCreds-cheat-sheet
+- **SecLists Default-Credentials**: https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+## Rozszerzenia Burp Suite
 
----
+| Rozszerzenie | Opis |
+|---|---|
+| AdminPanelFinder | Detekcja paneli admin |
+| Hydra (CLI) | Brute force |
 
-## Wskazówki ASVS
+## Źródła
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/02-Testing_for_Default_Credentials
+- DefaultCreds CS: https://github.com/ihebski/DefaultCreds-cheat-sheet
+- ProjectDiscovery default-logins: https://github.com/projectdiscovery/nuclei-templates/tree/main/http/default-logins
 
-### L1 (Podstawowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.3.2 | General Authentication Security | Verify that default user accounts (e.g., "root", "admin", or "sa") are not present in the application or are disabled. |
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.2.3 | Backend Communication Configuration | Verify that if a credential has to be used for service authentication, the credential being used by the consumer is not a default credential (e.g., root/root or admin/admin). |
+| ID | Wymaganie |
+|---|---|
+| V14.3.2 | No default credentials, sample apps. |
+| V2.1.7 | Check breached password lists. |

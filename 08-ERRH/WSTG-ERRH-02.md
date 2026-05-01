@@ -1,202 +1,175 @@
 # WSTG-ERRH-02 — Testing for Stack Traces
 
-## Cele
+## Cel
 
-- Zidentyfikowac wyjscie stack trace w odpowiedziach aplikacji
-- Ocenic ujawnianie informacji przez stack traces
+Wykrycie ujawnienia stack trace w odpowiedziach. Stack trace ujawnia: nazwy klas/metod, ścieżki plików w systemie, numery linii, łańcuch wywołań — wszystko co potrzebne do exploit development. Krytyczna pre-condition dla wielu zaawansowanych ataków.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Wymuszenie stack trace przez nieprawidlowy typ danych
-
-```bash
-curl -v "TARGET/page?id=abc"
-curl -v "TARGET/page?id[]=1"
-curl -v "TARGET/page?id=null"
-
-```
-
-### Wymuszenie stack trace przez dzielenie przez zero
+### Nasz dedykowany szablon
 
 ```bash
-curl -v "TARGET/calc?value=0"
-curl -v "TARGET/page?amount=0&operation=divide"
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-errh-02-stack-trace.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-errh-02.jsonl
 ```
 
-### Wymuszenie stack trace przez nieprawidlowe kodowanie
+Szablon w jednym requeście z dedicated matcherami per stack: Java/JVM (at file.java:N), Spring (org.springframework.*), Python traceback, Django (DEBUG=True yellow), Flask/Werkzeug, Ruby, Rails (Action Controller Exception), Node.js (at func (/path/file.js:N)), Express, PHP (Warning/Fatal in /path/file.php on line N), Laravel Whoops, Symfony Exception, ASP.NET ([Exception:]), .NET Core, Go panic.
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-curl -v "TARGET/page?param=%zz"
-curl -v "TARGET/page?param=%00"
+# Cross-ref: WSTG-ERRH-01 dla kompleksowego error handling
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-errh-01-error-page.yaml
 
+# Cross-ref: WSTG-CONF-02 platform config (debug mode detection)
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-02-platform-config.yaml
+
+# Misconfiguration: stack-related
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/ -tags trace
 ```
 
-### Wymuszenie stack trace przez buffer overflow w parametrach
+## Coverage Matrix
 
-```bash
-curl -v "TARGET/page?param=$(python3 -c "print('A'*50000)")"
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Java/JVM stack trace | ✓ | — |
+| Spring framework markers | ✓ | — |
+| Python traceback (generic + Django + Flask) | ✓ | — |
+| Ruby / Rails | ✓ | — |
+| Node.js / Express | ✓ | — |
+| PHP (warnings, fatal, Laravel, Symfony) | ✓ | — |
+| ASP.NET / .NET Core | ✓ | — |
+| Go panic / runtime error | ✓ | — |
+| Rust panic | częściowe (Go pattern matchuje czasem) | osobno |
+| C/C++ stack trace (rare in web) | — | poza zakresem |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Testowanie trybu debug
+### Metodologia (5 kroków)
 
-```bash
-curl -v "TARGET/?debug=true"
-curl -v "TARGET/?debug=1"
-curl -v "TARGET/?trace=true"
-curl -v "TARGET/?show_errors=1"
-curl -v "TARGET/debug"
-curl -v "TARGET/trace.axd"
-curl -v "TARGET/elmah.axd"
-curl -v "TARGET/phpinfo.php"
-curl -v "TARGET/_debugbar"
-curl -v "TARGET/__debug__/"
+1. **Trigger errors**: malformed input (null, array, oversized), invalid types (NaN, Infinity), special chars (`%00`).
+2. **Stack-specific triggers**: dla zidentyfikowanego stacka (z WSTG-INFO-08), użyj specific framework triggers.
+3. **Per endpoint test**: niektóre endpointy mają lepsze error handling niż inne — testować szeroko.
+4. **Authenticated vs anonymous**: czasem authenticated pokazuje więcej (debug aktywny gdy admin token).
+5. **Path extraction**: dla każdego znalezionego stack trace, ekstraktuj filesystem paths jako pivot do LFI/source disclosure.
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### Wymuszenie bledow w API
+- [ ] Python traceback markers
+- [ ] Java `at com.X.method(File.java:N)` patterns
+- [ ] PHP `in /path/file.php on line N`
+- [ ] ASP.NET `[Exception: ...]`
+- [ ] Node.js `at function (/path/file.js:N:M)`
+- [ ] Ruby `.rb:N:in` patterns
+- [ ] Go `panic: runtime error`
+- [ ] Per stack (z INFO-08): targeted error trigger
+- [ ] Filesystem paths extracted (jako recon dla LFI)
+- [ ] Class/method names extracted (jako recon dla source code disclosure)
 
-```bash
-curl -v -X POST TARGET/api/endpoint -H "Content-Type: application/json" -d 'null'
-curl -v -X POST TARGET/api/endpoint -H "Content-Type: application/json" -d '{"key": undefined}'
-curl -v -X POST TARGET/api/endpoint -H "Content-Type: application/json" -d '[]'
+### Per stack — typowe triggery
 
-```
-
-### Wymuszenie bledu przez nieprawidlowe sesje/tokeny
-
-```bash
-curl -v TARGET/ -H "Cookie: session=invalid_session_value_12345"
-curl -v TARGET/ -H "Authorization: Bearer invalid.token.here"
-
-```
-
-### Wymuszenie bledu przez XML
-
-```bash
-curl -v -X POST TARGET/api -H "Content-Type: application/xml" -d '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "test">]><foo>&xxe;</foo>'
-
-```
-
-### Testowanie endpointow zdrowia/diagnostyki
-
-```bash
-curl -v TARGET/health
-curl -v TARGET/status
-curl -v TARGET/actuator
-curl -v TARGET/actuator/env
-curl -v TARGET/actuator/heapdump
-
-```
-
-### Nmap skanowanie debug endpointow
-
-```bash
-nmap --script http-errors,http-trace -p 80,443 TARGET
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test manualny
-
-```bash
-# Stack traces sa najczesciej wyzwalane przez logike a nie fuzzing
-
-```
-
-### Opcjonalnie: fuzzowanie debug parametrow (fuzzdb)
-
-```bash
-ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/CommonDebugParamNames.txt -mc all -c
-ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/DebugParams.Json.fuzz.txt -mc all -c
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Suite -> Repeater: wyslij zmodyfikowane requesty z nieprawidlowymi typami danych
-2. Szukaj w odpowiedziach: "Exception", "Traceback", "Stack Trace", "at line",
-```bash
-   "NullPointerException", "SqlException", "Error in", "Fatal error"
-```
-
-3. Sprawdz czy stack traces ujawniaja: sciezki plikow, numery linii kodu, nazwy klas,
-```bash
-   wersje frameworkow, connection strings, nazwy tabel bazy danych
-```
-
-4. Testuj rozne Content-Types (application/json, application/xml, multipart/form-data)
-```bash
-   z nieprawidlowymi danymi
-```
-
-5. W DevTools -> Network: sprawdz odpowiedzi pod katem ukrytych informacji debugowania
-6. Sprawdz naglowki odpowiedzi pod katem X-Debug-Token, X-Debug-Token-Link
-7. Zrob screenshot kazdego znalezionego stack trace jako dowod
-
-
----
+| Stack | Trigger | Typowa stack trace marker |
+|---|---|---|
+| Spring Boot | `?id=invalid` na typed param | `org.springframework.web.method.annotation.MethodArgumentTypeMismatchException` |
+| Django | `?invalid_filter[]=x` | `<title>FieldError at /...</title>` + DEBUG yellow page |
+| Flask/Werkzeug | malformed body JSON | `werkzeug.exceptions.BadRequest` + traceback |
+| Rails | `/users/abc.json` (string zamiast int) | Action Controller: Exception |
+| Express | `?json={"a":1` (malformed) | SyntaxError + at body-parser |
+| Laravel | `?id[]=array` zamiast string | Whoops error page z Illuminate exception |
+| ASP.NET MVC | `/Home/Index/abc` (int param) | YSD z ModelBindingException |
+| PHP (raw) | array param when string expected | `Warning: Array to string conversion` |
+| Go (Gin/Echo) | malformed JSON body | `panic: runtime error: invalid memory` (rare ale ujawnia path) |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Error_Handling_Cheat_Sheet.md
 
-### Co stack trace moze ujawnic atakujacemu
+### Co stack trace może ujawnić atakującemu
 
 - **Technologie**: `com.opensymphony.xwork2` → Struts2, `Apache Tomcat/7.0.56` → konkretna wersja z CVE
-- **Sciezki plikow**: `D:\app\index_new.php on line 188` → struktura aplikacji
-- **Zapytania SQL**: `odbc_fetch_array()` → typ bazy danych, mozliwy injection point
+- **Ścieżki plików**: `D:\app\index_new.php on line 188` → struktura aplikacji
+- **Zapytania SQL**: `odbc_fetch_array()` → typ bazy danych, możliwy injection point
 - **Klasy i metody**: `java.lang.NumberFormatException.forInputString()` → logika biznesowa
-- **Connection strings**: dane dostepu do bazy, hosty wewnetrzne
+- **Connection strings**: dane dostępu do bazy, hosty wewnętrzne
 
-### Wylaczanie stack traces na produkcji
+### Wyłączanie stack traces na produkcji
 
 - **Java/Spring**: ustaw `server.error.include-stacktrace=never` w `application.properties`
-- **ASP.NET Core**: NIE uzywaj `app.UseDeveloperExceptionPage()` na produkcji — uzywaj `app.UseExceptionHandler()`
+- **ASP.NET Core**: NIE używaj `app.UseDeveloperExceptionPage()` na produkcji — używaj `app.UseExceptionHandler()`
 - **ASP.NET**: `<customErrors mode="RemoteOnly">` lub `mode="On"` w Web.config
 - **PHP**: `display_errors = Off`, `log_errors = On` w php.ini
 - **Django**: `DEBUG = False` w settings.py (KRYTYCZNE)
-- **Node.js/Express**: NIE uzywaj `app.use(errorHandler())` na produkcji — custom middleware z generycznym response
+- **Node.js/Express**: NIE używaj `app.use(errorHandler())` na produkcji — custom middleware z generycznym response
 
 ### Globalny error handler — wzorzec
 
-- Przechwytuj WSZYSTKIE nieobsluzowane wyjatki na najwyzszym poziomie
-- Loguj pelny stack trace SERVER-SIDE (do plikow logow, SIEM, ELK)
-- Zwracaj uzytkownikowi TYLKO generyczny komunikat: `{"message":"An error occurred"}`
-- Uzywaj RFC 7807 (Problem Details) w REST API: `Content-Type: application/problem+json`
+- Przechwytuj WSZYSTKIE nieobsłużone wyjątki na najwyższym poziomie
+- Loguj pełny stack trace SERVER-SIDE (do plików logów, SIEM, ELK)
+- Zwracaj użytkownikowi TYLKO generyczny komunikat: `{"message":"An error occurred"}`
+- Używaj RFC 7807 (Problem Details) w REST API: `Content-Type: application/problem+json`
 
 ### Debug endpointy do sprawdzenia
 
 - `/actuator`, `/actuator/env`, `/actuator/heapdump` — Spring Boot Actuator
 - `/trace.axd`, `/elmah.axd` — ASP.NET diagnostics
-- `/phpinfo.php` — PHP info (ujawnia cala konfiguracje)
+- `/phpinfo.php` — PHP info (ujawnia całą konfigurację)
 - `/_debugbar`, `/__debug__/` — Laravel/Django debug toolbars
 - `?debug=true`, `?trace=true`, `?show_errors=1` — debug query params
 
 ### Monitoring i alerting
 
-- Monitoruj bledy 5xx — wskazuja na nieoczekiwane awarie, potencjalne ataki
-- Loguj WSZYSTKIE nieobsluzowane wyjatki jako zdarzenia wysokiego priorytetu
-- Alertuj na nagly wzrost bledow — moze wskazywac na atak fuzzing/injection
-- Uzywaj centralnego systemu logowania (ELK, Splunk, SIEM) do korelacji bledow
+- Monitoruj błędy 5xx — wskazują na nieoczekiwane awarie, potencjalne ataki
+- Loguj WSZYSTKIE nieobsłużone wyjątki jako zdarzenia wysokiego priorytetu
+- Alertuj na nagły wzrost błędów — może wskazywać na atak fuzzing/injection
+- Używaj centralnego systemu logowania (ELK, Splunk, SIEM) do korelacji błędów
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **Stack trace via deserialization**: dla aplikacji deserializujących input (Java ObjectInputStream, PHP unserialize, Python pickle), malformed serialized data zwraca stack trace zawierający chain klas — pivot do gadget chain.
+- **Spring Cloud Function SpEL via header**: `spring.cloud.function.routing-expression: T(java.lang.Runtime).getRuntime().exec(...)` — jeśli stack trace ujawnia SpEL active, CVE-2022-22963.
+- **`/error` endpoint Spring Boot**: domyślny `/error` endpoint z parametrami `?path=/admin&trace=true` może wymusić zwrócenie pełnego trace.
+- **PHP `display_errors=stderr` redirected**: niektóre konfiguracje przekierowują stderr do response (rzadkie ale istnieje).
+- **TimeoutError stack** w long-running queries: timeout na DB query często zwraca stack z internal IPs i query.
+- **Async/await stack trace differences**: stack trace z async functions w Node.js / Python pokazuje internal scheduler frames — ujawnia wersję framework.
+
+### Common pitfalls
+
+- **WAF blocking stack trace markers**: Cloudflare/AWS WAF mają reguły blokujące responses zawierające `at com.`, `Traceback` — może maskować findings.
+- **Custom 500 page przesłaniający stack**: dobrze zhardenowana aplikacja zwraca custom 500 ale internal logging dalej widzi trace. Z perspektywy pentestera = brak finding.
+- **Different stack per HTTP method**: GET zwraca generic 500, POST z body parsing error daje stack — testować wszystkie metody.
+
+### Świeżynki z research
+
+- **Stack trace driven recon for CVE matching** — community pattern; framework version z stack trace + NVD search = znane CVE.
+- **GraphQL introspection blocked ale errors leak schema** — community pattern; unknown field error reveals lookalike valid fields.
+- **HackTricks per-framework error handling**: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Error Message Checks | Pasywne skanowanie pod katem ujawnionych komunikatow bledow | [GitHub](https://github.com/augustd/burp-suite-error-message-checks) |
+| Software Version Reporter | Wykrywanie wersji w stack traces | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+| Reflector | Detekcja reflected user input w error responses | [GitHub](https://github.com/elkokc/reflector) |
+| Backslash Powered Scanner | Probe-based input mutation → error trigger | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/02-Testing_for_Stack_Traces
+- OWASP Error Handling Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html
+- CWE-209: https://cwe.mitre.org/data/definitions/209.html
+- HackTricks Pentesting Web: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V16.5.1 | Error Handling | Verify that a generic message is returned to the consumer when an unexpected or security-sensitive error occurs, ensuring no exposure of sensitive internal system data such as stack traces, queries, secret keys, and tokens. |
-| V13.4.2 | Unintended Information Leakage | Verify that debug modes are disabled for all components in production environments to prevent exposure of debugging features and information leakage. |
+| V7.4.1 | Error Handling (L1) | Generic message returned. |
+| V7.4.2 | Error Handling (L2) | Application logs all unhandled exceptions. |
+| V13.4.6 | Information Leakage (L3) | No detailed version information of backend components. |

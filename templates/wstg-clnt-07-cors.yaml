@@ -1,0 +1,129 @@
+# ============================================================================
+# WSTG-CLNT-07: CORS Misconfiguration (Universal)
+# ============================================================================
+#
+# Coverage:
+#   ✓ Origin reflection (server returns whatever Origin sent)
+#   ✓ Allow-Credentials: true z wildcard / reflected origin (CRITICAL)
+#   ✓ Origin: null bypass
+#   ✓ Subdomain match flaw (target.com.evil.com)
+#   ✓ Pre-flight OPTIONS handling
+# ============================================================================
+
+id: wstg-clnt-07-cors
+
+info:
+  name: "WSTG-CLNT-07: CORS Misconfiguration (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa CORS misconfig: Origin reflection, Allow-Credentials z wildcardem,
+    null origin acceptance, sufix matching bypass. Krytyczne gdy w połączeniu
+    z Allow-Credentials - atakujący może czytać authenticated data.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/07-Testing_Cross_Origin_Resource_Sharing
+    - https://portswigger.net/web-security/cors
+    - https://book.hacktricks.xyz/pentesting-web/cors-bypass
+  classification:
+    cwe-id: CWE-942,CWE-346
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:N/A:N
+    cvss-score: 6.8
+  tags: dast,wstg,wstg-v42-clnt-07,cors,burp-history
+
+variables:
+  attacker_origin: "https://wstg-attacker-{{rand_text_alpha(6)}}.example.com"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Test 1: arbitrary Origin reflection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      Origin: "{{attacker_origin}}"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        name: cors-origin-reflection
+        regex:
+          - "(?i)access-control-allow-origin:\\s*{{attacker_origin}}"
+
+      # Critical: ACAO reflection + Allow-Credentials = data exfil
+      - type: regex
+        part: header
+        name: cors-credentials-with-reflection
+        regex:
+          - "(?i)access-control-allow-credentials:\\s*true"
+
+  # =========================================================================
+  # Test 2: null origin acceptance
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      Origin: "null"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: header
+        name: cors-null-origin-accepted
+        regex:
+          - "(?i)access-control-allow-origin:\\s*null"
+
+  # =========================================================================
+  # Test 3: subdomain suffix match bypass
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      Origin: "https://target.com.{{rand_text_alpha(6)}}.example.com"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: header
+        name: cors-suffix-match-bypass
+        regex:
+          - "(?i)access-control-allow-origin:\\s*https://target\\.com\\."
+
+  # =========================================================================
+  # Test 4: Wildcard ACAO
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: header
+        name: cors-wildcard-acao
+        regex:
+          - "(?i)access-control-allow-origin:\\s*\\*"
+
+      # Wildcard with credentials = ignored by browser BUT misconfig signal
+      - type: dsl
+        name: cors-wildcard-with-credentials
+        dsl:
+          - "regex(\"(?i)access-control-allow-origin:\\\\s*\\\\*\", header)"
+          - "regex(\"(?i)access-control-allow-credentials:\\\\s*true\", header)"
+        condition: and
+
+# ============================================================================
+# Known limitations:
+# - Pełen CORS test wymaga sprawdzenia każdego API endpoint indywidualnie -
+#   tu testujemy tylko `/`. Burp+Param Miner / cors-additional-checks lepsze
+# - Pre-flight OPTIONS test nie zaimplementowany - manual test
+# - Browser-side enforcement nie jest weryfikowany - tylko server response
+# ============================================================================

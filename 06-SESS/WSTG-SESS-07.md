@@ -1,155 +1,91 @@
 # WSTG-SESS-07 — Testing Session Timeout
 
-## Cele
+## Cel
 
-- Weryfikacja czy istnieje twardy timeout sesji (absolute timeout)
-- Sprawdzenie idle timeout (brak aktywnosci)
-- Ocena czy timeout jest wystarczajaco krotki
+Audyt timeoutów sesji: idle timeout (15-30 min standard, 2-5 min high-risk), absolute timeout (4-8h max), re-auth dla sensitive ops, czy session valid forever (worst case).
 
-## KOMENDY
+## Standard pentesterski — jak to robi się wzorowo
 
-### Krok 1: Zaloguj sie i zapisz czas + cookie
+### Metodologia (4 kroki)
 
-```bash
-curl -s -c session_cookies.txt -L TARGET/login -d "user=test&pass=test"
-echo "Login time: $(date)"
-cat session_cookies.txt
+1. **Idle timeout test**: zaloguj się, czekaj 30 min bez aktywności, próbuj request → czy session expired?
+2. **Absolute timeout**: aktywne używanie 8h+ → czy session expires?
+3. **Re-auth check**: change password / view sensitive data → czy wymaga re-input current password?
+4. **Server vs client timeout**: backend musi enforce timeout (nie tylko frontend redirect).
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-### Krok 2: Sprawdz sesje po okreslonym czasie bezczynnosci
-
-```bash
-# Poczekaj X minut (np. 15, 30, 60)
-sleep 900 && curl -s -b session_cookies.txt TARGET/dashboard -o /dev/null -w "Status after 15min: %{http_code}\n"
-
-```
-
-### Krok 3: Test idle timeout - request po dluzszym czasie
-
-```bash
-sleep 1800 && curl -s -b session_cookies.txt TARGET/dashboard -o /dev/null -w "Status after 30min: %{http_code}\n"
-
-```
-
-### Krok 4: Test absolute timeout
-
-```bash
-# Utrzymuj sesje aktywna (co minute wysylaj request)
-# Sprawdz po jakiej dlugosci calkowitej sesja wygasa mimo aktywnosci
-for i in $(seq 1 120); do
-    sleep 60
-    STATUS=$(curl -s -b session_cookies.txt TARGET/dashboard -o /dev/null -w "%{http_code}")
-    echo "Minute $i: HTTP $STATUS"
-    if [ "$STATUS" != "200" ]; then echo "Session expired at minute $i"; break; fi
-done
-
-```
-
-### Sprawdzenie Max-Age / Expires w cookie
-
-```bash
-curl -s -I TARGET/login -d "user=test&pass=test" | grep -i "set-cookie" | grep -iE "max-age|expires"
-
-```
-
-### Sprawdzenie naglowkow cache zwiazanych z timeout
-
-```bash
-curl -s -I TARGET/dashboard | grep -iE "cache-control|pragma"
-
-```
-
-### Test czy sesja wygasa po zamknieciu przegladarki (sesyjne cookie)
-
-```bash
-# Cookie bez Expires/Max-Age powinno wygasnac po zamknieciu przegladarki
-
-```
-
-### Test reakcji serwera na wygasla sesje
-
-```bash
-curl -v -b "SESSIONID=EXPIRED_SESSION_VALUE" TARGET/dashboard 2>&1
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak specyficznych wordlist dla tego testu.
-# Test opiera sie na pomiarze czasu wygasniecia sesji.
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zaloguj sie i zanotuj czas
-2. Nie wykonuj zadnych akcji przez 15/30 minut
-3. Sprobuj uzyc aplikacji - czy sesja wygasla? (idle timeout)
-4. Zaloguj sie ponownie i uzytkuj aktywnie przez dluzszy czas
-5. Sprawdz po jakim calkowitym czasie sesja wygasa (absolute timeout)
-6. Sprawdz w DevTools -> Application -> Cookies atrybut Expires
-7. Sprawdz czy po wygasnieciu sesji uzytkownik jest przekierowywany na strone logowania
-8. Rekomendacja: idle timeout 15-30min, absolute timeout 4-8h
-
-
----
+- [ ] Idle timeout: 15-30 min (standard) lub 2-5 min (banking)
+- [ ] Absolute timeout: 4-8h max
+- [ ] Server-side enforcement (nie tylko client redirect)
+- [ ] Sensitive operations wymagają re-auth
+- [ ] Session valid forever = critical finding
+- [ ] Auto-logout warning przed timeout
+- [ ] Timeout consistent across channels (web/API/mobile)
+- [ ] Session w iframe respects parent timeout
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Session_Management_Cheat_Sheet.md
 
-### Idle Timeout (brak aktywnosci)
+### Idle Timeout (brak aktywności)
 
 - **15-30 minut** dla standardowych aplikacji
-- **2-5 minut** dla aplikacji wysokiego ryzyka (bankowosc, ochrona zdrowia)
-- Po idle timeout: uniewazni sesje server-side + redirect na strone logowania
-- Mierz czas od OSTATNIEGO requestu uzytkownika
+- **2-5 minut** dla aplikacji wysokiego ryzyka (bankowość, ochrona zdrowia)
+- Po idle timeout: unieważnij sesję server-side + redirect na stronę logowania
+- Mierz czas od OSTATNIEGO requestu użytkownika
 
-### Absolute Timeout (calkowity czas sesji)
+### Absolute Timeout (całkowity czas sesji)
 
-- **4-8 godzin** — sesja wygasa niezaleznie od aktywnosci
-- Zapobiega scenariuszowi: sesja aktywna bez konca przy ciaglym uzyciu
+- **4-8 godzin** — sesja wygasa niezależnie od aktywności
+- Zapobiega scenariuszowi: sesja aktywna bez końca przy ciągłym użyciu
 - Wymusza ponowne uwierzytelnienie — ogranicza okno czasowe wykradzionego tokenu
-- Krotszy absolute timeout = mniejsze ryzyko
+- Krótszy absolute timeout = mniejsze ryzyko
 
-### Re-autentykacja dla operacji wrazliwych
+### Re-autentykacja dla operacji wrażliwych
 
-- **Zmiana hasla**, przelew, zmiana adresu email, zmiana ustawien bezpieczenstwa
-- Wymagaj podania aktualnego hasla LUB MFA — nawet w trakcie aktywnej sesji
-- Chroni przed scenariuszem: uzytkownik zapominal wylogowac sie na publicznym komputerze
+- **Zmiana hasła**: wymagaj podania bieżącego hasła
+- **Płatności / przelewy**: re-auth lub MFA
+- **Eksport danych**: re-auth
+- **Zmiana ustawień bezpieczeństwa**: re-auth
 
-### Implementacja timeout
+### Implementacja
 
-- Timeout po stronie SERWERA — nie po stronie klienta (JavaScript timeout mozna ominac)
-- Cookie sesyjne: NIE ustawiaj `Expires`/`Max-Age` — cookie wygasa z zamknieciem przegladarki
-- Persistent sessions (Remember Me): osobny token z dluzszym timeout, ALE wymagaj re-auth dla wrazliwych operacji
+- **Server-side enforcement**: timeout MUSI być enforced server-side, nie tylko client-side redirect
+- Per-user storage: `lastActivity` timestamp w session storage
+- Check on every request: `if (now - lastActivity > idleTimeout) destroyAndRedirect()`
 
-### Informowanie uzytkownika
+## Pentesterskie deep dive
 
-- Pokaz ostrzezenie przed wygasnieciem sesji (np. 2 minuty wczesniej)
-- Daj mozliwosc przedluzenia sesji — kliknij "Kontynuuj"
-- Po wygasnieciu: jasny komunikat "Twoja sesja wygasla" + redirect na login
+### Mniej znane techniki
 
-### Obrona przed session riding
+- **Timeout via heartbeat manipulation**: aplikacja używa AJAX heartbeat do extension - atakujący może keep-alive innym tabem.
+- **Refresh token bez TTL**: access token expires ale refresh token valid forever.
+- **Session timeout reset on every request including 304**: cached responses extend session.
 
-- Krotki timeout OGRANICZA okno ataku — atakujacy ma mniej czasu na wykorzystanie wykradzionej sesji
-- Im krotszy timeout — tym bezpieczniej, ALE gorszy UX — balans wymagany
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **Frontend logout po timeout ale backend session aktywna**: redirect to login but `/api/users/me` w background tab nadal działa.
+- **API endpoints bez timeout enforcement**: tylko web-side redirect.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Timeinator | Testowanie atakow opartych na czasie | [GitHub](https://github.com/FSecureLABS/timeinator) |
+### Świeżynki z research
 
----
+- **OWASP Session Management CS**: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Repeater | Replay request after timeout |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V7.3.1 | Session Timeout | Verify that there is an inactivity timeout such that re-authentication is enforced according to risk analysis and documented security decisions. |
-| V7.3.2 | Session Timeout | Verify that there is an absolute maximum session lifetime such that re-authentication is enforced according to risk analysis and documented security decisions. |
-| V7.1.1 | Session Management Documentation | Verify that the user's session inactivity timeout and absolute maximum session lifetime are documented, are appropriate in combination with other controls, and that the documentation includes justification for any deviations from NIST SP 800-63B re-authentication requirements. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/07-Testing_Session_Timeout
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V3.3.1 | Session has absolute and idle timeouts. |
+| V3.3.2 | Re-authentication for sensitive operations. |

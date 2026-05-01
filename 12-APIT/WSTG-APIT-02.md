@@ -1,140 +1,120 @@
 # WSTG-APIT-02 — API Broken Object Level Authorization (BOLA)
 
-## Cele
+## Cel
 
-- Identify whether the API enforces proper object-level authorization checks
+BOLA = #1 podatność w OWASP API Top 10 2023. Atakujący zmienia ID obiektu w URL/body → uzyskuje dostęp do cudzych danych. Cross-ref WSTG-ATHZ-04 (IDOR jest tym samym).
 
-## KOMENDY
+> **Test mostly manual**: wymaga 2 user accounts + diff testing per endpoint.
 
-### IDOR na API
-
-```bash
-curl -s "https://TARGET/api/users/1" -H "Authorization: Bearer USER_TOKEN"
-curl -s "https://TARGET/api/users/2" -H "Authorization: Bearer USER_TOKEN"
-curl -s "https://TARGET/api/orders/1" -H "Authorization: Bearer USER_TOKEN"
-
-```
-
-### Brute force IDs
+## Automatyzacja Nuclei
 
 ```bash
-for i in $(seq 1 50); do echo "$i: $(curl -s -o /dev/null -w '%{http_code}' 'https://TARGET/api/users/'$i -H 'Authorization: Bearer USER_TOKEN')"; done
-
+# Cross-ref - to jest IDOR z perspektywy API
+nuclei -l burp-export.xml -im burp -t templates/wstg-athz-02-bypass-headers.yaml
 ```
 
-### Rozne operacje CRUD
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -X GET "https://TARGET/api/users/OTHER_ID" -H "Authorization: Bearer USER_TOKEN"
-curl -X PUT "https://TARGET/api/users/OTHER_ID" -H "Authorization: Bearer USER_TOKEN" -H "Content-Type: application/json" -d '{"name":"hacked"}'
-curl -X DELETE "https://TARGET/api/users/OTHER_ID" -H "Authorization: Bearer USER_TOKEN"
+### Metodologia (5 kroków)
 
-```
+1. **API endpoint enumeration**: każdy endpoint with ID parameter (cross WSTG-APIT-01).
+2. **2 accounts setup**: user A + user B z own resources.
+3. **Cross-user test**: jako user A, requestować user B's resources via ID swap.
+4. **Method variants**: GET (read), PUT (update), DELETE (delete).
+5. **Burp Autorize**: automated per-role testing.
 
-### Test z roznym formatem ID
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-# Numeryczny: /api/users/123
-# UUID: /api/users/550e8400-e29b-41d4-a716-446655440000
-# Slug: /api/users/john-doe
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists numeric IDs
-
-```bash
-ffuf -u "https://TARGET/api/users/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/4-digits-0000-9999.txt -H "Authorization: Bearer USER_TOKEN" -mc 200 -o output_ffuf_bola.json
-
-```
-
-### PayloadsAllTheThings IDOR
-
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Insecure Direct Object References/README.md
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj endpointy z ID obiektow
-2. Zaloguj sie jako user A, sprobuj CRUD na obiektach user B
-3. Uzyj Burp Autorize extension
-4. Testuj rozne formaty ID
-5. Sprawdz nested resources: /api/users/1/orders/1
-
-
----
+- [ ] `/api/users/{id}` - cross user
+- [ ] `/api/orders/{id}` - cross user
+- [ ] `/api/users/{id}/documents` - nested resources
+- [ ] Per HTTP method (GET/PUT/DELETE)
+- [ ] POST body `{"user_id": ...}`
+- [ ] Query parameters
+- [ ] File names (`/uploads/report_userA.pdf`)
+- [ ] GraphQL aliases `query{a:user(id:1),b:user(id:2)}`
+- [ ] Tenant isolation (multi-tenant)
+- [ ] WebSocket message IDs
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — REST_Security_Cheat_Sheet.md, Authorization_Cheat_Sheet.md
 
-### BOLA/IDOR — #1 podatnosc API (OWASP API Top 10)
+### BOLA/IDOR — #1 podatność API (OWASP API Top 10)
 
-- **Broken Object Level Authorization** — najczestszy typ podatnosci w API
-- Atakujacy zmienia ID obiektu w URL/body aby uzyskac dostep do cudzych danych
+- **Broken Object Level Authorization** — najczęstszy typ podatności w API
+- Atakujący zmienia ID obiektu w URL/body aby uzyskać dostęp do cudzych danych
 - Dotyczy: GET (odczyt), PUT/PATCH (modyfikacja), DELETE (usuwanie)
 
-### Gdzie szukac BOLA
+### Gdzie szukać BOLA
 
 | Endpoint | Atak |
 |----------|------|
-| `/api/users/{id}` | Zmien `id` na innego uzytkownika |
-| `/api/orders/{id}` | Odczytaj zamowienia innego uzytkownika |
-| `/api/users/{id}/documents` | Nested resources innego uzytkownika |
-| `/api/invoices/{id}/download` | Pobierz fakture innego uzytkownika |
-| Request body: `{"user_id": 123}` | Zmien user_id na cudze |
+| `/api/users/{id}` | Zmień `id` na innego użytkownika |
+| `/api/orders/{id}` | Odczytaj zamówienia innego użytkownika |
+| `/api/users/{id}/documents` | Nested resources innego użytkownika |
+| `/api/invoices/{id}/download` | Pobierz fakturę innego użytkownika |
+| Request body: `{"user_id": 123}` | Zmień user_id na cudze |
 
-### Techniki testowania
+### Obrona przed BOLA
 
-- **Horizontal**: user A probuje CRUD na obiektach user B (ten sam poziom uprawnien)
-- **Vertical**: user probuje CRUD na obiektach admina (rozny poziom uprawnien)
-- **ID brute force**: sekwencyjne ID → iteruj 1,2,3... — znajdz cudze obiekty
-- **UUID prediction**: jesli UUID v1 — zawiera timestamp i MAC, mozliwe do odgadniecia
-- **Parameter pollution**: `?user_id=1&user_id=2` — ktory ID uzyje backend?
-- **Method switching**: GET dziala z auth, ale PUT/DELETE pomija sprawdzenie?
+- **Per-object access control**: sprawdzaj przy KAŻDYM użyciu czy user ma prawo do KONKRETNEGO obiektu
+- **Indirect references**: używaj indirect tokens zamiast prawdziwych ID
+- **Avoid sequential IDs**: UUID v4 zamiast numerów - utrudnia enumeration
+- **Audit logging**: każda próba dostępu logged
+- **Burp Autorize / AuthMatrix**: automatyzacja testowania per-endpoint
 
-### Obrona
+### API Top 10 (2023)
 
-- Sprawdzaj autoryzacje na **KAZDYM** endpoincie, **KAZDEJ** metodzie HTTP
-- Uzyj **UUID v4** zamiast sekwencyjnych ID — ale to NIE jest obrona (defense-in-depth)
-- Implementuj **ABAC** (Attribute-Based Access Control) lub **ReBAC** (Relationship-Based)
-- Centralna warstwa autoryzacji — nie w kazdym kontrolerze osobno
-- Loguj i alertuj na proby dostepu do cudzych obiektow
+1. **API1:2023 - Broken Object Level Authorization** (BOLA) — ten test
+2. **API2:2023 - Broken Authentication**
+3. **API3:2023 - Broken Object Property Level Authorization**
+4. **API4:2023 - Unrestricted Resource Consumption**
+5. **API5:2023 - Broken Function Level Authorization**
+6. **API6:2023 - Unrestricted Access to Sensitive Business Flows**
+7. **API7:2023 - Server Side Request Forgery**
+8. **API8:2023 - Security Misconfiguration**
+9. **API9:2023 - Improper Inventory Management**
+10. **API10:2023 - Unsafe Consumption of APIs**
 
-### REST API — ogolne bezpieczenstwo
+## Pentesterskie deep dive
 
-- Waliduj `Content-Type` — odrzucaj nieoczekiwane typy
-- Rate limituj wszystkie endpointy — szczegolnie auth i wyszukiwanie
-- Waliduj parametry: typy, zakresy, dlugosci
-- Zwracaj prawidlowe kody: 401 (brak auth), 403 (brak uprawnien), 404 (nie znaleziono)
-- Wymuszaj HTTPS — nie akceptuj HTTP
-- Implementuj CORS prawidlowo — nie uzywaj wildcard Origin z credentials
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **GraphQL alias enumeration**: bypass per-query rate limit, mass enumerate users.
+- **Indirect BOLA via include**: `?include=orders[123]` może bypass primary route check.
+- **Numeric vs string ID confusion**: niektóre frameworks różnie traktują `"123"` vs `123`.
+- **Time-based BOLA**: ID dostępne tylko w określone godziny (cron creates).
+- **API4 (rate limit) bypass via different IP per request**.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Swurg | Parsowanie i testowanie API na podstawie Swagger/OpenAPI | [GitHub](https://github.com/AresS31/swurg) |
-| SwaggerParser | Import definicji Swagger do Burp | [GitHub](https://github.com/AresS31/SwaggerParser-BurpExtension) |
+### Common pitfalls
 
----
+- **Authz check tylko na primary route**: alternative routes share same service bypass.
+- **UUID v4 random ale brak access control**: security through obscurity.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **OWASP API Top 10**: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
+- **PortSwigger Access Control**: https://portswigger.net/web-security/access-control
+- **HackTricks IDOR**: https://book.hacktricks.xyz/pentesting-web/idor
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
-| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+| Rozszerzenie | Opis |
+|---|---|
+| Autorize | Cross-user authz testing |
+| AuthMatrix | Per-endpoint + per-role matrix |
+| Turbo Intruder | High-speed enumeration |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/12-API_Testing/02-Testing_API_Broken_Object_Level_Authorization
+- OWASP API Top 10 2023: https://owasp.org/API-Security/
+- OWASP IDOR CS: https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V4.2.1 | Authz not bypassed by parameter tampering. |
+| V4.3.3 | Sensitive resources require ownership check. |

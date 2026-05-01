@@ -1,0 +1,145 @@
+# ============================================================================
+# WSTG-ATHZ-02: Bypassing Authorization Schema (Universal)
+# ============================================================================
+# Review status: NOWY | Reviewer: Claude Code (Opus 4.7) | 2026-05-01
+#
+# Coverage: aktywny test bypass authorization headers (X-Original-URL,
+# X-Rewrite-URL, X-Forwarded-For 127.0.0.1) na chronionych endpointach.
+# Wykrywa różne odpowiedzi - ujawnia bypass.
+# ============================================================================
+
+id: wstg-athz-02-bypass-headers
+
+info:
+  name: "WSTG-ATHZ-02: Authorization Bypass via Headers (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Testuje typowe authorization bypass headers: X-Original-URL,
+    X-Rewrite-URL, X-Forwarded-For=127.0.0.1, X-Custom-IP-Authorization.
+    Detekcja: różny status code dla bypassu vs baseline (np. 200 zamiast 401/403).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/05-Authorization_Testing/02-Testing_for_Bypassing_Authorization_Schema
+    - https://book.hacktricks.xyz/pentesting-web/login-bypass
+  classification:
+    cwe-id: CWE-285,CWE-639
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 9.6
+  tags: dast,wstg,wstg-v42-athz-02,bypass,auth,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Baseline request - typically 401/403 dla protected admin endpoints
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/admin/"
+      - "{{BaseURL}}/api/admin"
+      - "{{BaseURL}}/manager"
+      - "{{BaseURL}}/dashboard"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      # Endpoint protected (baseline)
+      - type: status
+        status:
+          - 401
+          - 403
+
+  # =========================================================================
+  # Bypass attempts via headers - if status differs from baseline = bypass
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/api/admin"
+
+    headers:
+      X-Original-URL: "/admin"
+      X-Rewrite-URL: "/admin"
+      X-Forwarded-For: "127.0.0.1"
+      X-Real-IP: "127.0.0.1"
+      X-Originating-IP: "127.0.0.1"
+      X-Custom-IP-Authorization: "127.0.0.1"
+      X-Forwarded-Host: "localhost"
+      X-Host: "localhost"
+
+    matchers-condition: or
+    matchers:
+      # Bypass success - 200 OK na endpoincie który normalnie 401/403
+      - type: dsl
+        name: bypass-via-localhost-header
+        dsl:
+          - "status_code == 200"
+
+      # Bypass partial - body z admin content
+      - type: regex
+        part: body
+        name: bypass-shows-admin-content
+        regex:
+          - "(?i)<title>[^<]*(admin|management|dashboard|control panel)"
+          - "(?i)welcome,? admin"
+          - "(?i)admin (?:console|panel|dashboard)"
+
+  # =========================================================================
+  # Path manipulation bypass
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin/..%2f"
+      - "{{BaseURL}}/admin%20"
+      - "{{BaseURL}}/admin."
+      - "{{BaseURL}}/admin/."
+      - "{{BaseURL}}/admin//"
+      - "{{BaseURL}}//admin"
+      - "{{BaseURL}}/Admin"
+      - "{{BaseURL}}/ADMIN"
+      - "{{BaseURL}}/admin;/"
+      - "{{BaseURL}}/admin%00"
+      - "{{BaseURL}}/admin?"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: admin-content-via-path-bypass
+        regex:
+          - "(?i)<title>[^<]*(admin|management|dashboard)"
+          - "(?i)admin (?:console|panel)"
+          - "(?i)(authentication|authorization|csrf-token)"
+        condition: or
+
+  # =========================================================================
+  # HTTP Method bypass - GET vs POST/PUT/DELETE
+  # =========================================================================
+  - method: POST
+    path:
+      - "{{BaseURL}}/admin"
+
+    matchers-condition: or
+    matchers:
+      - type: dsl
+        name: post-method-bypass
+        dsl:
+          - "status_code == 200"
+
+# ============================================================================
+# Known limitations:
+# - Wymaga że aplikacja ma `/admin` endpoint - generic path. Custom paths
+#   wymagają manual extension wordlisty.
+# - Bypass success może być false positive (np. landing page 200) - manual
+#   verification.
+# - X-Forwarded-For bypass nie działa gdy backend właściwie waliduje IP -
+#   ale wciąż warto testować.
+# ============================================================================

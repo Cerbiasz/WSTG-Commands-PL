@@ -1,0 +1,417 @@
+# ============================================================================
+# WSTG-INFO-03: Review Webserver Metafiles for Information Leakage (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-INFO-03 (existing repo):
+#   ✓ robots.txt + parsing Disallow paths (sensitive paths leak)
+#   ✓ sitemap.xml / sitemap_index.xml (URL enumeration)
+#   ✓ /.well-known/security.txt (RFC 9116 - contact, scope, expires)
+#   ✓ /.well-known/openid-configuration (OAuth endpoints, supported scopes)
+#   ✓ /.well-known/jwks.json (JWT public keys)
+#   ✓ /.well-known/assetlinks.json (Android App Links)
+#   ✓ /.well-known/apple-app-site-association (iOS Universal Links)
+#   ✓ /.well-known/change-password (RFC 8615)
+#   ✓ humans.txt
+#
+# Z research:
+#   ✓ /.well-known/dnt-policy.txt           (RFC reference)
+#   ✓ /.well-known/openpgpkey/hu/*          (WKD - Web Key Directory)
+#   ✓ /.well-known/matrix/{server,client}   (Matrix federation discovery)
+#   ✓ /.well-known/host-meta(.json)         (XRD discovery, ActivityPub)
+#   ✓ /.well-known/nodeinfo                 (ActivityPub/Mastodon)
+#   ✓ /.well-known/webfinger                (federation, account discovery)
+#   ✓ /.well-known/oauth-authorization-server (RFC 8414)
+#   ✓ /crossdomain.xml + /clientaccesspolicy.xml (Flash/Silverlight legacy)
+#   ✓ /robots.txt → ekstrakcja Disallow ścieżek do raportu
+#
+# Performance budget: very low (~20-30 requests per host)
+# Estimated time: ~30s per host
+#
+# Source mapping:
+# - CHEATSHEET WSTG-INFO-03: większość paths z tabeli ".well-known interesujące endpointy"
+# - HackTricks: pentesting-web/ssrf + Web Discovery section
+# - PortSwigger: Web Cache Deception research (host-meta, openid-config)
+# - PayloadsAllTheThings: Discovery / Web Discovery
+# - RFC 9116 (security.txt), RFC 8414 (oauth-authorization-server),
+#   RFC 8615 (change-password), RFC 5785 (.well-known)
+# ============================================================================
+
+id: wstg-info-03-metafiles
+
+info:
+  name: "WSTG-INFO-03: Webserver Metafiles Review (Universal)"
+  author: pentest-team
+  severity: info
+  description: |
+    Sprawdza obecność i zawartość plików metadanych (robots.txt, sitemap.xml,
+    /.well-known/*, humans.txt, crossdomain.xml). Wykrywa: ujawnione ścieżki
+    przez Disallow, OAuth/OIDC endpointy w openid-configuration, klucze JWT
+    w jwks.json, wycieki przez security.txt (kontakt, scope), legacy Flash
+    crossdomain. Każdy plik = osobne info-disclosure finding z extractorem.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/03-Review_Webserver_Metafiles_for_Information_Leakage
+    - https://datatracker.ietf.org/doc/html/rfc9116
+    - https://datatracker.ietf.org/doc/html/rfc5785
+    - https://www.iana.org/assignments/well-known-uris/well-known-uris.xhtml
+  classification:
+    cwe-id: CWE-200,CWE-540
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-info-03,info-disclosure,well-known,metafiles,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Request 1: robots.txt (Apache/Nginx/IIS - all serve from doc root)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/robots.txt"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: robots-syntax-present
+        regex:
+          - "(?im)^(User-agent|Disallow|Allow|Sitemap|Crawl-delay):"
+
+      # Anti-FP: nie SPA serwujący index.html dla każdego path
+      - type: word
+        part: header
+        name: not-spa-fallback
+        words:
+          - "text/plain"
+          - "text/x-robots"
+        condition: or
+
+    extractors:
+      - type: regex
+        name: disallowed-paths
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Disallow:\\s*(\\S+)"
+
+      - type: regex
+        name: sitemap-references
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Sitemap:\\s*(\\S+)"
+
+  # =========================================================================
+  # Request 2-4: sitemap variants
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/sitemap.xml"
+      - "{{BaseURL}}/sitemap_index.xml"
+      - "{{BaseURL}}/sitemaps.xml"
+      - "{{BaseURL}}/sitemap-news.xml"
+      - "{{BaseURL}}/sitemap-images.xml"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: sitemap-xml-detected
+        regex:
+          - "(?i)<urlset[^>]*xmlns=\"http://www\\.sitemaps\\.org/schemas/sitemap"
+          - "(?i)<sitemapindex[^>]*xmlns=\"http://www\\.sitemaps\\.org/schemas/sitemap"
+
+    extractors:
+      - type: regex
+        name: sitemap-urls
+        part: body
+        group: 1
+        regex:
+          - "<loc>([^<]+)</loc>"
+
+  # =========================================================================
+  # Request 5: security.txt (RFC 9116) - both legacy and well-known location
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/security.txt"
+      - "{{BaseURL}}/security.txt"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: security-txt-rfc9116
+        regex:
+          - "(?im)^Contact:\\s*"
+          - "(?im)^Expires:\\s*"
+        condition: or
+
+    extractors:
+      - type: regex
+        name: security-contacts
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Contact:\\s*(\\S+)"
+
+      - type: regex
+        name: security-policy-url
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Policy:\\s*(\\S+)"
+
+      - type: regex
+        name: security-expires
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Expires:\\s*(\\S+)"
+
+      - type: regex
+        name: security-acknowledgments
+        part: body
+        group: 1
+        regex:
+          - "(?im)^Acknowledgments:\\s*(\\S+)"
+
+  # =========================================================================
+  # Request 6: OAuth / OIDC discovery (RFC 8414)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/openid-configuration"
+      - "{{BaseURL}}/.well-known/oauth-authorization-server"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: oidc-config-detected
+        regex:
+          - "\"(issuer|authorization_endpoint|token_endpoint|jwks_uri)\""
+        condition: or
+
+      - type: word
+        part: header
+        name: json-content-type
+        words:
+          - "application/json"
+
+    extractors:
+      - type: json
+        name: issuer
+        json:
+          - ".issuer"
+
+      - type: json
+        name: token-endpoint
+        json:
+          - ".token_endpoint"
+
+      - type: json
+        name: jwks-uri
+        json:
+          - ".jwks_uri"
+
+      - type: json
+        name: supported-grant-types
+        json:
+          - ".grant_types_supported"
+
+      - type: json
+        name: supported-scopes
+        json:
+          - ".scopes_supported"
+
+  # =========================================================================
+  # Request 7: JWT public keys (jwks.json)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/jwks.json"
+      - "{{BaseURL}}/jwks.json"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: jwks-detected
+        regex:
+          - "\"keys\"\\s*:\\s*\\["
+          - "\"kty\"\\s*:\\s*\""
+        condition: or
+
+    extractors:
+      - type: json
+        name: jwk-key-ids
+        json:
+          - ".keys[].kid"
+
+      - type: json
+        name: jwk-algorithms
+        json:
+          - ".keys[].alg"
+
+  # =========================================================================
+  # Request 8: Mobile app linking
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/assetlinks.json"
+      - "{{BaseURL}}/.well-known/apple-app-site-association"
+      - "{{BaseURL}}/apple-app-site-association"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: app-association-detected
+        regex:
+          - "(?i)\"package_name\""           # Android assetlinks
+          - "(?i)\"applinks\""                # iOS
+          - "(?i)\"webcredentials\""          # iOS
+          - "(?i)\"appID\""                   # iOS
+        condition: or
+
+    extractors:
+      - type: json
+        name: android-package-names
+        json:
+          - ".[].target.package_name"
+
+      - type: json
+        name: ios-app-ids
+        json:
+          - ".applinks.apps[]"
+          - ".applinks.details[].appID"
+
+  # =========================================================================
+  # Request 9: Federation / fediverse discovery
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/host-meta"
+      - "{{BaseURL}}/.well-known/host-meta.json"
+      - "{{BaseURL}}/.well-known/nodeinfo"
+      - "{{BaseURL}}/.well-known/webfinger"
+      - "{{BaseURL}}/.well-known/matrix/server"
+      - "{{BaseURL}}/.well-known/matrix/client"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: dsl
+        name: not-empty-response
+        dsl:
+          - "len(body) > 10"
+
+    extractors:
+      - type: regex
+        name: federation-content
+        part: body
+        group: 0
+        regex:
+          - ".{0,200}"
+
+  # =========================================================================
+  # Request 10: Legacy Flash / Silverlight cross-domain
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/crossdomain.xml"
+      - "{{BaseURL}}/clientaccesspolicy.xml"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: crossdomain-policy-detected
+        regex:
+          - "(?i)<cross-domain-policy>"
+          - "(?i)<access-policy>"
+        condition: or
+
+    extractors:
+      - type: regex
+        name: allowed-domains
+        part: body
+        group: 1
+        regex:
+          - "(?i)<allow-access-from\\s+domain=\"([^\"]+)\""
+          - "(?i)<domain\\s+uri=\"([^\"]+)\""
+
+  # =========================================================================
+  # Request 11: Misc useful well-known
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.well-known/change-password"
+      - "{{BaseURL}}/.well-known/dnt-policy.txt"
+      - "{{BaseURL}}/humans.txt"
+      - "{{BaseURL}}/.well-known/openpgpkey/policy"
+    stop-at-first-match: false
+
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302
+
+# ============================================================================
+# Known limitations:
+# - WAF blokujący /.well-known/* (rzadkie ale istnieje) → false negatives
+# - SPA serwujący index.html dla każdego path → primary regex anti-FP filtruje
+# - Niektóre frameworki serwują puste 200 zamiast 404 dla nieistniejących
+#   metafiles → matcher status=200 + regex body filtrują to
+# - Wirtualne hosty nie są tu testowane (GET /robots.txt z Host: virthost)
+#   - patrz WSTG-CONF-07 dla virtual host enumeration
+# ============================================================================

@@ -1,188 +1,70 @@
 # WSTG-CONF-09 — Test File Permission
 
-## Cele
+## Cel
 
-- Review file permissions on the web server
-- Identify sensitive files accessible without proper authorization
-- Find files that should not be publicly readable
+Weryfikacja uprawnień plikowych aplikacji webowej: czy proces serwera (www-data) ma minimalne wymagane prawa, czy upload directory nie jest wykonywalny, czy klucze prywatne i config files są chronione przed dostępem przez HTTP.
 
-## KOMENDY
+> **Test infrastructural / manual**: uprawnienia plikowe testowane są na poziomie systemu plików (ssh + ls -la, find world-writable). Nuclei nie ma tu zastosowania - z perspektywy HTTP możemy tylko sprawdzić czy wrażliwe pliki są dostępne (cross-ref WSTG-CONF-03).
 
-### Nmap - skanowanie konfiguracji backupow
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-nmap --script http-config-backup -p 80,443 TARGET -oN output_nmap_config_backup.txt
+### Metodologia (5 kroków)
 
-```
+1. **HTTP-side check**: cross-reference z WSTG-CONF-03 (file extensions) — czy `.env`, `.git/`, `id_rsa` są dostępne przez HTTP.
+2. **Local audit (po uzyskaniu shell)**: `find /var/www -perm -o+w -type f` (world-writable), `find /var/www -perm -o+r -name "*.key" -o -name "*.pem"`.
+3. **Process ownership**: `ps aux | grep -E "(apache|nginx|httpd|node|python|ruby)"` — kto uruchamia serwer.
+4. **File ownership audit**: czy `chown -R www-data:www-data /var/www/` jest aplikowane consistent (web user = file owner = bypass file permissions completely).
+5. **Upload directory test**: czy `/uploads/test.php` z PHP code jest wykonywalne (gdy upload accepted)?
 
-### Nikto - skanowanie pod katem dostepnych plikow
+### Co MUSI być sprawdzone (10 punktów - po uzyskaniu shell)
 
-```bash
-nikto -h https://TARGET -o output_nikto.txt -Format txt
-nikto -h https://TARGET -Tuning 4 -o output_nikto_info.txt
-
-```
-
-### Sprawdzenie typowych wrazliwych sciezek
-
-```bash
-curl -sI https://TARGET/.env | head -1
-curl -sI https://TARGET/.git/config | head -1
-curl -sI https://TARGET/.git/HEAD | head -1
-curl -sI https://TARGET/.gitignore | head -1
-curl -sI https://TARGET/.htaccess | head -1
-curl -sI https://TARGET/.htpasswd | head -1
-curl -sI https://TARGET/web.config | head -1
-curl -sI https://TARGET/wp-config.php | head -1
-curl -sI https://TARGET/config.php | head -1
-curl -sI https://TARGET/database.yml | head -1
-curl -sI https://TARGET/settings.py | head -1
-curl -sI https://TARGET/application.properties | head -1
-curl -sI https://TARGET/appsettings.json | head -1
-
-```
-
-### Sprawdzenie directory listing
-
-```bash
-curl -sI https://TARGET/images/ | head -5
-curl -sI https://TARGET/uploads/ | head -5
-curl -sI https://TARGET/css/ | head -5
-curl -sI https://TARGET/js/ | head -5
-curl -sI https://TARGET/includes/ | head -5
-curl -sI https://TARGET/vendor/ | head -5
-curl -sI https://TARGET/backup/ | head -5
-curl -sI https://TARGET/logs/ | head -5
-
-```
-
-### Sprawdzenie logów
-
-```bash
-curl -sI https://TARGET/error.log | head -1
-curl -sI https://TARGET/access.log | head -1
-curl -sI https://TARGET/debug.log | head -1
-curl -sI https://TARGET/logs/error.log | head -1
-curl -sI https://TARGET/wp-content/debug.log | head -1
-
-```
-
-### Sprawdzenie SSH/kluczy
-
-```bash
-curl -sI https://TARGET/.ssh/id_rsa | head -1
-curl -sI https://TARGET/.ssh/authorized_keys | head -1
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists quickhits - szybka lista popularnych plikow
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/quickhits.txt -mc 200 -o output_ffuf_quickhits.json
-
-```
-
-### Bug-Bounty-Wordlists config
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/config.txt -mc 200 -o output_ffuf_config.json
-
-```
-
-### Bug-Bounty-Wordlists dotfiles
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/dotfiles.txt -mc 200 -o output_ffuf_dotfiles.json
-
-```
-
-### Bug-Bounty-Wordlists env
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/env.txt -mc 200 -o output_ffuf_env.json
-
-```
-
-### Bug-Bounty-Wordlists leaked files
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/all-files-leaked.txt -mc 200 -o output_ffuf_leaked.json
-
-```
-
-### Bug-Bounty-Wordlists keys
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/keys.txt -mc 200 -o output_ffuf_keys.json
-
-```
-
-### fuzzdb Unix dotfiles
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/UnixDotfiles.txt -mc 200 -o output_ffuf_unix_dotfiles.json
-
-```
-
-### fuzzdb password locations
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/password-file-locations/Passwords.txt -mc 200 -o output_ffuf_passwords.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz czy pliki konfiguracyjne sa dostepne (.env, .git/config, wp-config.php)
-2. Przetestuj directory listing na roznych katalogach
-3. Sprawdz czy logi sa dostepne publicznie (error.log, access.log, debug.log)
-4. Zweryfikuj uprawnienia do plikow uploadowanych przez uzytkownikow
-5. Sprawdz czy pliki tymczasowe sa dostepne (.swp, .bak, ~)
-6. W Burp Suite: przejrzyj Site Map pod katem wrazliwych plikow
-7. Sprawdz czy private keys, certyfikaty, credentials nie sa dostepne publicznie
-8. Przetestuj sciezki wzgledne (../) do uzyskania dostepu do plikow poza webroot
-
-
----
+- [ ] World-writable files w webroot (`find /var/www -perm -o+w -type f`)
+- [ ] World-readable sensitive files (`*.key`, `*.pem`, `id_rsa`, `.env`)
+- [ ] Process user vs file owner (jeśli te same = bypass uprawnień)
+- [ ] Upload directory permissions (powinno być 750, nie 777)
+- [ ] Upload directory wykonywalność PHP/JSP/ASPX (test przez file upload)
+- [ ] `.git/` directory permissions (powinno być chmod 700 dla deployment user)
+- [ ] Log files permissions (640, append-only via setattr +a)
+- [ ] Config files (640, group www-data dla read)
+- [ ] Setuid/setgid files (`find /var/www -perm /6000 -type f`)
+- [ ] Symlinks pointing outside webroot
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md, Docker_Security_Cheat_Sheet.md
 
-### Uprawnienia plikow — zasady
+### Uprawnienia plików — zasady
 
 | Zasada | Opis |
 |--------|------|
 | Least Privilege | Pliki webowe: odczyt tylko dla procesu serwera, nie `777` |
-| Separation of Duties | Uzytkownik serwera web ≠ wlasciciel plikow |
-| No Execute on Uploads | Katalog uploadow: brak prawa execute, brak interpretacji skryptow |
-| Config Files Protected | `.env`, `config.php`: `640` lub `600`, dostep tylko dla procesu serwera |
-| Log Files | Logi: append-only, niedostepne przez HTTP |
+| Separation of Duties | Użytkownik serwera web ≠ właściciel plików |
+| No Execute on Uploads | Katalog uploadów: brak prawa execute, brak interpretacji skryptów |
+| Config Files Protected | `.env`, `config.php`: `640` lub `600`, dostęp tylko dla procesu serwera |
+| Log Files | Logi: append-only, niedostępne przez HTTP |
 
 ### Typowe uprawnienia Linux — web server
 
-| Zasob | Uprawnienia | Wlasciciel |
+| Zasób | Uprawnienia | Właściciel |
 |-------|-------------|------------|
 | Pliki PHP/Python/Ruby | `644` (rw-r--r--) | root:www-data |
 | Katalogi aplikacji | `755` (rwxr-xr-x) | root:www-data |
 | Pliki konfiguracyjne | `640` (rw-r-----) | root:www-data |
-| Katalog uploadow | `750` (rwxr-x---) | www-data:www-data |
+| Katalog uploadów | `750` (rwxr-x---) | www-data:www-data |
 | Klucze prywatne/SSL | `600` (rw-------) | root:root |
 | Logi aplikacji | `640` (rw-r-----) | www-data:adm |
 
-### Pliki wrazliwe — co chronic
+### Pliki wrażliwe — co chronić
 
 - **`.env`** — credentials, klucze API, connection strings
-- **`.git/`** — pelne repozytorium kodu (git checkout pozwala odtworzyc pliki)
+- **`.git/`** — pełne repozytorium kodu (git checkout pozwala odtworzyć pliki)
 - **`wp-config.php`**, **`config.php`** — dane do bazy danych
-- **`.htpasswd`** — hashe hasel
+- **`.htpasswd`** — hashe haseł
 - **`id_rsa`**, **`*.pem`**, **`*.key`** — klucze prywatne
 - **`*.sql`**, **`*.db`** — dumpy baz danych
-- **`debug.log`**, **`error.log`** — moga zawierac tokeny, stack traces
+- **`debug.log`**, **`error.log`** — mogą zawierać tokeny, stack traces
 
-### Konfiguracja serwera — blokowanie dostepu
+### Konfiguracja serwera — blokowanie dostępu
 
 **Apache:**
 ```
@@ -200,35 +82,59 @@ location ~ /\. { deny all; }
 location ~ /\.git { deny all; }
 ```
 
-### Directory listing — wylaczenie
+### Directory listing — wyłączenie
 
 | Serwer | Konfiguracja |
 |--------|-------------|
 | Apache | `Options -Indexes` |
-| Nginx | `autoindex off;` (domyslnie wylaczony) |
-| IIS | Usun "Directory Browsing" z Feature Delegation |
+| Nginx | `autoindex off;` (domyślnie wyłączony) |
+| IIS | Usuń "Directory Browsing" z Feature Delegation |
 
 ### Obrona
 
 - Regularnie skanuj webroot: `find /var/www -perm -o+w -type f` (pliki world-writable)
 - Ustaw `umask 027` dla procesu serwera web
-- Nie przechowuj kluczy, hasel, certyfikatow w katalogu webowym
-- Uzyj `.gitignore` aby nie commitowac `.env`, `*.key`, `*.pem`
-- Monitoruj zmiany plikow konfiguracyjnych (AIDE, Tripwire, OSSEC)
+- Nie przechowuj kluczy, haseł, certyfikatów w katalogu webowym
+- Użyj `.gitignore` aby nie commitować `.env`, `*.key`, `*.pem`
+- Monitoruj zmiany plików konfiguracyjnych (AIDE, Tripwire, OSSEC)
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp — test wymaga dostepu do systemu plikow serwera.
+### Mniej znane techniki
 
----
+- **Race condition w upload**: jeśli plik jest weryfikowany po upload, ale przed move do final dir, atakujący może w okno czasowe wykonać go (Time-of-check vs Time-of-use - TOCTOU).
+- **Symlink attack**: jeśli upload directory pozwala na symlinki, atakujący uploaduje symlink do `/etc/passwd` → następnie GET na uploaded path zwraca passwd content.
+- **PHP `auto_prepend_file` via upload**: Apache + PHP misconfig może wykonać `<?php` z dowolnego pliku w katalogu jako prefix do PHP requestów.
+- **SUID web shell**: po RCE dropping suid binary jako www-data → privilege escalation gdy atakujący ma local access.
+- **Setgid directory permission inheritance**: katalog z setgid bit nadaje wszystkim plikom group ownership = często użyte do ataku gdzie www-data dziedziczy z innej grupy.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **777 na uploads "for convenience"**: typowy junior fix gdy upload nie działa. Zostawia executable PHP files possibility.
+- **Process running as root**: `ps aux | grep -v grep | grep ^root.*nginx` — root-owned web server = privilege escalation łatwiejsze przy RCE.
+- **Container default user = root**: Docker containers domyślnie uruchamiają jako root chyba że `USER` directive w Dockerfile.
 
-### L1 (Podstawowy)
+### Świeżynki z research
+
+- **Container escape via shared file permissions** — community pattern; jeśli host volume mounted z 777 + container running as root, można pisać na host.
+- **Kubernetes RunAsNonRoot bypass** — config error w pod spec.
+- **HackTricks Privilege Escalation Linux**: https://book.hacktricks.xyz/linux-hardening/privilege-escalation
+
+## Rozszerzenia Burp Suite
+
+Brak dedykowanych rozszerzeń — test wykonywany lokalnie po RCE.
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/09-Test_File_Permission
+- HackTricks Linux Privilege Escalation: https://book.hacktricks.xyz/linux-hardening/privilege-escalation
+- OWASP Docker Security: https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+- Linux Capabilities: https://man7.org/linux/man-pages/man7/capabilities.7.html
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V5.3.1 | File Storage | Verify that files uploaded or generated by untrusted input and stored in a public folder, are not executed as server-side program code when accessed directly with an HTTP request. |
-| V5.3.2 | File Storage | Verify that when the application creates file paths for file operations, instead of user-submitted filenames, it uses internally generated or trusted data, or if user-submitted filenames or file metadata must be used, strict validation and sanitization must be applied. This is to protect against path traversal, local or remote file inclusion (LFI, RFI), and server-side request forgery (SSRF) attacks. |
+| V14.1.4 | Configuration (L2) | App processes run with least privilege. |
+| V12.4.1 | File Upload (L1) | Uploaded files not stored in web root. |
+| V14.4.5 | Configuration (L1) | File integrity verification. |

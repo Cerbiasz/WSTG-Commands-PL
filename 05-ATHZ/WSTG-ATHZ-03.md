@@ -1,63 +1,46 @@
 # WSTG-ATHZ-03 — Testing for Privilege Escalation
 
-## Cele
+## Cel
 
-- Identify injection points related to privilege manipulation
-- Fuzz or otherwise attempt to bypass security measures
+Wykrycie vertical privilege escalation (user → admin) i horizontal escalation (user A → user B): mass assignment role w body, JWT manipulation, forced browsing admin endpoints, mass-assignment-via-update.
 
-## KOMENDY
+> **Test mostly manual**: wymaga 2 user accounts (user + admin) + diff testing.
 
-### Modyfikacja roli w request
-
-```bash
-curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -H "Content-Type: application/json" -d '{"role":"admin"}'
-curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -d "isAdmin=true"
-curl -X POST "https://TARGET/api/user/profile" -H "Cookie: session=USER_SESSION" -d "usertype=1"
-
-```
-
-### Modyfikacja tokenu/cookie
+## Automatyzacja Nuclei
 
 ```bash
-# Sprawdz JWT claims (role, sub, admin)
-# Sprawdz cookie values (base64 decode, modify, re-encode)
+# Bypass headers (cross WSTG-ATHZ-02)
+nuclei -l burp-export.xml -im burp -t templates/wstg-athz-02-bypass-headers.yaml
 
+# Attack surface (admin panels)
+nuclei -l burp-export.xml -im burp -t templates/wstg-info-04-attack-surface.yaml
 ```
 
-### Dostep do admin API
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/api/admin/users" -H "Cookie: session=USER_SESSION" -o /dev/null -w "%{http_code}\n"
-curl -s "https://TARGET/api/admin/settings" -H "Cookie: session=USER_SESSION" -o /dev/null -w "%{http_code}\n"
+### Metodologia (6 kroków)
 
-```
+1. **2 accounts setup**: user + admin role.
+2. **Endpoint enumeration**: lista wszystkich admin endpoints.
+3. **Forced browsing**: jako user, próba dostępu do admin endpoints.
+4. **Mass assignment**: w PUT /api/users/me, dodaj `role=admin` → czy backend akceptuje?
+5. **JWT manipulation**: edit `role` claim → czy aplikacja akceptuje (bez signature validation)?
+6. **Session puzzling**: czy reset password / registration ustawia auth state?
 
-### Parameter tampering
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "user_id=ADMIN_ID&action=delete"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test logiczny
-
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Insecure Direct Object References/README.md
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj rozne poziomy uprawnien w aplikacji
-2. Testuj modyfikacje parametrow roli (role, group, type, level)
-3. Sprawdz JWT/cookie pod katem manipulacji uprawnien
-4. Testuj dostep do endpointow wyzszego poziomu
-5. Uzyj Burp Match/Replace do automatycznej podmiany parametrow
-
-
----
+- [ ] Forced browsing wszystkich admin endpoints jako user
+- [ ] Mass assignment w PUT/PATCH (role, isAdmin, permissions)
+- [ ] JWT role claim edit (cross WSTG-SESS-10)
+- [ ] Session puzzling (cross WSTG-SESS-08)
+- [ ] Hidden form fields (`<input type="hidden" name="role">`)
+- [ ] API version downgrade
+- [ ] HTTP method switching
+- [ ] Header bypass (cross WSTG-ATHZ-02)
+- [ ] Cookie tampering (`role=admin`)
+- [ ] OAuth scope escalation
+- [ ] Multi-step privilege check (atakujący czyta state z 2-step flow)
+- [ ] Promote action - czy admin promote prevent unauthorized?
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -67,64 +50,67 @@ curl -X POST "https://TARGET/api/action" -H "Cookie: session=USER_SESSION" -d "u
 
 - **Parametr roli w request**: `role=admin`, `isAdmin=true`, `userType=administrator`
 - **Modyfikacja JWT claims**: zmiana `"role":"user"` na `"role":"admin"` w JWT payload
-- **Forced browsing**: bezposredni dostep do `/admin/`, `/management/`, `/internal/`
+- **Forced browsing**: bezpośredni dostęp do `/admin/`, `/management/`, `/internal/`
 - **HTTP method switching**: endpoint chroni GET ale nie POST/PUT/DELETE
-- **API version bypass**: `/api/v1/admin` — starsza wersja API bez kontroli dostepu
+- **API version bypass**: `/api/v1/admin` — starsza wersja API bez kontroli dostępu
 
 ### Obrona przed privilege escalation
 
-- **Waliduj role SERVER-SIDE** na KAZDYM request — nie polegaj na client-side
-- Sprawdzaj uprawnienia do **KONKRETNEJ AKCJI**, nie tylko typ uzytkownika
-- **Deny by default** — jesli brak jawnej reguly, ODMOW dostepu
-- Uzyj **centralnego middleware** do kontroli dostepu — nie rozpraszaj logiki autoryzacji
-- **Separuj funkcje administracyjne** od zwyklych uzytkownikow na poziomie kodu i infrastruktury
+- **Waliduj role SERVER-SIDE** na KAŻDYM request — nie polegaj na client-side
+- Sprawdzaj uprawnienia do **KONKRETNEJ AKCJI**, nie tylko typ użytkownika
+- **Deny by default** — jeśli brak jawnej reguły, ODMÓW dostępu
+- Użyj **centralnego middleware** do kontroli dostępu — nie rozpraszaj logiki autoryzacji
+- **Separuj funkcje administracyjne** od zwykłych użytkowników na poziomie kodu i infrastruktury
   - Oddzielny panel admin na innej subdomenie/porcie
-  - Osobna warstwa middleware dla admin endpointow
+  - Osobna warstwa middleware dla admin endpointów
 
-### Modele kontroli dostepu
+### Modele kontroli dostępu
 
-- **RBAC** (Role-Based): proste ale podatne na "role explosion" — role per zasob
-- **ABAC** (Attribute-Based): uwzglednia wiele atrybutow (rola, czas, IP, urzadzenie) — elastyczniejsze
-- **ReBAC** (Relationship-Based): kontrola na podstawie relacji user↔zasob ("autor moze edytowac swoj post")
+- **RBAC** (Role-Based): proste ale podatne na "role explosion" — role per zasób
+- **ABAC** (Attribute-Based): bardziej granularne — atrybuty user, resource, action, context
+- **ReBAC** (Relationship-Based): kontrola w oparciu o relacje (autor → swój post)
 
-### Testowanie vertical privilege escalation
+### Mass assignment
 
-- Zaloguj sie jako zwykly user → probuj endpointy admina
-- Dodaj parametry: `admin=true`, `role=admin`, `debug=1` do requestow
-- Zmien role/claims w tokenach JWT lub cookies
-- Testuj CRUD na admin zasobach z sesja zwyklego usera
-- Porownaj odpowiedzi: te same dane vs 403/404 vs inne dane
+- **NIE akceptuj** pól `role`, `isAdmin`, `permissions`, `is_staff` z user input
+- Allowlist pól (strong parameters / DTOs)
+- Audit log changes do critical fields
 
-### Logging i monitoring
+## Pentesterskie deep dive
 
-- Loguj WSZYSTKIE proby dostepu do zasobow o wyzszym poziomie uprawnien
-- Alertuj na powtarzajace sie proby eskalacji z jednego konta/IP
-- Naruszenia autoryzacji = zdarzenia WYSOKIEGO priorytetu w SIEM
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **Privilege escalation via `promote` action**: aplikacja allowing admin promote user → atakujący admin może add backdoor admin.
+- **Concurrent role check race**: zmiana roli + parallel API call może execute z poprzednią rolą.
+- **OAuth scope creep**: refresh token może requestować nowe scopes (broader than initial grant).
+- **Multi-tenant tenant escape**: tenant_id manipulation w request body → access cross-tenant data.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Autorize | Automatyczne testowanie eskalacji uprawnien | [GitHub](https://github.com/Quitten/Autorize) |
-| AuthMatrix | Macierz testow autoryzacji | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
-| Burp SessionAuth | Wykrywanie podatnosci eskalacji uprawnien | [GitHub](https://github.com/thomaspatzke/Burp-SessionAuthTool) |
+### Common pitfalls
 
----
+- **role check tylko na frontend**: atakujący direct API call.
+- **role check w controller, brak w underlying service**: alternate entry.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **PortSwigger Access Control labs**: https://portswigger.net/web-security/access-control
+- **HackerOne disclosed reports - "privilege escalation"**: https://hackerone.com/hacktivity
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
-| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
-| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+| Rozszerzenie | Opis |
+|---|---|
+| Autorize | Different role testing |
+| AuthMatrix | Privilege matrix |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.4.1 | Other Authorization Considerations | Verify that multi-tenant applications use cross-tenant controls to ensure consumer operations will never affect tenants with which they do not have permissions to interact. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/05-Authorization_Testing/03-Testing_for_Privilege_Escalation
+- OWASP Authorization CS: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V4.1.3 | Principle of least privilege. |
+| V4.2.1 | Authz not bypassed by parameter tampering. |
+| V5.1.4 | Mass assignment protection. |

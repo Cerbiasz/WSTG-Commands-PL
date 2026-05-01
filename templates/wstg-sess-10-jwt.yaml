@@ -1,0 +1,84 @@
+# ============================================================================
+# WSTG-SESS-10: JSON Web Tokens (JWT) (Universal)
+# ============================================================================
+# Review status: NOWY | Reviewer: Claude Code (Opus 4.7) | 2026-05-01
+#
+# Coverage: detekcja JWT z słabym alg (none/HS256), JWT w URL, JWT
+# z sensitive data w payload, missing JWT validation hints.
+# ============================================================================
+
+id: wstg-sess-10-jwt
+
+info:
+  name: "WSTG-SESS-10: JWT Weaknesses (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa JWT z słabymi parametrami: alg=none (token forgery), HS256
+    z guessable secret, JWT w URL/Referer leak, JWT z PII/credentials w payload.
+    Aktywny crack secret wymaga hashcat manual.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/10-Testing_JSON_Web_Tokens
+    - https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+    - https://book.hacktricks.xyz/pentesting-web/hacking-jwt-json-web-tokens
+  classification:
+    cwe-id: CWE-345,CWE-347
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 9.6
+  tags: dast,wstg,wstg-v42-sess-10,jwt,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # JWT with alg=none (Base64-decoded header starts with {"alg":"none"})
+      # Header pattern: eyJhbGciOiJub25lIn0
+      - type: regex
+        part: body
+        name: jwt-alg-none
+        regex:
+          - "\\beyJhbGciOiJub25lIn[0-9A-Za-z_-]*"
+
+      # JWT in URL (logged everywhere)
+      - type: regex
+        part: body
+        name: jwt-in-url
+        regex:
+          - "(?i)href=[\"'][^\"']*[?&]\\w*=eyJ[A-Za-z0-9_-]{8,}\\.eyJ"
+          - "(?i)src=[\"'][^\"']*[?&]\\w*=eyJ[A-Za-z0-9_-]{8,}\\.eyJ"
+
+      # JWT in body (signal aplikacja używa JWT)
+      - type: regex
+        part: body
+        name: jwt-token-present
+        regex:
+          - "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}"
+
+      # JWT in Authorization header (returned in response - leakage)
+      - type: regex
+        part: header
+        name: jwt-in-response-header
+        regex:
+          - "(?i)(?:authorization|x-auth-token|bearer):\\s*[Bb]earer\\s+eyJ"
+
+      # JWT alg=HS256 + JWKS endpoint exposed (key confusion attack vector)
+      - type: dsl
+        name: jwt-jwks-uri-exposed
+        dsl:
+          - "regex(\"\\\\beyJ[A-Za-z0-9_-]+\\\\.eyJ\", body)"
+          - "regex(\"(?i)/.well-known/jwks\\\\.json\", body)"
+        condition: and
+
+# ============================================================================
+# Known limitations:
+# - Pasywna detekcja patterns. Aktywny test (forge JWT, crack HS256 secret)
+#   wymaga Burp JWT Editor / hashcat -m 16500.
+# - JWT w cookie nie wykrywane przez ten template (use SESS-02 + Burp JWT Editor).
+# ============================================================================

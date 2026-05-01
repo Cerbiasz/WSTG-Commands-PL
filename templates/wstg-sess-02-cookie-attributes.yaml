@@ -1,0 +1,107 @@
+# ============================================================================
+# WSTG-SESS-02: Cookies Attributes (Universal)
+# ============================================================================
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-05-01
+#
+# Coverage: detekcja cookies bez Secure/HttpOnly/SameSite, weak Path/Domain.
+# ============================================================================
+
+id: wstg-sess-02-cookie-attributes
+
+info:
+  name: "WSTG-SESS-02: Cookie Attributes (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa cookies bez wymaganych atrybutów: Secure (HTTPS only), HttpOnly
+    (no JS access), SameSite (CSRF defense), Domain/Path zbyt szerokie.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/02-Testing_for_Cookies_Attributes
+    - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-1004,CWE-614
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N
+    cvss-score: 5.9
+  tags: dast,wstg,wstg-v42-sess-02,cookies,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # Session/auth cookie bez Secure
+      - type: dsl
+        name: session-cookie-without-secure
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)[^\\\\r\\\\n]*;\\\\s*Secure\", header)"
+        condition: and
+
+      # Session/auth cookie bez HttpOnly
+      - type: dsl
+        name: session-cookie-without-httponly
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)[^\\\\r\\\\n]*;\\\\s*HttpOnly\", header)"
+        condition: and
+
+      # Session/auth cookie bez SameSite
+      - type: dsl
+        name: session-cookie-without-samesite
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token|jsessionid|phpsessid|aspxauth|connect\\\\.sid)[^\\\\r\\\\n]*;\\\\s*SameSite\", header)"
+        condition: and
+
+      # SameSite=None bez Secure (Chrome rejects)
+      - type: regex
+        part: header
+        name: samesite-none-without-secure
+        regex:
+          - "(?i)set-cookie:[^\\r\\n]*SameSite\\s*=\\s*None(?![^\\r\\n]*Secure)"
+
+      # Domain wildcard (.target.com) - too broad
+      - type: regex
+        part: header
+        name: cookie-domain-wildcard-broad
+        regex:
+          - "(?i)set-cookie:[^\\r\\n]*Domain=\\.(?:com|net|org|io|co)(?:\\s|;|$)"
+
+      # Brak prefix __Secure-/__Host-
+      - type: dsl
+        name: no-cookie-prefix
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|auth|token)\", header)"
+          - "!regex(\"(?i)set-cookie:\\\\s*__(?:Secure|Host)-\", header)"
+        condition: and
+
+    extractors:
+      - type: regex
+        name: cookie-name
+        part: header
+        group: 1
+        regex:
+          - "(?i)set-cookie:\\s*([A-Za-z_.][\\w.-]*)="
+
+      - type: regex
+        name: cookie-flags
+        part: header
+        group: 0
+        regex:
+          - "(?i)set-cookie:[^\\r\\n]+"
+
+# ============================================================================
+# Known limitations:
+# - Wykrywa session-related cookies przez nazwy. Custom-named cookies (np.
+#   "user_token") mogą być pominięte - manual review.
+# - SameSite default behavior w nowoczesnych browserach (Lax bez explicit) -
+#   nadal wymaga explicit dla defense-in-depth.
+# ============================================================================

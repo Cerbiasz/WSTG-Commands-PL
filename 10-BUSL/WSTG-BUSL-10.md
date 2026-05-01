@@ -1,224 +1,127 @@
 # WSTG-BUSL-10 — Test Payment Functionality
 
-## Cele
+## Cel
 
-- Przetestowac odpornosc logiki platnosci
-- Zweryfikowac bezpieczenstwo procesu platniczego
+Audyt płatności: server-side price recalculation, integer overflow, negative quantities, currency switching, coupon stacking, race condition na payment submit, callback signature validation.
 
-## KOMENDY
+> **Test manual-only**.
 
-### Testowanie modyfikacji ceny
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 0.01, "quantity": 1}'
+### Metodologia (6 kroków)
 
-```
+1. **Price tampering**: zmień cena w request body → akceptowane?
+2. **Negative values**: ujemna cena/ilość = refund?
+3. **Currency switching**: zmień EUR na ZWL (zimbabwe dollar)?
+4. **Coupon stacking**: użyj 5 kuponów jednocześnie → akceptowane?
+5. **Race condition**: 2× klik "Pay" simultaneously - cross WSTG-BUSL-04.
+6. **Callback manipulation**: bypass payment via fake callback (`?status=success`).
 
-### Testowanie negatywnej ceny
+### Co MUSI być sprawdzone (15 punktów)
 
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": -100, "quantity": 1}'
-
-```
-
-### Testowanie negatywnej ilosci
-
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 100, "quantity": -1}'
-
-```
-
-### Testowanie zerowej ceny
-
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 0, "quantity": 1}'
-
-```
-
-### Testowanie manipulacji waluta
-
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 100, "currency": "KRW"}'
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 100, "currency": "XXX"}'
-
-```
-
-### Testowanie modyfikacji kodu rabatowego
-
-```bash
-curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50&amount=100"
-curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50&discount_percent=100"
-
-```
-
-### Testowanie podwojnego naliczenia rabatu
-
-```bash
-curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50" -H "Cookie: session=SESSION"
-curl -v -X POST TARGET/api/apply-discount -d "code=DISCOUNT50" -H "Cookie: session=SESSION"
-
-```
-
-### Testowanie race condition na platnosci
-
-```bash
-for i in $(seq 1 10); do
-    curl -s -X POST TARGET/api/pay -d "order_id=123&amount=100" -H "Cookie: session=SESSION" &
-done
-wait
-
-```
-
-### Testowanie modyfikacji parametrow po stronie klienta
-
-```bash
-# Zmiana calkowitej kwoty:
-curl -v -X POST TARGET/api/payment/process -d "order_id=123&total=0.01&items=5"
-
-```
-
-### Testowanie pominiecia kroku platnosci
-
-```bash
-curl -v -X POST TARGET/api/order/confirm -d "order_id=123&payment_status=completed"
-
-```
-
-### Testowanie modyfikacji callback platnosci
-
-```bash
-curl -v -X POST TARGET/api/payment/callback -H "Content-Type: application/json" \
-  -d '{"order_id": "123", "status": "success", "amount": "0.01"}'
-
-```
-
-### Testowanie modyfikacji ilosci po platnosci
-
-```bash
-curl -v -X POST TARGET/api/order/update -d "order_id=123&quantity=100" -H "Cookie: session=SESSION"
-
-```
-
-### Testowanie integer overflow na kwocie
-
-```bash
-curl -v -X POST TARGET/api/checkout -H "Content-Type: application/json" \
-  -d '{"item_id": 1, "price": 99999999999, "quantity": 99999999999}'
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na logice platnosci
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Suite -> Proxy: przechwytuj request platnosci i modyfikuj cene/ilosc
-2. Testuj caly flow: koszyk -> platnosc -> potwierdzenie - szukaj punktow modyfikacji
-3. Sprawdz czy cena jest przeliczana po stronie serwera (nie ufaj klientowi)
-4. Testuj manipulacje walut (zmiana z USD na tansza walute)
-5. Testuj race condition na platnosci (wielokrotne uzycie jednorazowego kodu)
-6. Sprawdz czy callback platnosci weryfikuje podpis/HMAC bramki platniczej
-7. Testuj cofanie platnosci i sprawdz czy towar jest nadal dostepny
-8. Sprawdz czy historia zamowien poprawnie odzwierciedla zmiany
-
-
----
+- [ ] Server-side price recalculation
+- [ ] Negative price/quantity blocked
+- [ ] Currency validation server-side
+- [ ] Coupon stacking limited
+- [ ] Idempotency keys (no double charge)
+- [ ] Skip payment step blocked
+- [ ] Callback signature validated
+- [ ] Integer overflow protection
+- [ ] Decimal precision (no 0.001 free items)
+- [ ] HMAC on critical params (amount, order_id)
+- [ ] PCI DSS compliance (no card data stored bez tokenization)
+- [ ] 3DS authentication
+- [ ] Refund authorization checks
+- [ ] Wallet balance race conditions
+- [ ] Order status integrity (`status=paid` w request body blocked)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Transaction_Authorization_Cheat_Sheet.md, Abuse_Case_Cheat_Sheet.md
 
-### Bezpieczenstwo platnosci — kluczowe zasady
+### Bezpieczeństwo płatności — kluczowe zasady
 
-- **Cena ustalana SERVER-SIDE**: serwer musi przeliczac calkowita kwote na podstawie produktow w koszyku
-- NIGDY nie ufaj cenie/kwocie przeslanej przez klienta — zawsze przelicz z bazy danych
-- **Integralnosc danych**: podpisuj HMAC-em parametry platnosci (kwota, waluta, order_id)
-- **Idempotency**: kazda platnosc z unikalnym kluczem — zapobiegaj double charging
+- **Cena ustalana SERVER-SIDE**: serwer musi przeliczać całkowitą kwotę na podstawie produktów w koszyku
+- NIGDY nie ufaj cenie/kwocie przesłanej przez klienta — zawsze przelicz z bazy danych
+- **Integralność danych**: podpisuj HMAC-em parametry płatności (kwota, waluta, order_id)
+- **Idempotency**: każda płatność z unikalnym kluczem — zapobiegaj double charging
 
-### Typowe ataki na platnosci
+### Typowe ataki na płatności
 
 | Atak | Opis | Obrona |
 |------|------|--------|
 | Price manipulation | Zmiana ceny w request body | Server-side price calculation |
-| Negative price/quantity | Ujemne wartosci daja "zwrot" | Waliduj: cena > 0, ilosc > 0 |
-| Currency switching | Zmiana waluty na tansza | Waliduj walute server-side |
-| Coupon stacking | Wielokrotne uzycie kuponu | Atomic operation, jednorazowe kupony |
-| Race condition | Podwojne klikniecie "Zaplac" | Idempotency keys |
-| Skip payment step | Bezposredni dostep do /order/complete | Server-side state machine |
-| Callback manipulation | Falszywy callback "payment success" | Weryfikuj podpis bramki platniczej |
-| Integer overflow | Ogromna ilosc * cena = overflow = niska kwota | Waliduj zakresy, uzyj Decimal |
+| Negative price/quantity | Ujemne wartości dają "zwrot" | Waliduj: cena > 0, ilość > 0 |
+| Currency switching | Zmiana waluty na tańszą | Waliduj walutę server-side |
+| Coupon stacking | Wielokrotne użycie kuponu | Atomic operation, jednorazowe kupony |
+| Race condition | Podwójne kliknięcie "Zapłać" | Idempotency keys |
+| Skip payment step | Bezpośredni dostęp do /order/complete | Server-side state machine |
+| Callback manipulation | Fałszywy callback "payment success" | Weryfikuj podpis bramki płatniczej |
+| Integer overflow | Ogromna ilość * cena = overflow = niska kwota | Waliduj zakresy, użyj Decimal |
 
-### Bramka platnicza — bezpieczna integracja
+### Bramka płatnicza — bezpieczna integracja
 
-- **Webhook/callback**: weryfikuj podpis (HMAC/RSA) od bramki platniczej
-- **Nie ufaj parametrom w URL callback** — sprawdz stan platnosci przez API bramki
-- **Server-to-server**: krytyczne dane (kwota, status) potwierdzane server-side, nie przez klienta
-- **3D Secure**: implementuj dla kart — dodatkowa warstwa autoryzacji
-- **PCI DSS**: nie przechowuj pelnych numerow kart — uzyj tokenizacji bramki
+- **Callback validation**: weryfikuj signature/HMAC z payment gateway
+- **Webhook security**: TLS + signature + IP allowlist
+- **Polling fallback**: nie polegaj wyłącznie na webhook - poll status (płatności zawodzą)
+- **Idempotency**: gateway provides idempotency keys - przekaż client requested id
+- **Server-to-server confirmation**: post-callback, server kontaktuje gateway aby potwierdzić
 
-### Autoryzacja transakcji
+### PCI DSS Compliance
 
-- **Re-autentykacja**: wymagaj hasla/MFA przed krytycznymi operacjami finansowymi
-- **Transaction signing**: uzytkownik potwierdza dokladna kwote i odbiorce (nie generic "potwierdz")
-- **Limity transakcji**: dzienny/miesięczny limit — wymaga dodatkowej weryfikacji po przekroczeniu
-- **Cooling period**: opoznienie dla duzych transakcji — czas na wykrycie oszustwa
+- **Tokenization**: card data tokenized przez payment gateway (Stripe, Braintree)
+- **No raw card data storage**: aplikacja NIGDY nie touchuje raw card numbers
+- **HTTPS everywhere**: WSZYSTKIE auth + payment requests
+- **Logging**: nie loguj card numbers, CVV, full PAN
+- **Network segmentation**: payment service na osobnym network segment
 
-### Testowanie
+### 3D Secure (3DS)
 
-- Modyfikuj cene, ilosc, walute, rabat w Burp Repeater
-- Testuj negatywne i zerowe wartosci
-- Testuj race condition na platnosci (wiele requestow jednoczesnie)
-- Sprawdz czy callback jest weryfikowany (wyslij falszywy callback)
-- Testuj pominiecie kroku platnosci (bezposredni dostep do potwierdzenia)
-- Sprawdz integer overflow na ilosc * cena
+- **3DS1** (legacy): challenge-based authentication
+- **3DS2** (rekomendowane): risk-based, less friction
+- Supported by all major card networks (Visa, MC, Amex)
+- Increases conversion + reduces fraud
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Stripe webhook signature bypass**: jeśli aplikacja sprawdza tylko presence header, nie value - atakujący sends fake webhook.
+- **Currency manipulation chain**: `?amount=100&currency=EUR` → `?amount=100&currency=USD` (USD < EUR ratio).
+- **Decimal precision attack**: `0.001` x 1000 = 1.000 ale stored as 1.0 (lost cent).
+- **Coupon code prediction**: sequential coupon codes (`PROMO0001`, `PROMO0002`) - mass enumeration.
+- **Refund-as-purchase**: API allows POST z negative amount as refund without authentication.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Server validates price ALE client-side discount**: discount calculated client → atakujący sets discount=99%.
+- **Integer overflow in JavaScript**: `Number.MAX_SAFE_INTEGER + 1` overflow.
+- **Callback verification w GET param**: `?signature=xxx` - replay possible.
 
-### L1 (Podstawowy)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.1 | Business Logic Security | Verify that the application will only process business logic flows for the same user in the expected sequential step order and without skipping steps. |
+- **PortSwigger Business Logic Lab**: https://portswigger.net/web-security/logic-flaws
+- **HackerOne Payment Bypass reports**: https://hackerone.com/hacktivity?queryString=payment
+- **Stripe Webhooks documentation**: https://stripe.com/docs/webhooks/signatures
 
-### L2 (Standardowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.2 | Business Logic Security | Verify that business logic limits are implemented per the application's documentation to avoid business logic flaws being exploited. |
-| V2.3.3 | Business Logic Security | Verify that transactions are being used at the business logic level such that either a business logic operation succeeds in its entirety or it is rolled back to the previous correct state. |
-| V2.3.4 | Business Logic Security | Verify that business logic level locking mechanisms are used to ensure that limited quantity resources (such as theater seats or delivery slots) cannot be double-booked by manipulating the application's logic. |
+| Rozszerzenie | Opis |
+|---|---|
+| Hackvertor | HMAC manipulation |
+| Turbo Intruder | Race condition testing |
+| Param Miner | Hidden parameter discovery |
 
-### L3 (Zaawansowany)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.5 | Business Logic Security | Verify that high-value business logic flows require multi-user approval to prevent unauthorized or accidental actions. This could include but is not limited to large monetary transfers, contract approvals, access to classified information, or safety overrides in manufacturing. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/10-Test_Payment_Functionality
+- OWASP Transaction Authorization CS: https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html
+- PCI DSS: https://www.pcisecuritystandards.org/
 
+### Wskazówki ASVS
 
----
-
-## HackTricks Tips
-
-- **Intercept callback**: modify `success=false` → `success=true` w payment callback przed przetworzeniem
-- **Remove/modify Referrer/Callback URL** w redirect post-payment flow
-- **Modify cookies** storing payment status
-- **Tamper response body** przed browser/app processing → simulate successful transaction
+| ID | Wymaganie |
+|---|---|
+| V11.1.7 | Application protects against integer overflow. |
+| V6.4.1 | Integrity protection on critical operations (payments). |
+| V11.1.6 | Application protects against race conditions. |

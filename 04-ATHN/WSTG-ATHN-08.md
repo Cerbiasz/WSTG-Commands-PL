@@ -1,133 +1,103 @@
 # WSTG-ATHN-08 — Testing for Weak Security Question Answer
 
-## Cele
+## Cel
 
-- Determine the complexity and how straight-forward the questions are
-- Assess possible user answers and brute force capabilities
+Audyt mechanizmu pytań bezpieczeństwa: czy pytania są guessable (data urodzenia, nazwisko panieńskie matki) z OSINT, czy odpowiedzi są case-insensitive trim'owane, czy aplikacja używa pytań jako MFA czy fallback do password reset.
 
-## KOMENDY
+> **Test mostly manual**: NIST 800-63 odradza pytania bezpieczeństwa jako auth factor.
 
-### Sprawdzenie jakie pytania sa uzywane
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/forgot-password" | grep -i "security question\|secret question\|question"
-curl -s "https://TARGET/register" | grep -i "security question\|secret question"
+### Metodologia (4 kroki)
 
-```
+1. **Question quality audit**: czy pytania są specific (NIST OK) czy generic (data ur, ulubiony kolor)?
+2. **Answer normalization test**: case-insensitive, trim whitespace - czy `Cat` = `cat ` = `CAT`?
+3. **OSINT recoverability**: dla 3 random pytań, ile można znaleźć w 5 min OSINT (LinkedIn/Facebook)?
+4. **Brute-force test**: rate limiting na security question → czy bruteforce możliwy?
 
-### Testowanie brute force odpowiedzi
+### Co MUSI być sprawdzone (8 punktów)
 
-```bash
-ffuf -u "https://TARGET/forgot-password" -X POST -d "username=admin&answer=FUZZ" -w Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt -mc 200,302 -o output_ffuf_security_q.json
-
-```
-
-### Testowanie slabych pytan
-
-```bash
-# Czy pytania sa zbyt proste? (ulubiony kolor, miasto urodzenia)
-# Czy odpowiedzi sa publicznie dostepne? (social media)
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists common passwords (jako potencjalne odpowiedzi)
-
-```bash
-# Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt
-# Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/common-passwords-win.txt
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz jakie pytania bezpieczenstwa sa dostepne
-2. Ocen czy pytania sa zbyt proste lub odpowiedzi publiczne
-3. Testuj brute force odpowiedzi z Burp Intruder
-4. Sprawdz czy jest lockout po blednych odpowiedziach
-5. Testuj czy mozna zmienic pytanie na prostsze
-
-
----
+- [ ] Aplikacja NIE używa pytań jako primary auth factor
+- [ ] Pytania są memorable, consistent, applicable, confidential, specific
+- [ ] Brak pytań typu "data urodzenia" (publicly available)
+- [ ] Rate limiting na security question endpoint
+- [ ] Multiple questions required (nie pojedyncze)
+- [ ] Fallback do password reset z proper email link (cross WSTG-ATHN-09)
+- [ ] User-defined questions allowed (lepsze niż predefined)
+- [ ] OSINT susceptibility minimized
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Choosing_and_Using_Security_Questions_Cheat_Sheet.md
 
-### UWAGA: NIST SP 800-63 — pytania bezpieczenstwa NIE sa akceptowalnym czynnikiem uwierzytelniania
+### UWAGA: NIST SP 800-63 — pytania bezpieczeństwa NIE są akceptowalnym czynnikiem uwierzytelniania
 
-- NIST **odradza** uzywanie pytan bezpieczenstwa jako mechanizmu uwierzytelniania
-- Badania Microsoft (2009) i Google (2015) wykazaly slaba skutecznosc pytan bezpieczenstwa
-- Jesli juz musisz uzywac — traktuj jako **dodatkowy** czynnik, NIGDY jako jedyny
+- NIST **odradza** używanie pytań bezpieczeństwa jako mechanizmu uwierzytelniania
+- Badania Microsoft (2009) i Google (2015) wykazały słabą skuteczność pytań bezpieczeństwa
+- Jeśli już musisz używać — traktuj jako **dodatkowy** czynnik, NIGDY jako jedyny
 
-### Cechy dobrych pytan bezpieczenstwa
+### Cechy dobrych pytań bezpieczeństwa
 
-- **Memorable**: uzytkownik musi pamietac odpowiedz po latach
-- **Consistent**: odpowiedz NIE moze sie zmieniac w czasie (NIE: ulubiony film, kolor)
-- **Applicable**: kazdy uzytkownik musi moc odpowiedziec
-- **Confidential**: odpowiedz musi byc trudna do uzyskania przez atakujacego (NIE: data urodzenia)
-- **Specific**: odpowiedz musi byc jednoznaczna
+- **Memorable**: użytkownik musi pamiętać odpowiedź po latach
+- **Consistent**: odpowiedź NIE może się zmieniać w czasie (NIE: ulubiony film, kolor)
+- **Applicable**: każdy użytkownik musi móc odpowiedzieć
+- **Confidential**: odpowiedź musi być trudna do uzyskania przez atakującego (NIE: data urodzenia)
+- **Specific**: odpowiedź musi być jednoznaczna
 
-### Zle pytania (UNIKAJ)
+### Złe pytania (UNIKAJ)
 
 | Pytanie | Problem |
 |---------|---------|
-| Data urodzenia | Latwo dostepna (social media, publiczne rejestry) |
-| Ulubiony film/kolor | Zmienia sie w czasie |
-| Nazwisko panienskie matki | Latwo do odnalezienia (social media, genealogia) |
-| Pierwszy samochod | Maly zakres mozliwych odpowiedzi |
-| Pseudonim | Mozna odgadnac z social media |
+| Data urodzenia | Łatwo dostępna (social media, publiczne rejestry) |
+| Ulubiony film/kolor | Zmienia się w czasie |
+| Nazwisko panienskie matki | Łatwo do odnalezienia (social media, genealogia) |
+| Pierwszy zwierzak | Często pamiętane przez przyjaciół, social media posty |
+| Nazwa szkoły | LinkedIn, biografia |
 
-### Dobre pytania (przykladowe)
+### Dobre pytania (preferuj)
 
-- "Nazwa uczelni do ktorej aplikowales ale nie poszles?"
-- "Nazwa pierwszej szkoly ktora pamietas?"
-- "Cel najciekawszej wycieczki szkolnej?"
-- "Imie instruktora nauki jazdy?"
-- Najlepiej: pytania **specyficzne dla kontekstu aplikacji** (mniej prawdopodobne ze te same na innej stronie)
+- "Nazwa pierwszego pluszaka jako dziecko" (specific, memorable, niepubliczny)
+- "Imię najlepszego przyjaciela z liceum" (specific)
+- "Marka pierwszego samochodu" (specific, hard to find)
+- Pozwól użytkownikowi **definiować własne pytania** — często lepsze niż predefiniowane
 
 ### Przechowywanie odpowiedzi
 
-- Hashuj odpowiedzi **tak jak hasla** (bcrypt, Argon2) — moga zawierac PII i byc reuse miedzy serwisami
-- Porownuj odpowiedzi **case-insensitive** — konwertuj do lowercase przed haszowaniem
-- Sprawdzaj odpowiedzi na denylist: username, email, haslo, "123", "password"
-- Wymuszaj **minimalna dlugosc** odpowiedzi (ale nie za duza — "Li" moze byc poprawna)
+- Hashuj odpowiedzi jak hasła (Argon2id/bcrypt)
+- Normalizuj input: lowercase, trim whitespace
+- NIE przechowuj plaintext
 
-### Flow bezpieczenstwa
+## Pentesterskie deep dive
 
-- Pytania bezpieczenstwa + haslo **NIE stanowia MFA** (oba = "something you know")
-- Przy odzyskiwaniu hasla: najpierw zweryfikuj email (link), POTEM pokaz pytania
-- Bledna odpowiedz = nieudane logowanie → inkrementuj licznik lockout
-- Nie pokazuj roznych pytan po kazdej blednej probie — atakujacy moze sprobowac wszystkich
-- Aktualizacja odpowiedzi = **operacja wrazliwa** → wymagaj re-autentykacji (haslo/MFA)
+### Mniej znane techniki
 
-### Wiele pytan
+- **Security question OSINT pivot**: 30 minut LinkedIn/Facebook = większość odpowiedzi.
+- **Rate limiting bypass via security question**: niektóre apps rate limit login ale nie security question endpoint.
+- **Password reset via security question = MFA bypass**: jeśli forgot password używa tylko security question, atakujący z OSINT pomija password.
 
-- Uzywaj **wielu pytan jednoczesnie** (np. 3 z 5) — trudniejsze do zlamania
-- Mieszaj pytania user-defined z system-defined
-- NIE pozwalaj uzytkownikowi pisac wlasnych pytan — ryzyko slabych pytan lub "reminder" hasla
+### Common pitfalls
 
-### Testowanie
+- **Aplikacja używa security question jako MFA**: weakening of MFA - powinno być TOTP/WebAuthn.
+- **Pre-defined dropdown questions**: nawet "what was your first pet" - typowy phishing target.
 
-- Czy pytania sa latwe do odgadniecia (social media OSINT)?
-- Czy jest rate limiting na odpowiedzi?
-- Czy bledne odpowiedzi powoduja lockout?
-- Czy mozna zmienic pytanie na prostsze bez re-autentykacji?
-- Czy odpowiedzi sa przechowywane w plaintext (sprawdz w DB/API response)?
+### Świeżynki z research
 
-## ROZSZERZENIA BURP SUITE
+- **OWASP Choosing Security Questions CS**: https://cheatsheetseries.owasp.org/cheatsheets/Choosing_and_Using_Security_Questions_Cheat_Sheet.html
+- **Google Security Questions Research (2015)**: rzeczywiście public research
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+## Rozszerzenia Burp Suite
 
----
+Brak dedykowanych - test manual.
 
-## Wskazówki ASVS
+## Źródła
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/08-Testing_for_Weak_Security_Question_Answer
+- OWASP Choosing Security Questions CS: https://cheatsheetseries.owasp.org/cheatsheets/Choosing_and_Using_Security_Questions_Cheat_Sheet.html
+- NIST SP 800-63: https://pages.nist.gov/800-63-3/
 
-### L1 (Podstawowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.4.2 | Authentication Factor Lifecycle and Recovery | Verify that password hints or knowledge-based authentication (so-called "secret questions") are not present. |
+| ID | Wymaganie |
+|---|---|
+| V6.2.1 | Cryptographic modules fail securely. |
+| V2.1.1 | Use of MFA. |

@@ -1,132 +1,117 @@
 # WSTG-INFO-03 — Review Webserver Metafiles for Information Leakage
 
-## Cele
+## Cel
 
-- Identify hidden paths via metadata files (robots.txt, sitemap.xml, .well-known, security.txt)
-- Extract information about disallowed or hidden directories and endpoints
-- Find sensitive paths that administrators tried to hide from crawlers
+Identyfikacja ścieżek, endpointów i metadanych ujawnianych przez pliki "menedżerskie" web serwera: `robots.txt`, `sitemap*.xml`, katalog `/.well-known/*`, `humans.txt`, `crossdomain.xml`. Te pliki są publiczne z definicji — często ujawniają ścieżki administracyjne, konfigurację OAuth/OIDC, klucze JWT, kontakty bug bounty.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### robots.txt
+### Nasz dedykowany szablon
 
 ```bash
-curl -s https://TARGET/robots.txt | tee output_robots.txt
-curl -s http://TARGET/robots.txt | tee output_robots_http.txt
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-info-03-metafiles.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-info-03.jsonl
 ```
 
-### sitemap.xml
+Szablon w 11 krokach: robots.txt + sitemap warianty + security.txt (z extractem Contact/Expires/Policy) + openid-configuration + oauth-authorization-server + jwks.json + assetlinks.json + apple-app-site-association + host-meta + nodeinfo + matrix federation + crossdomain.xml/clientaccesspolicy.xml + change-password + dnt-policy + humans.txt. Każdy plik = osobny finding z ekstraktorami zwracającymi konkretne wartości (np. listę Disallow paths, JWT key IDs, OAuth issuer).
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-curl -s https://TARGET/sitemap.xml | tee output_sitemap.xml
-curl -s https://TARGET/sitemap_index.xml | tee output_sitemap_index.xml
-curl -s https://TARGET/sitemaps.xml | tee output_sitemaps.xml
+# Exposed config files / .well-known scans
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/configs/ \
+       -t resources/nuclei-templates/http/exposures/files/
 
+# Backup files exposure (klasyczny pivot z metafiles)
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/backups/
+
+# Git/SVN exposure
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/configs/git-config.yaml \
+       -t resources/nuclei-templates/http/exposures/configs/svn-wc-db.yaml
+
+# Misconfiguration: directory listing, options method, robots.txt parsing
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/
+
+# OAuth/OIDC well-known
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/configs/oauth2-config-exposure.yaml
 ```
 
-### security.txt (.well-known)
+## Coverage Matrix
 
-```bash
-curl -s https://TARGET/.well-known/security.txt | tee output_security.txt
-curl -s https://TARGET/security.txt | tee output_security2.txt
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| robots.txt + Disallow extraction | ✓ | — |
+| sitemap.xml + sitemap_index + warianty (news/images) | ✓ | — |
+| /.well-known/security.txt (RFC 9116) | ✓ | — |
+| /.well-known/openid-configuration (RFC 8414) | ✓ | — |
+| /.well-known/oauth-authorization-server | ✓ | — |
+| /.well-known/jwks.json (JWT public keys) | ✓ | — |
+| /.well-known/assetlinks.json (Android App Links) | ✓ | — |
+| /.well-known/apple-app-site-association | ✓ | — |
+| /.well-known/host-meta + nodeinfo + matrix + webfinger | ✓ | — |
+| crossdomain.xml + clientaccesspolicy.xml (Flash/Silverlight) | ✓ | — |
+| /.well-known/change-password (RFC 8615) | ✓ | — |
+| Walk Disallow paths z robots.txt → status check | — | wykonane w skrypcie wrappera |
+| `<meta>` tagi w HTML (noindex/nofollow) | — | wykrywane w INFO-05 |
+| OpenAPI/Swagger discovery | — | wykrywane w WSTG-APIT |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Inne pliki .well-known
+### Metodologia (7 kroków)
 
-```bash
-curl -s https://TARGET/.well-known/openid-configuration | tee output_openid.txt
-curl -s https://TARGET/.well-known/assetlinks.json | tee output_assetlinks.json
-curl -s https://TARGET/.well-known/apple-app-site-association | tee output_apple_asa.json
-curl -s https://TARGET/.well-known/change-password
-curl -s https://TARGET/.well-known/dnt-policy.txt
+1. **Pull metafiles**: pobrać wszystkie warianty (`/robots.txt` HTTP i HTTPS, `/sitemap.xml`, `/sitemap_index.xml`, `/.well-known/*`).
+2. **Parsuj robots**: każdy `Disallow:` zdejmować jako kandydata do ręcznego sprawdzenia. `Allow:` w połączeniu z `Disallow:` ujawnia internal routing.
+3. **Map sitemap**: rozwinąć `sitemap_index.xml` → wszystkie sitemap → wszystkie URL. Częsty wyciek: URL niedostępne z głównej nawigacji (staging, archive).
+4. **OAuth/OIDC discovery**: jeśli `openid-configuration` istnieje — zanotować `issuer`, `authorization_endpoint`, `token_endpoint`, `jwks_uri`, `grant_types_supported`. To pivot do testów OAuth (open redirect, PKCE bypass, scope confusion).
+5. **JWT keys**: `jwks.json` ujawnia `kid`, algorytmy. Brak `RS256/ES256` lub obecność `none/HS256` z public RSA = testować JWT confusion.
+6. **Mobile app linking**: `apple-app-site-association` i `assetlinks.json` ujawniają package/team IDs i deep-link patterns — pivot do mobile pentesting i universal-link hijacking.
+7. **Legacy crossdomain**: jeśli istnieje `<allow-access-from domain="*"/>` — Flash już nie żyje, ale `clientaccesspolicy.xml` wciąż używany przez niektóre Silverlight portale enterprise.
 
-```
+### Co MUSI być sprawdzone (13 punktów)
 
-### humans.txt
+- [ ] `/robots.txt` HTTP i HTTPS — wartości Disallow, Allow, Sitemap, Crawl-delay
+- [ ] `/sitemap.xml` + `/sitemap_index.xml` + warianty (`-news.xml`, `-images.xml`)
+- [ ] Każdy URL z sitemap sprawdzony pod kątem 200/3xx/auth
+- [ ] `/.well-known/security.txt` — Contact, Expires (data nieaktualna = brak żywego programu), Policy URL
+- [ ] `/.well-known/openid-configuration` — issuer + endpoints + supported grant types
+- [ ] `/.well-known/oauth-authorization-server` — alternatywna lokalizacja OAuth metadata
+- [ ] `/.well-known/jwks.json` — `kid`, `kty`, `alg`, `n`/`e` (RSA pub)
+- [ ] `/.well-known/assetlinks.json` — Android `package_name`, SHA-256 fingerprints
+- [ ] `/.well-known/apple-app-site-association` — `appID`, `applinks.details.paths`
+- [ ] `/crossdomain.xml` — `<allow-access-from domain="*">` = wildcard CORS dla Flash legacy
+- [ ] `/.well-known/host-meta` + `/nodeinfo` (federacja Mastodon/ActivityPub)
+- [ ] `/.well-known/change-password` (RFC 8615) — często wskazuje na implementację SCM (single-click)
+- [ ] `/humans.txt` — kontakty zespołu, czasem wycieki email/imion (social engineering)
 
-```bash
-curl -s https://TARGET/humans.txt | tee output_humans.txt
+### Per stack — kluczowe różnice
 
-```
-
-### Parsero - parser robots.txt
-
-```bash
-parsero -u https://TARGET -o -sb | tee output_parsero.txt
-
-```
-
-### Sprawdzenie META tagów w kodzie strony
-
-```bash
-curl -s https://TARGET | grep -iE "<meta" | tee output_meta_tags.txt
-curl -s https://TARGET | grep -iE "robots|noindex|nofollow" | tee output_robots_meta.txt
-
-```
-
-### Wyciaganie linkow z sitemap
-
-```bash
-curl -s https://TARGET/sitemap.xml | grep -oP "(?<=<loc>).*?(?=</loc>)" | tee output_sitemap_urls.txt
-
-```
-
-### Sprawdzenie Disallow z robots.txt i testowanie sciezek
-
-```bash
-curl -s https://TARGET/robots.txt | grep -i "Disallow:" | awk '{print $2}' | while read path; do echo "Sprawdzam: https://TARGET$path"; curl -sI "https://TARGET$path" | head -1; done | tee output_robots_check.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brute-force popularnych plikow metadanych
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -mc 200 -o output_ffuf_common.json
-
-```
-
-### Wordlista do fuzzowania plikow konfiguracyjnych serwera
-
-```bash
-gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -o output_gobuster_common.txt
-
-```
-
-### Predictable filepaths z fuzzdb
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/KitchensinkDirectories.txt -mc 200,301,302,403 -o output_ffuf_predictable.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Otworz przegladarke i wejdz na https://TARGET/robots.txt - przeanalizuj Disallow/Allow
-2. Sprawdz https://TARGET/sitemap.xml - wylistuj wszystkie URL-e
-3. Sprawdz https://TARGET/.well-known/security.txt
-4. W Burp Suite: przejrzyj Site Map po spiderowaniu - porownaj z robots.txt
-5. Sprawdz kazdy wpis Disallow z robots.txt - czy prowadzi do wrazliwych zasobow
-6. Sprawdz tagi META robots w kodzie zrodlowym strony (noindex, nofollow)
-7. Poszukaj linkow do sitemap w robots.txt
-8. Sprawdz czy istnieja alternatywne sitemapy (sitemap-news.xml, sitemap-images.xml)
-
-
----
+| Stack | robots.txt | sitemap | well-known | crossdomain |
+|---|---|---|---|---|
+| WordPress | autogenerowane przez plugin Yoast/Rank Math | `wp-sitemap.xml` (od 5.5) | rzadko | brak domyślnie |
+| Drupal | `robots.txt` w core, listuje `/admin/`, `/CHANGELOG.txt` | `/sitemap.xml` przez moduł XML Sitemap | `/.well-known/security.txt` często ustawiony | brak |
+| Spring Boot | rzadko default | brak default | brak — programmer-controlled | brak |
+| Express + Helmet | brak default | brak | brak — programmer-controlled | brak |
+| Django | `django.contrib.sitemaps` framework | `/sitemap.xml` przez framework | brak default | brak |
+| Rails | `public/robots.txt` w skeleton | `/sitemap.xml.gz` (sitemap_generator gem) | brak default | legacy `/crossdomain.xml` w starszych Rails |
+| Next.js | `public/robots.txt` lub `app/robots.ts` | `next-sitemap` paczka | konfigurowalne | brak |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
 
-### robots.txt — co szukac
+### robots.txt — co szukać
 
-- **Disallow** wpisy ujawniaja ukryte sciezki — atakujacy sprawdzaja je w pierwszej kolejnosci
-- Nie uzywaj `robots.txt` do ukrywania wrazliwych zasobow — to informacja publiczna
-- `User-agent: *` + `Disallow: /admin/` = informacja dla atakujacego gdzie jest panel admina
-- Sprawdz roznice miedzy wersjami HTTP i HTTPS robots.txt
+- **Disallow** wpisy ujawniają ukryte ścieżki — atakujący sprawdzają je w pierwszej kolejności
+- Nie używaj `robots.txt` do ukrywania wrażliwych zasobów — to informacja publiczna
+- `User-agent: *` + `Disallow: /admin/` = informacja dla atakującego gdzie jest panel admina
+- Sprawdź różnice między wersjami HTTP i HTTPS robots.txt
 
 ### Typowe wycieki w robots.txt
 
@@ -134,69 +119,111 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-
 |--------------|-----------|
 | `/admin/`, `/administrator/` | Panel administracyjny |
 | `/backup/`, `/old/`, `/temp/` | Katalogi z backupami |
-| `/api/`, `/api/v1/internal/` | Wewnetrzne endpointy API |
-| `/staging/`, `/dev/`, `/test/` | Srodowiska deweloperskie |
+| `/api/`, `/api/v1/internal/` | Wewnętrzne endpointy API |
+| `/staging/`, `/dev/`, `/test/` | Środowiska deweloperskie |
 | `/cgi-bin/`, `/scripts/` | Skrypty serwerowe |
 | `/wp-admin/`, `/wp-includes/` | Struktura WordPress |
 
 ### sitemap.xml — informacje
 
-- Zawiera pelna liste URL-ow strony — mapuje powierzchnie ataku
-- Moze zawierac URL-e niedostepne z glownej nawigacji
-- Sprawdz `sitemap_index.xml` — moze wskazywac na wiele sitemapów
-- Porownaj URL-e z sitemap z wynikami crawlingu — roznice moga wskazywac na ukryte zasoby
+- Zawiera pełną listę URL-ów strony — mapuje powierzchnię ataku
+- Może zawierać URL-e niedostępne z głównej nawigacji
+- Sprawdź `sitemap_index.xml` — może wskazywać na wiele sitemapów
+- Porównaj URL-e z sitemap z wynikami crawlingu — różnice mogą wskazywać na ukryte zasoby
 
 ### security.txt (RFC 9116)
 
 - Lokalizacja: `/.well-known/security.txt`
-- Zawiera: kontakt do zglaszania podatnosci, polityka, klucz PGP
-- Moze ujawnic: adresy email, programy bug bounty, scope testow
-- Sprawdz pole `Expires` — przestarzaly plik moze zawierac nieaktualne informacje
+- Zawiera: kontakt do zgłaszania podatności, polityka, klucz PGP
+- Może ujawnić: adresy email, programy bug bounty, scope testów
+- Sprawdź pole `Expires` — przestarzały plik może zawierać nieaktualne informacje
 
-### .well-known — interesujace endpointy
+### .well-known — interesujące endpointy
 
 | Endpoint | Co zawiera |
 |----------|-----------|
 | `/.well-known/openid-configuration` | Konfiguracja OAuth/OIDC — token endpoint, supported scopes |
-| `/.well-known/assetlinks.json` | Powiazania Android App Links |
-| `/.well-known/apple-app-site-association` | Powiazania iOS Universal Links |
-| `/.well-known/change-password` | URL do zmiany hasla (jesli zaimplementowany) |
-| `/.well-known/jwks.json` | Klucze publiczne JWT — weryfikacja tokenow |
+| `/.well-known/assetlinks.json` | Powiązania Android App Links |
+| `/.well-known/apple-app-site-association` | Powiązania iOS Universal Links |
+| `/.well-known/change-password` | URL do zmiany hasła (jeśli zaimplementowany) |
+| `/.well-known/jwks.json` | Klucze publiczne JWT — weryfikacja tokenów |
 
 ### Obrona
 
-- Nie polegaj na `robots.txt` jako mechanizmie bezpieczenstwa — to sugestia dla crawlerow
-- Blokuj dostep do wrazliwych zasobow przez autentykacje i autoryzacje, nie robots.txt
-- Nie umieszczaj wewnetrznych sciezek w robots.txt — uzyj `noindex` meta tag zamiast tego
-- Regularnie przegladaj sitemap.xml — usuwaj sciezki ktore nie powinny byc publiczne
+- Nie polegaj na `robots.txt` jako mechanizmie bezpieczeństwa — to sugestia dla crawlerów
+- Blokuj dostęp do wrażliwych zasobów przez autentykację i autoryzację, nie robots.txt
+- Nie umieszczaj wewnętrznych ścieżek w robots.txt — użyj `noindex` meta tag zamiast tego
+- Regularnie przeglądaj sitemap.xml — usuwaj ścieżki które nie powinny być publiczne
 
-## ROZSZERZENIA BURP SUITE
+### Uzupełnienia do CHEATSHEET
+
+| Endpoint | Co zawiera | Pivot |
+|---|---|---|
+| `/.well-known/oauth-authorization-server` | Alternatywna lokalizacja OAuth metadata (RFC 8414) | OAuth attack surface |
+| `/.well-known/host-meta(.json)` | XRD — discovery (ActivityPub) | Federation account enumeration |
+| `/.well-known/nodeinfo` | Mastodon/ActivityPub instance info | Software version, user count |
+| `/.well-known/webfinger` | Account discovery (`?resource=acct:user@host`) | User enumeration |
+| `/.well-known/openpgpkey/hu/<wkd-hash>` | WKD — Web Key Directory dla emaili | Email enumeration |
+| `/.well-known/matrix/server` + `/client` | Matrix federation discovery | Identyfikacja instancji + delegacja |
+| `/clientaccesspolicy.xml` | Silverlight cross-domain | Legacy enterprise — wide-open często |
+| `/sitemap.xml.gz` | Skompresowany sitemap (Rails default) | Sometimes pomijany przez skanery |
+
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **HTTP/HTTPS delta na metafiles**: serwery z dwoma virtualhost mogą serwować różne `robots.txt` per protokół. Klasyk: `https://` ma pełny robots, `http://` zwraca 301 redirect — Disallowy widoczne tylko na HTTPS.
+- **Sitemap loc spoofing przez `<image:loc>`**: rzadziej skanowane sitemap variants (`<image:loc>` w `<image:image>`) zawierają cdn-only URL — czasem niezprotegowane bucket assets.
+- **JWKS rotation window**: aplikacja rotująca klucze trzyma stare i nowe `kid` w `jwks.json`. Stare klucze nadal akceptowane do wygaśnięcia tokenów = okno ataku JWT confusion na stary algorytm.
+- **assetlinks.json package_name leak**: ujawnia internal Android `package_name` (np. `com.company.app.staging`) co umożliwia pull APK z Play Store / mirrors → reverse engineering.
+- **OAuth `registration_endpoint`**: jeśli `openid-configuration` zwraca `registration_endpoint`, to dynamic client registration włączone (RFC 7591) — można zarejestrować client_id z dowolnym redirect_uri = pivot do account takeover.
+- **WebFinger user enumeration**: `?resource=acct:admin@target.com` zwraca 200 lub 404 — enumeration kont przez federation discovery.
+
+### Common pitfalls
+
+- **Skanery pomijają `sitemap.xml.gz`**: Burp Spider/Acunetix domyślnie nie rozpakowują gz — manualnie `curl -s X.gz | gunzip`.
+- **WAF przepuszcza `/robots.txt` bez auth, ale blokuje `/.well-known/*`**: błąd konfiguracji który widać po różnych statusach.
+- **CDN cache shadowing**: Cloudflare cache może serwować stary `robots.txt` po deploy — porównać z `?cb=<random>` cache buster.
+- **Reverse proxy maskuje 200 jako 404 dla `/.well-known/security.txt`**: aplikacja ma plik, proxy go nie serwuje. Wymusić bezpośredni IP scan jeśli możliwe.
+- **JSON metafiles z BOM**: niektóre `assetlinks.json` mają UTF-8 BOM (Windows tooling) — niewspierane parsery zwrócą błąd, signal że plik istnieje ale niepoprawny.
+
+### Świeżynki z research (patterns)
+
+- **OAuth Discovery enumeration** — Frans Rosén research na temat scope/grant_types_supported jako attack surface.
+- **JWT key confusion via JWKS** — pattern z research community: gdy `jwks_uri` = attacker-controlled URL (przez SSRF lub `kid` pointing) → token forgery.
+- **Universal Link hijacking via apple-app-site-association** — Sam Curry research; gdy aplikacja zarejestrowana z `paths: ["*"]`, atakujący instalujący app o tym samym Team ID może przechwycić.
+- **Sitemap Cache Poisoning** — Web Cache Deception variants; `target.com/sitemap.xml/foo.css` może być cached publicly z auth content.
+- **`.well-known` directory listing** — niektóre serwery z włączonym `Indexes` ujawniają zawartość `/.well-known/` jako directory listing — pivot do plików o niespodziewanych nazwach.
+- **PortSwigger Web Security Academy — OAuth labs**: https://portswigger.net/web-security/oauth — wszystkie warianty OAuth attacks pivotują z openid-configuration.
+- **HackTricks OAuth**: https://book.hacktricks.xyz/pentesting-web/oauth-to-account-takeover
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| AdminPanelFinder | Enumeracja interfejsow administracyjnych aplikacji | [GitHub](https://github.com/moeinfatehi/Admin-Panel_Finder) |
-| Backup Finder | Wyszukiwanie plikow kopii zapasowych i tymczasowych na serwerze | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| AdminPanelFinder | Enumeracja interfejsów administracyjnych aplikacji | [GitHub](https://github.com/moeinfatehi/Admin-Panel_Finder) |
+| Backup Finder | Wyszukiwanie plików kopii zapasowych i tymczasowych | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| Param Miner | Discovery hidden params + cache poisoning | [GitHub](https://github.com/PortSwigger/param-miner) |
+| Hackvertor | Inspect/decode metafiles z BOM, base64, JWT | [GitHub](https://github.com/PortSwigger/hackvertor) |
+| JWT Editor | Edycja i atakowanie JWT z jwks.json | [GitHub](https://github.com/PortSwigger/jwt-editor) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/03-Review_Webserver_Metafiles_for_Information_Leakage
+- OWASP Cheat Sheet — Attack Surface Analysis: https://cheatsheetseries.owasp.org/cheatsheets/Attack_Surface_Analysis_Cheat_Sheet.html
+- IANA Well-Known URIs registry: https://www.iana.org/assignments/well-known-uris/well-known-uris.xhtml
+- RFC 5785 — `.well-known` URIs: https://datatracker.ietf.org/doc/html/rfc5785
+- RFC 9116 — security.txt: https://datatracker.ietf.org/doc/html/rfc9116
+- RFC 8414 — OAuth Authorization Server Metadata: https://datatracker.ietf.org/doc/html/rfc8414
+- RFC 8615 — `.well-known/change-password`: https://datatracker.ietf.org/doc/html/rfc8615
+- HackTricks Pentesting Web (Discovery): https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+- PortSwigger Web Security Academy — OAuth: https://portswigger.net/web-security/oauth
+- ProjectDiscovery exposures: https://github.com/projectdiscovery/nuclei-templates/tree/main/http/exposures
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.4.1 | Unintended Information Leakage | Verify that the application is deployed either without any source control metadata, including the .git or .svn folders, or in a way that these folders are inaccessible both externally and to the application itself. |
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V13.4.7 | Unintended Information Leakage | Verify that the web tier is configured to only serve files with specific file extensions to prevent unintentional information, configuration, and source code leakage. |
+| V13.4.1 | Unintended Information Leakage (L1) | Verify that the application is deployed either without any source control metadata, including the .git or .svn folders, or in a way that these folders are inaccessible. |
+| V13.4.5 | Unintended Information Leakage (L2) | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
+| V13.4.7 | Unintended Information Leakage (L3) | Verify that the web tier is configured to only serve files with specific file extensions. |

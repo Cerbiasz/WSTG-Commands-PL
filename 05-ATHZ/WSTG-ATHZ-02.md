@@ -1,95 +1,52 @@
 # WSTG-ATHZ-02 — Testing for Bypassing Authorization Schema
 
-## Cele
+## Cel
 
-- Assess if unauthenticated, horizontal, or vertical access is possible
+Wykrycie ścieżek omijających authorization checks: header injection (X-Original-URL, X-Forwarded-For 127.0.0.1), HTTP method switching, path manipulation (case, matrix params, encoding), API version downgrade.
 
-## KOMENDY
-
-### Test dostepu bez autentykacji
+## Automatyzacja Nuclei
 
 ```bash
-curl -s "https://TARGET/admin/dashboard" -o /dev/null -w "%{http_code}\n"
-curl -s "https://TARGET/api/users" -o /dev/null -w "%{http_code}\n"
-
+nuclei -l burp-export.xml -im burp -t templates/wstg-athz-02-bypass-headers.yaml
 ```
 
-### Horizontal privilege escalation
+Aktywnie testuje typowe bypass headers + path manipulations + HTTP method switching na typowych admin endpoints.
 
-```bash
-# Zaloguj sie jako user A, sprobuj dostep do zasobow user B
-curl -s "https://TARGET/api/user/2/profile" -H "Cookie: session=USER_A_SESSION"
-curl -s "https://TARGET/api/orders/OTHER_USER_ORDER_ID" -H "Cookie: session=USER_A_SESSION"
+## Coverage Matrix
 
-```
+| Wymiar | Pokryte |
+|---|---|
+| X-Original-URL bypass | ✓ |
+| X-Forwarded-For 127.0.0.1 | ✓ |
+| Path manipulation (case, encoding, matrix) | ✓ |
+| HTTP method switching | ✓ |
+| Per-endpoint authz check | manual via Burp Autorize |
+| Multi-user differential testing | manual |
 
-### Vertical privilege escalation
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# Zaloguj sie jako zwykly user, sprobuj dostep do endpointow admina
-curl -s "https://TARGET/admin/users" -H "Cookie: session=NORMAL_USER_SESSION"
+### Metodologia (5 kroków)
 
-```
+1. **Endpoint enumeration**: lista wszystkich protected endpoints (z WSTG-INFO-04).
+2. **Per endpoint - bypass test**: różne header/path bypass attempts.
+3. **Burp Autorize**: register session for each role, test każdego endpointu z każdą rolą.
+4. **JWT manipulation**: zmień `role` claim w JWT, czy aplikacja akceptuje (cross WSTG-SESS-10)?
+5. **Body parameter mass assignment**: dodaj `role=admin` do body request (cross WSTG-IDNT-02).
 
-### Forced browsing
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -H "Cookie: session=NORMAL_USER_SESSION" -mc 200 -o output_ffuf_forced.json
-
-```
-
-### Method-based bypass
-
-```bash
-curl -X POST "https://TARGET/admin" -H "Cookie: session=NORMAL_USER_SESSION" -o /dev/null -w "%{http_code}\n"
-
-```
-
-### Header-based bypass
-
-```bash
-curl -s "https://TARGET/admin" -H "X-Original-URL: /admin" -o /dev/null -w "%{http_code}\n"
-curl -s "https://TARGET/admin" -H "X-Forwarded-For: 127.0.0.1" -o /dev/null -w "%{http_code}\n"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists common paths
-
-```bash
-# Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt
-# Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-directories.txt
-
-```
-
-### Bug-Bounty-Wordlists 403 bypass
-
-```bash
-ffuf -u "https://TARGET/admin" -H "FUZZ: 127.0.0.1" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/403_header_payloads.txt -mc 200 -o output_ffuf_403bypass_headers.json
-
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/403_url_payloads.txt -mc 200 -o output_ffuf_403bypass_url.json
-
-```
-
-### SecLists 403 bypass
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/403/403_url_payloads.txt -mc 200 -o output_ffuf_seclists_403.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Uzyj Burp Autorize extension do automatycznego testowania autoryzacji
-2. Zaloguj sie jako rozni uzytkownicy i porownaj dostep do endpointow
-3. Testuj IDOR na ID w URL i body requestow
-4. Sprawdz forced browsing do chronionych zasobow
-5. Testuj HTTP method switching (GET vs POST vs PUT)
-6. Testuj header-based bypass (X-Original-URL, X-Forwarded-For)
-
-
----
+- [ ] X-Original-URL: /admin
+- [ ] X-Rewrite-URL: /admin
+- [ ] X-Forwarded-For: 127.0.0.1
+- [ ] X-Custom-IP-Authorization: 127.0.0.1
+- [ ] Path manipulation (case, encoding, matrix params)
+- [ ] HTTP method switching (GET/POST/PUT/DELETE)
+- [ ] API version downgrade (`/api/v1/admin` vs `/api/v2/admin`)
+- [ ] JWT role claim manipulation
+- [ ] Mass assignment w request body
+- [ ] BOLA (Broken Object Level Authorization)
+- [ ] Function level authorization (admin functions accessible by user?)
+- [ ] Tenant isolation (multi-tenant apps)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -97,83 +54,72 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/403/403_ur
 
 ### Fundamentalne zasady autoryzacji
 
-- **Deny by Default**: jesli brak jawnej reguly — ODMOW dostepu; kazde uprawnienie musi byc jawnie przyznane
-- **Least Privilege**: przydzielaj MINIMUM uprawnien potrzebnych do wykonania zadania — horyzontalnie i wertykalnie
-- **Waliduj przy KAZDYM uzyciu**: sprawdzaj uprawnienia na KAZDY request, niezaleznie od zrodla (AJAX, server-side, API)
-  - Uzyj globalnych filtrow/middleware: Java Filters, Django Middleware, .NET Core Filters, Laravel Middleware
+- **Deny by Default**: jeśli brak jawnej reguły — ODMÓW dostępu; każde uprawnienie musi być jawnie przyznane
+- **Least Privilege**: przydzielaj MINIMUM uprawnień potrzebnych do wykonania zadania — horyzontalnie i wertykalnie
+- **Waliduj przy KAŻDYM użyciu**: sprawdzaj uprawnienia na KAŻDY request, niezależnie od źródła (AJAX, server-side, API)
+  - Użyj globalnych filtrów/middleware: Java Filters, Django Middleware, .NET Core Filters, Laravel Middleware
 
-### Model kontroli dostepu
+### Model kontroli dostępu
 
 - Preferuj **ABAC** (Attribute-Based) lub **ReBAC** (Relationship-Based) nad **RBAC** (Role-Based)
-  - RBAC: proste ale podatne na "role explosion", slabo obsluguje fine-grained permissions
-  - ABAC: uwzglednia wiele atrybutow (rola, czas, lokalizacja, urzadzenie) — lepsza obrona least privilege
-  - ReBAC: kontrola dostepu na podstawie relacji miedzy uzytkownikiem a zasobem (np. "autor moze edytowac swoj post")
+  - RBAC: proste ale podatne na "role explosion", słabo obsługuje fine-grained permissions
+  - ABAC: uwzględnia wiele atrybutów (rola, czas, lokalizacja, urządzenie) — lepsza obrona least privilege
+  - ReBAC: kontrola dostępu na podstawie relacji między użytkownikiem a zasobem (np. "autor może edytować swój post")
 
 ### Obrona przed bypass autoryzacji
 
-- NIE polegaj na client-side access control — atakujacy moze ominac JavaScript/CSS ukrywajace elementy
-- Sprawdzaj autoryzacje **SERVER-SIDE**, na gateway lub w serverless function
-- Unikaj eksponowania identyfikatorow (ID) uzytkownikowi — jesli to mozliwe, pobieraj dane na podstawie sesji/JWT
-- Jesli ID sa eksponowane — uzywaj **UUID/hash** zamiast sekwencyjnych numerow
+- NIE polegaj na client-side access control — atakujący może ominąć JavaScript/CSS ukrywające elementy
+- Sprawdzaj autoryzację **SERVER-SIDE**, na gateway lub w serverless function
+- Unikaj eksponowania identyfikatorów (ID) użytkownikowi — jeśli to możliwe, pobieraj dane na podstawie sesji/JWT
+- Jeśli ID są eksponowane — używaj **UUID/hash** zamiast sekwencyjnych numerów
 - Sprawdzaj uprawnienia do **KONKRETNEGO obiektu**, nie tylko do typu obiektu
 
-### Obsluga bledow autoryzacji
+### Typowe wektory bypass
 
-- Centralizuj logike obslugi bledow autoryzacji — unikaj nieoczekiwanych stanow aplikacji
-- Nie ujawniaj wrazliwych informacji w komunikatach o bledzie (sciezki, logi, debug output)
-- Loguj WSZYSTKIE naruszenia autoryzacji jako zdarzenia wysokiego priorytetu
+- **Forced browsing**: `/admin/`, `/api/admin/users` bez logowania
+- **Path manipulation**: `/admin/..%2f`, `/Admin`, `/admin;/`, `/admin//`
+- **HTTP method switching**: GET zamiast POST, PUT/DELETE
+- **Header injection**: `X-Original-URL`, `X-Rewrite-URL`, `X-Forwarded-For: 127.0.0.1`
+- **Parameter manipulation**: `?admin=true`, `?role=admin`
+- **API version bypass**: legacy `/api/v1/` bez auth
+- **JWT manipulation**: zmiana claim `role` lub `alg=none`
 
-### Testowanie autoryzacji
+## Pentesterskie deep dive
 
-- Testuj dostep **horyzontalny**: uzytkownik A probuuje dostep do zasobow uzytkownika B
-- Testuj dostep **wertykalny**: zwykly user probuje dostep do zasobow admina
-- Testuj forced browsing do chronionych endpointow
-- Testuj method switching (GET zamiast POST, PUT zamiast DELETE)
-- Testuj header-based bypass: `X-Original-URL`, `X-Forwarded-For: 127.0.0.1`
+### Mniej znane techniki
 
-### Logging i monitoring
+- **JBoss HEAD bypass**: niektóre wersje JBoss tylko walidują GET/POST — HEAD daje content access bez auth.
+- **Tomcat `..;/` bypass**: Spring Security bypass via matrix params (`/admin/..;/public/`).
+- **Sub-path access**: `/admin/users` protected ale `/admin/users.json` nie - alternative file extension.
+- **CORS preflight bypass**: niektóre aplikacje zwracają full response na OPTIONS bez auth check.
 
-- Loguj wszystkie proby dostepu i naruszenia autoryzacji
-- Uzywaj synchronizowanych zegarow i stref czasowych
-- Rozważ SIEM do centralnego monitorowania logow dostepu
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **Frontend hides admin button = security illusion**: backend musi enforce.
+- **Authz w controller, brak w service layer**: alternative endpoints używające same service bypass authz.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Autorize | Automatyczne wykrywanie bledow autoryzacji | [GitHub](https://github.com/Quitten/Autorize) |
-| AuthMatrix | Macierz testow autoryzacji uzytkownik/rola vs endpoint | [GitHub](https://github.com/SecurityInnovation/AuthMatrix) |
-| AutoRepeater | Automatyczne powtarzanie requestow z roznymi sesjami | [GitHub](https://github.com/nccgroup/AutoRepeater) |
-| Auth Analyzer | Porownywanie odpowiedzi miedzy sesjami | [GitHub](https://github.com/simioni87/auth_analyzer) |
+### Świeżynki z research
 
----
+- **PortSwigger Access Control labs**: https://portswigger.net/web-security/access-control
+- **HackTricks Login Bypass**: https://book.hacktricks.xyz/pentesting-web/login-bypass
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Autorize | Test endpoints with/without auth |
+| AuthMatrix | Authz matrix across roles |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.1 | General Authorization Design | Verify that the application ensures that function-level access is restricted to consumers with explicit permissions. |
-| V8.2.2 | General Authorization Design | Verify that the application ensures that data-specific access is restricted to consumers with explicit permissions to specific data items to mitigate insecure direct object reference (IDOR) and broken object level authorization (BOLA). |
-| V8.3.1 | Operation Level Authorization | Verify that the application enforces authorization rules at a trusted service layer and doesn't rely on controls that an untrusted consumer could manipulate, such as client-side JavaScript. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/05-Authorization_Testing/02-Testing_for_Bypassing_Authorization_Schema
+- OWASP Authorization CS: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+- PortSwigger Access Control: https://portswigger.net/web-security/access-control
 
-### L2 (Standardowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V8.2.3 | General Authorization Design | Verify that the application ensures that field-level access is restricted to consumers with explicit permissions to specific fields to mitigate broken object property level authorization (BOPLA). |
-
-
----
-
-## HackTricks Tips
-
-### 403/401 Bypass
-
-- **Path confusion**: `/admin` → `//admin`, `/./admin`, `/admin/`, `/admin..;/`, `/%2e/admin`
-- **Nginx + Node.js**: `\xA0` za ścieżką; Flask: `\x85`; Spring Boot: `;` za ścieżką
-- **PHP-FPM**: `/admin.php/index.php` gdy tylko `/admin.php` zablokowany
-- **ModSecurity v3**: `%3f` w path — ModSec kończy path, backend dostaje `%3f` literalnie
+| ID | Wymaganie |
+|---|---|
+| V4.1.1 | Access control rules at trusted layer. |
+| V4.2.1 | Authz checks not bypassed by parameter tampering. |
+| V4.2.2 | CSRF defense per state-changing operation. |

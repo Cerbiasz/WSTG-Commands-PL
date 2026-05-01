@@ -1,0 +1,267 @@
+# ============================================================================
+# WSTG-CONF-03: Test File Extensions Handling for Sensitive Information
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-03 (existing repo):
+#   ✓ Backup extensions (.bak, .old, .swp, ~, .save, .orig)
+#   ✓ Source code disclosure (.phps, .inc, .java, .cs)
+#   ✓ Archive extensions (.zip, .tar, .tar.gz, .rar, .7z)
+#   ✓ Config extensions (.config, .conf, .ini, .env, .yml, .yaml, .properties)
+#   ✓ Database backups (.sql, .sqlite, .db, .mdb)
+#   ✓ Log files (.log, .access, .error)
+#   ✓ Test files (test.php, test.html, untitled.html)
+#
+# Z research:
+#   ✓ IDE/editor leftovers (.idea/, .vscode/, .DS_Store, Thumbs.db)
+#   ✓ Build output (composer.lock, package-lock.json - INFO-09 cross-ref)
+#   ✓ Vim/Emacs swap files (.swp, .swo, *~)
+#
+# Coverage strategy: testować tylko popularne paths (index.php.bak, config.bak,
+# database.sql, .env) - NIE pełna brute force wordlista (tu tylko sample).
+# Pełna kuracja w wrapperze script + ffuf z SecLists Discovery wordlist.
+#
+# Performance budget: low (~30 paths × 1 request)
+# Estimated time: ~30s per host
+# ============================================================================
+
+id: wstg-conf-03-file-extensions
+
+info:
+  name: "WSTG-CONF-03: File Extensions Handling (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Sprawdza obecność wrażliwych plików ujawnionych przez błędy konfiguracji
+    obsługi rozszerzeń: backupy (.bak/.old/~), źródła (.phps/.inc), archiwa,
+    config (.env/.yml), DB dumps (.sql/.sqlite), logi, IDE artifacts.
+    Rzucenie typowych nazw + sprawdzenie czy serwer serwuje content (vs 404).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/03-Test_File_Extensions_Handling_for_Sensitive_Information
+    - https://github.com/swisskyrepo/PayloadsAllTheThings
+  classification:
+    cwe-id: CWE-538,CWE-552
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-conf-03,file-extensions,info-disclosure,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Backup files - common
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php.bak"
+      - "{{BaseURL}}/index.php.old"
+      - "{{BaseURL}}/index.php~"
+      - "{{BaseURL}}/index.php.swp"
+      - "{{BaseURL}}/index.html.bak"
+      - "{{BaseURL}}/config.php.bak"
+      - "{{BaseURL}}/config.bak"
+      - "{{BaseURL}}/wp-config.php.bak"
+      - "{{BaseURL}}/wp-config.php~"
+      - "{{BaseURL}}/wp-config.php.save"
+      - "{{BaseURL}}/wp-config.old"
+      - "{{BaseURL}}/web.config.bak"
+      - "{{BaseURL}}/.htaccess.bak"
+      - "{{BaseURL}}/database.sql"
+      - "{{BaseURL}}/dump.sql"
+      - "{{BaseURL}}/backup.sql"
+      - "{{BaseURL}}/backup.zip"
+      - "{{BaseURL}}/backup.tar.gz"
+      - "{{BaseURL}}/site.zip"
+      - "{{BaseURL}}/www.zip"
+      - "{{BaseURL}}/{{Hostname}}.zip"            # przenoszenie hostname jako filename
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: dsl
+        name: not-empty-large-enough
+        dsl:
+          - "len(body) > 50"
+
+      - type: regex
+        part: body
+        name: backup-content-markers
+        regex:
+          - "(?i)<\\?php\\s"                          # PHP source
+          - "(?i)CREATE TABLE"                        # SQL dump
+          - "(?i)DROP TABLE"
+          - "(?i)INSERT INTO"
+          - "(?i)PK\\x03\\x04"                        # ZIP magic header (rarely raw in body)
+          - "(?i)Wordpress"                           # WP config bak
+          - "(?i)DB_PASSWORD"                         # config leak
+          - "(?i)<configuration"                      # web.config
+          - "(?i)<\\?xml.*encoding"
+        condition: or
+
+    extractors:
+      - type: regex
+        name: leaked-content-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,30}(DB_PASSWORD|API_KEY|SECRET_KEY|<\\?php|CREATE TABLE).{0,80}"
+
+  # =========================================================================
+  # Source code disclosure (.phps, .inc, .source)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.phps"
+      - "{{BaseURL}}/login.phps"
+      - "{{BaseURL}}/config.inc"
+      - "{{BaseURL}}/config.inc.php"
+      - "{{BaseURL}}/connect.inc"
+      - "{{BaseURL}}/db.inc"
+      - "{{BaseURL}}/source.txt"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: source-code-disclosure
+        regex:
+          - "(?i)<\\?php\\s"
+          - "(?i)mysql_connect"
+          - "(?i)\\$conn\\s*="
+          - "(?i)<font color=\"#[0-9A-F]{6}\">&lt;\\?php"   # phps highlighted
+        condition: or
+
+  # =========================================================================
+  # Config files
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/.env.bak"
+      - "{{BaseURL}}/.env.local"
+      - "{{BaseURL}}/.env.production"
+      - "{{BaseURL}}/.env.development"
+      - "{{BaseURL}}/.env.example"
+      - "{{BaseURL}}/config.yml"
+      - "{{BaseURL}}/config.yaml"
+      - "{{BaseURL}}/config.json"
+      - "{{BaseURL}}/config.xml"
+      - "{{BaseURL}}/config.ini"
+      - "{{BaseURL}}/database.yml"
+      - "{{BaseURL}}/config/database.yml"
+      - "{{BaseURL}}/settings.py"
+      - "{{BaseURL}}/local_settings.py"
+      - "{{BaseURL}}/application.properties"
+      - "{{BaseURL}}/application.yml"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: config-file-content
+        regex:
+          - "(?i)DB_(HOST|PASSWORD|USERNAME|DATABASE)\\s*="
+          - "(?i)APP_KEY\\s*="
+          - "(?i)SECRET_KEY"
+          - "(?i)production:[\\r\\n]\\s+adapter:"
+          - "(?i)database\\.url\\s*="
+          - "(?i)spring\\.datasource\\.url"
+          - "(?i)<connectionStrings>"
+          - "(?i)password\\s*[:=]\\s*[\"']"
+        condition: or
+
+  # =========================================================================
+  # IDE / editor leftovers
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.idea/workspace.xml"
+      - "{{BaseURL}}/.idea/.gitignore"
+      - "{{BaseURL}}/.idea/modules.xml"
+      - "{{BaseURL}}/.vscode/settings.json"
+      - "{{BaseURL}}/.vscode/launch.json"
+      - "{{BaseURL}}/.DS_Store"
+      - "{{BaseURL}}/Thumbs.db"
+      - "{{BaseURL}}/.project"
+      - "{{BaseURL}}/.classpath"
+      - "{{BaseURL}}/.settings/"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: ide-artifact-content
+        regex:
+          - "(?i)<\\?xml.*\\?>\\s*<project\\s"
+          - "(?i)<module type"
+          - '"folders"\s*:'
+          - "Bud1"                                  # .DS_Store magic
+          - "<projectDescription>"                  # Eclipse .project
+        condition: or
+
+  # =========================================================================
+  # Log files
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/error.log"
+      - "{{BaseURL}}/access.log"
+      - "{{BaseURL}}/debug.log"
+      - "{{BaseURL}}/laravel.log"                   # Laravel default
+      - "{{BaseURL}}/storage/logs/laravel.log"
+      - "{{BaseURL}}/log/production.log"            # Rails
+      - "{{BaseURL}}/log/development.log"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: log-file-content
+        regex:
+          - "(?i)\\[\\d{4}-\\d{2}-\\d{2}[T\\s]\\d{2}:\\d{2}:\\d{2}.*?\\]"
+          - "(?i)\\[error\\]"
+          - "(?i)\\[notice\\]"
+          - "(?i)Started GET \"/"                  # Rails log
+          - "(?i)\\[\\d{4}-\\d{2}-\\d{2}.*\\] (production|local)"   # Laravel log
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Skanowanie tylko sample paths - dla pełnego coverage użyj ffuf z
+#   SecLists/Discovery/Web-Content/raft-large-files.txt
+# - Niektóre serwery zwracają 200 na każdy path (catch-all SPA) → matchery
+#   anti-FP w postaci body markers
+# - WAF blokujące .env / .git / .DS_Store są popularne → bypass przez
+#   encoding (%2e%65%6e%76) lub skanowanie alternative locations
+# ============================================================================

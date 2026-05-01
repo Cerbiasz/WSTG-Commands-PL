@@ -1,104 +1,61 @@
 # WSTG-APIT-01 — API Reconnaissance
 
-## Cele
+## Cel
 
-- Find all API endpoints supported by the backend server code
-- Find all parameters for each endpoint
-- Discover interesting data related to APIs in HTML and JavaScript
+Discovery i mapping API: REST endpoints, GraphQL schema (przez introspection lub field suggestions), SOAP WSDL, OpenAPI/Swagger spec, gRPC reflection. Bez kompletnego mapowania nie można testować API authz/input validation.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Typowe sciezki dokumentacji API
+### Nasze szablony
 
 ```bash
-curl -s "https://TARGET/swagger.json" | head -50
-curl -s "https://TARGET/swagger/v1/swagger.json" | head -50
-curl -s "https://TARGET/api-docs" | head -50
-curl -s "https://TARGET/openapi.json" | head -50
-curl -s "https://TARGET/v1/api-docs" | head -50
-curl -s "https://TARGET/v2/api-docs" | head -50
-curl -s "https://TARGET/.well-known/openapi.yaml" | head -50
-curl -s "https://TARGET/swagger-ui.html" | head -50
-curl -s "https://TARGET/redoc" | head -50
-curl -s "https://TARGET/graphql" -X POST -H "Content-Type: application/json" -d '{"query":"{ __schema { types { name } } }"}'
+# GraphQL specific recon
+nuclei -l burp-export.xml -im burp -t templates/wstg-apit-graphql.yaml
 
+# API discovery (Swagger/OpenAPI/GraphQL)
+nuclei -l burp-export.xml -im burp -t templates/wstg-info-04-attack-surface.yaml
 ```
 
-### kiterunner - API endpoint discovery
+### Suplementarne narzędzia
 
 ```bash
-kr scan https://TARGET -w /path/to/kiterunner/routes.kite
+# Pull OpenAPI spec
+curl -s https://target.com/api/swagger.json | jq
 
+# GraphQL introspection (manual)
+curl -X POST https://target.com/graphql \
+     -H "Content-Type: application/json" \
+     -d '{"query":"query{__schema{types{name}}}"}'
+
+# graphw00f - GraphQL fingerprinting
+graphw00f -t https://target.com/graphql
+
+# Postman OpenAPI import
 ```
 
-### Ekstrakcja API z JS
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/" | grep -oP 'src="[^"]*\.js"' | while read js; do echo "=== $js ==="; curl -s "https://TARGET/$js" | grep -oP '"/api/[^"]*"'; done
+### Metodologia (6 kroków)
 
-```
+1. **API discovery**: szukaj `/api`, `/api/v1`, `/swagger`, `/openapi.json`, `/graphql`, `/graphiql`, `/playground`.
+2. **OpenAPI/Swagger pull**: jeśli dostępny, kompletna lista endpointów + schemas.
+3. **GraphQL introspection**: `__schema` query → pełen schema.
+4. **Mobile app reverse**: extract API endpoints z mobile binary.
+5. **Wayback enumeration**: historyczne API endpoints.
+6. **Doc/README check**: jeśli aplikacja ma `/docs`, `/api-docs`.
 
-### GAU + grep API endpoints
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-echo TARGET | gau | grep -i "api\|graphql\|v1\|v2\|rest" | sort -u | tee output_api_endpoints.txt
-
-```
-
-### Arjun - parameter discovery
-
-```bash
-arjun -u "https://TARGET/api/endpoint" -m GET
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists API wordlists
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/api/api-endpoints.txt -mc 200,301,302,401,403 -o output_ffuf_api.json
-
-```
-
-### Bug-Bounty-Wordlists API
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt -mc 200,301,302,401,403 -o output_ffuf_bbw_api.json
-
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api-actions.txt -mc 200 -o output_ffuf_api_actions.json
-
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api-objects.txt -mc 200 -o output_ffuf_api_objects.json
-
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api_seen_in_wild.txt -mc 200,301,302 -o output_ffuf_api_wild.json
-
-```
-
-### SecLists common paths
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -mc 200,301,302,401 -o output_ffuf_common_api.json
-
-```
-
-### Wordlists-master API
-
-```bash
-# Sprawdz: Desktop/WSTG/wordlists-master/data/
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz /swagger, /api-docs, /openapi.json
-2. Analizuj kod JS pod katem API endpointow
-3. Uzyj Burp Spider i sitemapa do mapowania API
-4. Sprawdz rozne wersje API (v1, v2, v3)
-5. Testuj rozne metody HTTP na kazdym endpoincie
-6. Uzyj Postman/Insomnia do interakcji z API
-
-
----
+- [ ] `/swagger.json`, `/openapi.json`, `/api-docs` discovery
+- [ ] `/graphql`, `/graphiql`, `/playground` accessible?
+- [ ] GraphQL introspection enabled?
+- [ ] GraphQL field suggestions enabled?
+- [ ] gRPC reflection enabled (`/grpc.reflection.v1alpha.ServerReflection`)?
+- [ ] WSDL exposed (`?wsdl`)?
+- [ ] API versioning (`/api/v1`, `/api/v2`)
+- [ ] Mobile app API endpoints (cross WSTG-INFO-08)
+- [ ] Internal API endpoints (different subdomain)
+- [ ] Hidden parameters via Param Miner
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -106,90 +63,72 @@ ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/SecLists-master/Discovery/Web-Cont
 
 ### GraphQL Security
 
-- **Wylacz introspection** na produkcji — nie ujawniaj calego schematu API atakujacemu
-- **Query depth limiting**: ogranicz zagnieżdzenie zapytan (np. max 10 levels) — zapobiegaj DoS
-- **Query cost analysis**: przypisz koszty do pol i ogranicz calkowity koszt zapytania
+- **Wyłącz introspection** na produkcji — nie ujawniaj całego schematu API atakującemu
+- **Query depth limiting**: ogranicz zagnieżdżenie zapytań (np. max 10 levels) — zapobiegaj DoS
+- **Query cost analysis**: przypisz koszty do pól i ogranicz całkowity koszt zapytania
 - **Persisted queries**: akceptuj TYLKO pre-approved query hashes — eliminuje arbitrary queries
-- **Autoryzacja per field/type** — nie tylko na poziomie endpointu, ale na kazdym polu
-- **Batch attack prevention**: ogranicz ilosc operacji w jednym batch request
-- **Rate limiting** na poziomie zapytan, nie requestow (1 request GraphQL = wiele operacji)
+- **Autoryzacja per field/type** — nie tylko na poziomie endpointu, ale na każdym polu
+- **Batch attack prevention**: ogranicz ilość operacji w jednym batch request
+- **Rate limiting** na poziomie zapytań, nie requestów (1 request GraphQL = wiele operacji)
 
 ### REST API Security
 
 - **Autentykacja**: OAuth 2.0 + JWT, API keys (TYLKO jako identyfikator, NIE jako jedyna auth)
-- **Autoryzacja**: sprawdzaj uprawnienia na KAZDYM endpoincie, KAZDEJ metodzie HTTP
-- **Input validation**: waliduj wszystkie parametry — typ, dlugosc, format, zakres
+- **Autoryzacja**: sprawdzaj uprawnienia na KAŻDYM endpoincie, KAŻDEJ metodzie HTTP
+- **Input validation**: waliduj wszystkie parametry — typ, długość, format, zakres
 - **Rate limiting**: ogranicz requesty per API key/IP/user — zapobiegaj abuse
-- **Wersjonowanie**: utrzymuj bezpieczenstwo WSZYSTKICH aktywnych wersji API (v1, v2, v3)
-- **CORS**: `Access-Control-Allow-Origin` — NIE uzywaj `*` z credentials
+- **OpenAPI documentation**: utrzymuj aktualne — opisz expected request/response
 
-### API Discovery — co sprawdzic
+### gRPC Security
 
-- `/swagger`, `/swagger-ui`, `/api-docs`, `/openapi.json`, `/graphql` — dokumentacja API
-- Starsze wersje API (`/api/v1/`) — czesto bez nowych zabezpieczen
-- Hidden endpoints — sprawdz kod JavaScript, mobile app decompilation
-- GraphQL introspection: `{ __schema { types { name fields { name } } } }`
+- **Reflection**: wyłącz na produkcji (jak GraphQL introspection)
+- **mTLS**: wzajemna autentykacja klient-serwer
+- **Authentication**: per-method, nie per-service
 
-### OWASP API Security Top 10
+## Pentesterskie deep dive
 
-- **API1**: Broken Object Level Authorization (BOLA/IDOR) — sprawdzaj uprawnienia do KAZDEGO obiektu
-- **API2**: Broken Authentication — slabe mechanizmy uwierzytelnienia API
-- **API3**: Broken Object Property Level Authorization — Mass Assignment, excessive data exposure
-- **API4**: Unrestricted Resource Consumption — brak rate limiting, DoS
-- **API5**: Broken Function Level Authorization — brak autoryzacji na poziomie funkcji
-- **API6**: Unrestricted Access to Sensitive Business Flows — automatyzacja krytycznych operacji
-- **API7**: Server Side Request Forgery (SSRF) — API jako proxy do wewnetrznych zasobow
-- **API8**: Security Misconfiguration — debug mode, verbose errors, CORS misconfiguration
-- **API9**: Improper Inventory Management — shadow API, stare wersje
-- **API10**: Unsafe Consumption of APIs — brak walidacji odpowiedzi z third-party API
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **GraphQL aliasing for rate limit bypass**: `query{a:user(id:1),b:user(id:2),c:user(id:3)...}` - tysiące queries w jednym request.
+- **GraphQL field suggestions enumeration**: nawet z introspection disabled, server podpowiada `Cannot query field "x" on type "Y". Did you mean "Z"?` → enumeruje fields.
+- **gRPC reflection via grpcurl**: `grpcurl -plaintext target:50051 list` enumerates services.
+- **OpenAPI/Swagger version with hidden endpoints**: `swagger.json` może mieć endpoints not exposed in UI.
+- **REST API enumeration via Wayback**: `gau target.com | grep "/api/"` historical endpoints.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| InQL Scanner | Kompleksowe testowanie bezpieczenstwa GraphQL | [GitHub](https://github.com/doyensec/inql) |
-| GraphQL Raider | Parsowanie i manipulacja zapytan GraphQL w Burp | [BApp Store](https://portswigger.net/bappstore/4841f0d78a554ca381c65b26d48571e2) |
+### Common pitfalls
 
----
+- **GraphQL introspection enabled "for dev convenience"**: prod bez disable.
+- **OpenAPI spec aktualne ale różne od kodu**: actual implementation odbiega od dokumentacji.
+- **gRPC reflection forgotten on prod**: cluster Kubernetes z reflection.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **graphw00f**: https://github.com/dolevf/graphw00f - GraphQL fingerprinting
+- **PortSwigger GraphQL**: https://portswigger.net/web-security/graphql
+- **HackTricks GraphQL**: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/graphql
+- **OWASP API Top 10**: https://owasp.org/API-Security/
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V4.1.1 | Generic Web Service Security | Verify that every HTTP response with a message body contains a Content-Type header field that matches the actual content of the response, including the charset parameter to specify safe character encoding (e.g., UTF-8, ISO-8859-1) according to IANA Media Types, such as "text/", "/+xml" and "/xml". |
+| Rozszerzenie | Opis |
+|---|---|
+| InQL | GraphQL introspection + queries generator |
+| Param Miner | Hidden API parameter discovery |
+| OpenAPI Parser | Auto-import API endpoints |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V4.1.2 | Generic Web Service Security | Verify that only user-facing endpoints (intended for manual web-browser access) automatically redirect from HTTP to HTTPS, while other services or endpoints do not implement transparent redirects. This is to avoid a situation where a client is erroneously sending unencrypted HTTP requests, but since the requests are being automatically redirected to HTTPS, the leakage of sensitive data goes undiscovered. |
-| V4.1.3 | Generic Web Service Security | Verify that any HTTP header field used by the application and set by an intermediary layer, such as a load balancer, a web proxy, or a backend-for-frontend service, cannot be overridden by the end-user. Example headers might include X-Real-IP, X-Forwarded-*, or X-User-ID. |
-| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/12-API_Testing/01-Testing_GraphQL
+- OWASP GraphQL CS: https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html
+- OWASP REST Security CS: https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+- OWASP API Top 10: https://owasp.org/API-Security/
+- HackTricks GraphQL: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/graphql
+- PortSwigger GraphQL: https://portswigger.net/web-security/graphql
 
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.4.6 | Unintended Information Leakage | Verify that the application does not expose detailed version information of backend components. |
-
-
----
-
-## HackTricks Tips
-
-### gRPC-Web
-
-- **Enumerate via reflection**: `buf curl --protocol grpcweb https://host --list-methods`
-- **Reverse JS bundle**: `python3 grpc-scan.py --file main.js` — extract service paths + schemas
-- **CORS**: `Origin: https://evil.tld` — jeśli reflects z `Allow-Credentials: true` = cross-site authenticated calls
-- **JSON transcoder bypass**: `application/json` POST do `/<pkg>.<Service>/<Method>` — auth/route mismatches
-
-### SOAP / JAX-WS ThreadLocal Auth Bypass
-
-- JAX-WS handler stores authenticated `Subject` w static `ThreadLocal`; nigdy nie czyści na missing header
-- **Attack**: spam header-less SOAP bodies → thread reuse stale admin Subject
-- **Discovery**: szukaj `ThreadLocal`, `SubjectHolder`, `@WebService` w EAR/WAR
+| ID | Wymaganie |
+|---|---|
+| V13.4.5 | API documentation not exposed unless intended. |
+| V13.2.1 | Documented HTTP methods. |
+| V13.4.2 | API endpoint authz checks. |

@@ -1,0 +1,67 @@
+# ============================================================================
+# WSTG-SESS-05: Cross Site Request Forgery (Universal)
+# ============================================================================
+# Review status: NOWY | Reviewer: Claude Code (Opus 4.7) | 2026-05-01
+#
+# Coverage: detekcja braku CSRF token w formularzach, brak SameSite cookies,
+# state-changing endpoints accepting GET (no CSRF token).
+# ============================================================================
+
+id: wstg-sess-05-csrf
+
+info:
+  name: "WSTG-SESS-05: CSRF Defense (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa brak CSRF defenses: state-changing forms bez anti-CSRF token,
+    state-changing endpoints akceptujące GET, session cookies bez SameSite.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/05-Testing_for_Cross_Site_Request_Forgery
+    - https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-352
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 6.3
+  tags: dast,wstg,wstg-v42-sess-05,csrf,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # Form POST/PUT/DELETE bez visible CSRF token
+      - type: dsl
+        name: state-changing-form-without-csrf-token
+        dsl:
+          - "regex(\"(?i)<form[^>]*method\\\\s*=\\\\s*[\\\"']?(?:post|put|delete)\", body)"
+          - "!regex(\"(?i)<input[^>]*name\\\\s*=\\\\s*[\\\"']?(?:csrf|_csrf|csrfmiddlewaretoken|authenticity_token|__RequestVerificationToken|csrf_token|X-CSRF-Token)\", body)"
+        condition: and
+
+      # Cookies bez SameSite (CSRF defense)
+      - type: dsl
+        name: session-cookie-no-samesite
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|auth|sid|token)\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|auth|sid|token)[^\\\\r\\\\n]*;\\\\s*SameSite\", header)"
+        condition: and
+
+      # Origin/Referer not validated marker (heuristic - looks for forms without CSRF protection)
+      - type: regex
+        part: body
+        name: form-action-with-credentials
+        regex:
+          - "(?is)<form[^>]*method\\s*=\\s*[\"']?post[^>]*>(?:(?!csrf|_csrf|authenticity).)*?<input[^>]*type=[\"']?(?:password|email)"
+
+# ============================================================================
+# Known limitations:
+# - Custom CSRF token names mogą być pominięte (heuristic regex).
+# - JS-injected CSRF tokens (axios interceptors) niewidoczne w initial HTML.
+# - Per request rotation - nie testowane.
+# ============================================================================

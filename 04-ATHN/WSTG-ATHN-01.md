@@ -1,135 +1,61 @@
 # WSTG-ATHN-01 — Testing for Credentials Transported over an Encrypted Channel
 
-## Cele
+## Cel
 
-- Ocenic czy dane uwierzytelniajace sa przesylane bez szyfrowania
-- Zweryfikowac konfiguracje SSL/TLS
-- Sprawdzic czy formularze logowania wymuszaja HTTPS
+Weryfikacja że credentials (login, password, MFA codes) przesyłane są tylko przez HTTPS. Login form na HTTP = atakujący w MitM przechwytuje plaintext credentials.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Sprawdzenie czy strona logowania uzywa HTTPS
+### Nasz dedykowany szablon
 
 ```bash
-curl -s -v "http://TARGET/login" 2>&1 | grep -iE "Location|HTTP/"
-curl -s -v "https://TARGET/login" 2>&1 | grep -iE "Location|HTTP/"
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-athn-01-credentials-transport.yaml
 ```
 
-### Testssl.sh - kompleksowy test SSL/TLS
+Wykrywa: login form na HTTP page, form action HTTP, auth API endpoint via HTTP, MFA challenge na HTTP, Basic Auth challenge na HTTP.
+
+### Cross-reference
 
 ```bash
-testssl.sh https://TARGET
-testssl.sh --starttls smtp TARGET:25
-testssl.sh -U --sneaky https://TARGET
+# Pełny transport security (CRYP-03)
+nuclei -l burp-export.xml -im burp -t templates/wstg-cryp-03-unencrypted-channels.yaml
 
+# HSTS (CONF-07)
+nuclei -l burp-export.xml -im burp -t templates/wstg-conf-07-hsts.yaml
 ```
 
-### sslyze - analiza konfiguracji SSL
+## Coverage Matrix
 
-```bash
-sslyze TARGET
-sslyze --regular TARGET
-sslyze --certinfo TARGET
-sslyze --tlsv1 --tlsv1_1 --tlsv1_2 --tlsv1_3 TARGET
+| Wymiar | Pokryte |
+|---|---|
+| Login form na HTTP | ✓ |
+| Form action HTTP | ✓ |
+| API auth endpoint via HTTP | ✓ |
+| MFA challenge HTTP | ✓ |
+| Basic Auth na HTTP | ✓ |
+| HSTS | cross-ref CONF-07 |
+| TLS protocol/cipher analysis | testssl.sh |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### curl - sprawdzenie certyfikatu i wersji TLS
+### Metodologia (4 kroki)
 
-```bash
-curl -vI "https://TARGET" 2>&1 | grep -iE "SSL|TLS|subject|issuer|expire"
+1. **HTTP probe**: GET na port 80 - czy serwowane treści, czy redirect 301?
+2. **Form action audit**: wszystkie `<form>` elementy - target HTTPS?
+3. **API endpoints**: każdy auth endpoint (login, register, reset, MFA) - tylko HTTPS?
+4. **HSTS verify**: nasz CONF-07 + check preload status.
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-### Sprawdzenie czy formularz logowania wysyla POST przez HTTP
-
-```bash
-curl -s "https://TARGET/login" | grep -iE "action=.*http://"
-
-```
-
-### Nmap SSL scripts
-
-```bash
-nmap --script ssl-enum-ciphers -p 443 TARGET
-nmap --script ssl-cert -p 443 TARGET
-nmap --script ssl-known-key -p 443 TARGET
-nmap --script ssl-heartbleed -p 443 TARGET
-nmap --script ssl-poodle -p 443 TARGET
-nmap --script ssl-dh-params -p 443 TARGET
-
-```
-
-### Sprawdzenie naglowkow bezpieczenstwa
-
-```bash
-curl -s -I "https://TARGET/" | grep -iE "Strict-Transport|Content-Security|X-Frame|X-Content"
-
-```
-
-### Sprawdzenie HSTS
-
-```bash
-curl -s -I "https://TARGET/" | grep -i "Strict-Transport-Security"
-
-```
-
-### Sprawdzenie mixed content (HTTP resources na HTTPS)
-
-```bash
-curl -s "https://TARGET/login" | grep -iE "src=.http://"
-
-```
-
-### Sprawdzenie przekierowania HTTP -> HTTPS
-
-```bash
-curl -s -o /dev/null -w "%{redirect_url}" "http://TARGET/login"
-
-```
-
-### Sprawdzenie czy API akceptuje HTTP
-
-```bash
-curl -s -X POST "http://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"test","password":"test"}' -v 2>&1
-
-```
-
-### Sprawdzenie slabych cipher suites
-
-```bash
-openssl s_client -connect TARGET:443 -cipher NULL,EXPORT,LOW,DES,RC4,MD5,aNULL,eNULL 2>&1
-
-```
-
-### Sprawdzenie obslugi TLS 1.0/1.1 (przestarzale)
-
-```bash
-openssl s_client -connect TARGET:443 -tls1 2>&1 | grep -i "protocol"
-openssl s_client -connect TARGET:443 -tls1_1 2>&1 | grep -i "protocol"
-openssl s_client -connect TARGET:443 -tls1_2 2>&1 | grep -i "protocol"
-openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak wordlist - test konfiguracji SSL/TLS i szyfrowania transportu
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W przegladarce sprawdz ikone klodki i szczegoly certyfikatu na stronie logowania
-2. W DevTools (Security tab) sprawdz konfiguracje TLS i certyfikat
-3. W Burp Suite sprawdz czy requesty logowania ida przez HTTPS
-4. Uzyj Wireshark do przechwycenia ruchu i sprawdzenia czy credentials sa widoczne
-5. Sprawdz czy formularz logowania nie wysyla danych przez HTTP (action URL)
-6. Przetestuj czy mozna uzyskac dostep do strony logowania przez HTTP (bez S)
-7. Sprawdz czy cookies maja flage Secure
-8. Zweryfikuj naglowek HSTS i jego wartosc max-age
-
-
----
+- [ ] HTTP redirect 301 do HTTPS
+- [ ] Login form action używa HTTPS (relative na HTTPS page też OK)
+- [ ] Password reset flow tylko przez HTTPS
+- [ ] MFA enrollment / challenge tylko HTTPS
+- [ ] OAuth callback URLs HTTPS
+- [ ] HSTS poprawny (max-age, includeSubDomains, preload)
+- [ ] Brak mixed content na login page
+- [ ] Cookies z Secure flag
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -137,63 +63,61 @@ openssl s_client -connect TARGET:443 -tls1_3 2>&1 | grep -i "protocol"
 
 ### Konfiguracja TLS
 
-- Wymuszaj **TLS 1.2+** dla wszystkich polaczen — wylacz TLS 1.0/1.1 (przestarzale, podatne na POODLE, BEAST)
+- Wymuszaj **TLS 1.2+** dla wszystkich połączeń — wyłącz TLS 1.0/1.1 (przestarzałe, podatne na POODLE, BEAST)
 - Preferuj **TLS 1.3** — eliminuje starsze, niebezpieczne cipher suites, szybszy handshake
-- Wylacz slabe cipher suites: **RC4, DES, 3DES, NULL, EXPORT, aNULL, eNULL**
+- Wyłącz słabe cipher suites: **RC4, DES, 3DES, NULL, EXPORT, aNULL, eNULL**
 - Preferuj **AEAD cipher suites**: AES-GCM, ChaCha20-Poly1305
 - Preferuj **ECDHE** (Elliptic Curve Diffie-Hellman Ephemeral) — zapewnia Perfect Forward Secrecy (PFS)
-- Formularz logowania i endpoint POST MUSZA byc na HTTPS — brak HTTPS ujawnia credentials w sieci
+- Formularz logowania i endpoint POST MUSZĄ być na HTTPS — brak HTTPS ujawnia credentials w sieci
 
 ### HSTS (HTTP Strict Transport Security)
 
-- Wlacz HSTS z: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-- `max-age` minimum **31536000** (1 rok) — krotsza wartosc daje mniejsza ochrone
-- `includeSubDomains` — chroni wszystkie subdomeny (WAZNE: upewnij sie ze WSZYSTKIE subdomeny obsluguja HTTPS)
-- `preload` — dodaj domene do HSTS Preload List (hstspreload.org) — przegladarka wymusza HTTPS bez pierwszego HTTP request
+- Włącz HSTS z: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+- `max-age` minimum **31536000** (1 rok) — krótsza wartość daje mniejszą ochronę
+- `includeSubDomains` — chroni wszystkie subdomeny (WAŻNE: upewnij się że WSZYSTKIE subdomeny obsługują HTTPS)
+- `preload` — dodaj domenę do HSTS Preload List (hstspreload.org) — przeglądarka wymusza HTTPS bez pierwszego HTTP request
 - HSTS chroni przed: SSL stripping (sslstrip), downgrade attacks, mixed content issues
 
 ### Mixed Content
 
-- WSZYSTKIE zasoby (obrazy, CSS, JS, fonty, iframe) musza byc ladowane przez HTTPS
-- Mixed content: HTTP resources na stronie HTTPS — przegladarka moze je zablokowac lub wyswietlic ostrzezenie
-- Sprawdz: `curl -s "https://TARGET/" | grep -i "src=.http://"`
+- WSZYSTKIE zasoby (obrazy, CSS, JS, fonty, iframe) muszą być ładowane przez HTTPS
+- Mixed content: HTTP resources na stronie HTTPS — przeglądarka może je zablokować lub wyświetlić ostrzeżenie
 
-### Certyfikaty
+## Pentesterskie deep dive
 
-- Uzyj certyfikatow od zaufanych CA (nie self-signed w produkcji)
-- Sprawdz date waznosci certyfikatu, lancuch zaufania, CN/SAN
-- Wlacz OCSP Stapling dla szybszej weryfikacji statusu certyfikatu
-- Nie lacz stron HTTP (niezabezpieczonych) z HTTPS na tej samej domenie
+### Mniej znane techniki
 
-### Session Security
+- **sslstrip2 z HSTS bypass**: nowsze warianty obejmują HSTS preload mapping subset → effective gdy aplikacja nowo dodana.
+- **HTTP/2 cleartext (h2c)**: niektóre internal services używają h2c za reverse proxy → bypass TLS jeśli proxy nie enforces.
+- **Captive portal bypass**: Wi-Fi captive portal redirects HTTPS to HTTP login → user enters creds on HTTP.
+- **OAuth state via insecure channel**: redirect_uri http:// zwraca authorization code w URL → MitM intercept.
 
-- Cookie session MUSI miec flage **Secure** — bez niej moze byc wyslane przez HTTP
-- Nie przechodzic sesji z HTTP na HTTPS (i odwrotnie) — regeneruj cookie PO redirect na HTTPS
-- Implementuj HSTS razem z Secure cookies — defence in depth
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **HTTPS na main domain ale HTTP na subdomain login**: `login.target.com` może być HTTP gdy main jest HTTPS.
+- **HSTS bez preload**: pierwszy request idzie przez HTTP - vulnerable do sslstrip.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| TLS-Attacker-BurpExtension | Testowanie konfiguracji TLS serwera | [GitHub](https://github.com/RUB-NDS/TLS-Attacker-BurpExtension) |
-| Headers Analyzer | Analiza naglowkow bezpieczenstwa (HSTS, CSP) | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+### Świeżynki z research
 
----
+- **HTTPS-Only Mode w browserach** (Firefox/Chrome): nowy default upgrades all HTTP to HTTPS.
+- **PortSwigger TLS labs**: https://portswigger.net/web-security
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Software Version Reporter | Detekcja insecure versions |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V12.1.1 | General TLS Security Guidance | Verify that only the latest recommended versions of the TLS protocol are enabled, such as TLS 1.2 and TLS 1.3. The latest version of the TLS protocol must be the preferred option. |
-| V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
-| V12.2.2 | HTTPS Communication with External Facing Services | Verify that external facing services use publicly trusted TLS certificates. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/01-Testing_for_Credentials_Transported_over_an_Encrypted_Channel
+- OWASP TLS CS: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+- HSTS Preload: https://hstspreload.org/
 
-### L2 (Standardowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V12.1.2 | General TLS Security Guidance | Verify that only recommended cipher suites are enabled, with the strongest cipher suites set as preferred. L3 applications must only support cipher suites which provide forward secrecy. |
+| ID | Wymaganie |
+|---|---|
+| V9.1.1 | TLS for all client connectivity. |
+| V2.7.1 | Authentication credentials always over TLS. |
+| V14.4.5 | HSTS with sufficient max-age. |

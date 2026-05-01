@@ -1,111 +1,33 @@
 # WSTG-BUSL-07 — Test Defenses Against Application Misuse
 
-## Cele
+## Cel
 
-- Przegladnac zabezpieczenia przed naduzyciami aplikacji
-- Zweryfikowac mozliwosc obejscia zabezpieczen
+Audyt obron przed misuse: rate limiting (per IP/user/global), CAPTCHA, anomaly detection, monitoring, WAF, abuse cases - czy aplikacja wykrywa atypowy behavior i reaguje?
 
-## KOMENDY
+> **Test manual-only**.
 
-### Testowanie rate limiting
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-for i in $(seq 1 100); do
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" TARGET/api/login -X POST -d "user=admin&pass=test${i}")
-    echo "Request $i: HTTP $RESPONSE"
-done
+### Metodologia (5 kroków)
 
-```
+1. **Rate limit test**: 100 requestów/sekundę na sensitive endpoint - blocked? CAPTCHA?
+2. **WAF detection**: send malicious payload → blocked? bypassable?
+3. **Anomaly detection**: nagła zmiana lokalizacji geo, nowy device → trigger MFA?
+4. **Monitoring**: czy system loguje failed auth, suspicious patterns? Alert do SOC?
+5. **Abuse cases**: każda funkcja ma defined abuse case + defense?
 
-### Testowanie rate limiting z roznych IP
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-for i in $(seq 1 20); do
-    curl -s -o /dev/null -w "IP 1.1.1.$i: %{http_code}\n" TARGET/api/login \
-      -X POST -d "user=admin&pass=test" -H "X-Forwarded-For: 1.1.1.${i}"
-done
-
-```
-
-### Testowanie WAF rules
-
-```bash
-curl -v "TARGET/page?id=1' OR 1=1--"
-curl -v "TARGET/page?id=1'/**/OR/**/1=1--"
-curl -v "TARGET/page?id=1%27%20OR%201%3D1--"
-
-```
-
-### Testowanie obejscia WAF
-
-```bash
-curl -v "TARGET/?param=<script>alert(1)</script>"
-curl -v "TARGET/?param=<ScRiPt>alert(1)</ScRiPt>"
-curl -v "TARGET/?param=<img src=x onerror=alert(1)>"
-curl -v -H "Content-Type: application/json" TARGET/api -d '{"param":"<script>alert(1)</script>"}'
-
-```
-
-### Testowanie CAPTCHA bypass
-
-```bash
-# Sprawdz czy CAPTCHA jest walidowana po stronie serwera:
-curl -v -X POST TARGET/login -d "user=test&pass=test&captcha="
-curl -v -X POST TARGET/login -d "user=test&pass=test"
-# Wyslij stare rozwiazanie CAPTCHA:
-curl -v -X POST TARGET/login -d "user=test&pass=test&captcha=OLD_CAPTCHA_VALUE"
-
-```
-
-### Testowanie account lockout
-
-```bash
-for i in $(seq 1 15); do
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST TARGET/login -d "user=victim&pass=wrong${i}")
-    echo "Attempt $i: HTTP $RESPONSE"
-done
-# Sprawdz czy konto jest zablokowane:
-curl -v -X POST TARGET/login -d "user=victim&pass=correct_password"
-
-```
-
-### Testowanie automatyzacji (bot detection)
-
-```bash
-curl -v TARGET/api/endpoint -H "User-Agent: python-requests/2.28.0"
-curl -v TARGET/api/endpoint -H "User-Agent: curl/7.88.1"
-curl -v TARGET/api/endpoint -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-
-```
-
-### Agresywne fuzzowanie
-
-```bash
-wfuzz -c --hc 404 -z range,1-1000 TARGET/api/item/FUZZ
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na logice zabezpieczen
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Testuj rate limiting na krytycznych endpointach (login, reset password, API)
-2. Sprawdz czy CAPTCHA jest egzekwowana po kazdej probie (nie tylko po kilku blednych)
-3. Testuj obejscie rate limitingu: X-Forwarded-For, X-Real-IP, rozne User-Agents
-4. Sprawdz czy account lockout dziala i czy mozna go wykorzystac do DoS
-5. Testuj WAF bypass: rozne encodingi, case manipulation, komentarze SQL
-6. Sprawdz czy aplikacja loguje podejrzana aktywnosc
-7. Testuj czy aplikacja blokuje agresywne skanowanie (wiele 404, szybkie requesty)
-8. Sprawdz odpowiedzi na abuse: czy sa informacyjne (ulatwiaja atakujacemu)?
-
-
----
+- [ ] Rate limit per IP
+- [ ] Rate limit per user
+- [ ] Rate limit globalny
+- [ ] CAPTCHA po N failed attempts
+- [ ] WAF detection + bypass tests
+- [ ] Geolokalizacja anomaly
+- [ ] Device fingerprinting
+- [ ] Failed auth logging + alerting
+- [ ] Brute-force lockout
+- [ ] Honeypot endpoints (canary detection)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -113,70 +35,75 @@ wfuzz -c --hc 404 -z range,1-1000 TARGET/api/item/FUZZ
 
 ### Defenses Against Application Misuse
 
-- **Abuse cases obok use cases**: dla KAZDEJ funkcji zdefiniuj scenariusze naduzywania
-- Przyklad: "Jako atakujacy chce obejsc WAF", "Jako bot chce omnic CAPTCHA"
+- **Abuse cases obok use cases**: dla KAŻDEJ funkcji zdefiniuj scenariusze nadużywania
+- Przykład: "Jako atakujący chcę obejść WAF", "Jako bot chcę ominąć CAPTCHA"
 - Wbuduj obrony w design — nie dodawaj post-factum
 
 ### Rate Limiting — warstwowe
 
 - **Per IP**: ogranicz requesty z jednego IP (uwaga: NAT, proxy)
-- **Per uzytkownik/konto**: ogranicz operacje per zalogowany uzytkownik
-- **Per endpoint**: krytyczne endpointy (login, reset) maja nizsze limity
-- **Globalnie**: ogranicz calkowita przepustowosc — obrona przed DDoS
-- Progresywne opoznienia: 1s, 2s, 4s po kolejnych probach
+- **Per użytkownik/konto**: ogranicz operacje per zalogowany użytkownik
+- **Per endpoint**: krytyczne endpointy (login, reset) mają niższe limity
+- **Globalnie**: ogranicz całkowitą przepustowość — obrona przed DDoS
+- Progresywne opóźnienia: 1s, 2s, 4s po kolejnych próbach
 
-### WAF Bypass — co testowac
+### WAF Bypass — co testować
 
 - Case manipulation: `<ScRiPt>`, `SELECT` vs `select` vs `SeLeCt`
 - Encoding: URL encoding (`%27`), double encoding (`%2527`), Unicode
 - Komentarze SQL: `/**/`, `/*!50000*/` (MySQL version comment)
 - Alternatywne payloady: `<img src=x onerror=alert(1)>` zamiast `<script>alert(1)</script>`
 - Content-Type switching: `application/json` zamiast `application/x-www-form-urlencoded`
-
-### CAPTCHA — wdrozenie i bypass
-
-- Waliduj CAPTCHA **server-side** — nie po stronie klienta
-- CAPTCHA musi byc **jednorazowa** — stare rozwiazanie nie moze byc reuse
-- Uzyj **invisible CAPTCHA** (reCAPTCHA v3) — mniej irytujaca dla uzytkownikow
-- Testuj: puste pole CAPTCHA, brak parametru, stare rozwiazanie, OCR bypass
+- HTTP/2 smuggling: bypass WAF action header parsing
 
 ### Monitoring i alerting
 
-- Loguj WSZYSTKIE podejrzane wzorce: duza ilosc 404, szybkie requesty, nietypowe User-Agent
-- Alertuj na: skanowanie portow, directory brute force, credential stuffing
-- Integruj z SIEM do centralnego monitorowania i korelacji zdarzen
+- Loguj WSZYSTKIE failed authentication, authz, payment, file upload attempts
+- Alertuj na anomalie: spike of 5xx, unusual user-agents, brute force patterns
+- Centralized logging: ELK, Splunk, SIEM
+- Real-time response: auto-block IP po wykryciu attack pattern
 
-## ROZSZERZENIA BURP SUITE
+### Honeypots
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+- Hidden links/fields visible tylko dla bots → klikających = bot detected
+- Email harvesting traps
+- API endpoint który zawsze zwraca 200 ale loguje + alerts
 
----
+## Pentesterskie deep dive
 
-## Wskazówki ASVS
+### Mniej znane techniki
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **WAF bypass via HTTP/2 desync**: różne parsing frontend vs backend.
+- **CAPTCHA solver services**: 2captcha, anti-captcha (commercial).
+- **Distributed botnet bypass IP rate limit**: 1000 IPs po 1 attempt each.
+- **JS-based bot detection bypass via headless browser w stealth mode**.
 
-### L2 (Standardowy)
+### Common pitfalls
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.4.1 | Anti-automation | Verify that anti-automation controls are in place to protect against excessive calls to application functions that could lead to data exfiltration, garbage-data creation, quota exhaustion, rate-limit breaches, denial-of-service, or overuse of costly resources. |
-| V16.3.3 | Security Events | Verify that the application logs the security events that are defined in the documentation and also logs attempts to bypass the security controls, such as input validation, business logic, and anti-automation. |
+- **Rate limit per IP only**: NAT/proxy = wiele users blocked or spoofed via X-Forwarded-For.
+- **WAF blocks tylko obvious attacks**: `' OR 1=1` blocked but `' OR 1#=1` passes.
 
-### L3 (Zaawansowany)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.4.2 | Anti-automation | Verify that business logic flows require realistic human timing, preventing excessively rapid transaction submissions. |
+- **OWASP Abuse Case CS**: https://cheatsheetseries.owasp.org/cheatsheets/Abuse_Case_Cheat_Sheet.html
+- **OWASP Automated Threat Handbook**: https://owasp.org/www-project-automated-threats-to-web-applications/
 
+## Rozszerzenia Burp Suite
 
----
+| Rozszerzenie | Opis |
+|---|---|
+| Wafw00f (CLI) | WAF identification |
+| Hackvertor | Encoding bypass |
 
-## HackTricks Tips
+## Źródła
 
-### ReDoS (Regular Expression DoS)
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/07-Test_Defenses_Against_Application_Misuse
+- OWASP Abuse Case CS: https://cheatsheetseries.owasp.org/cheatsheets/Abuse_Case_Cheat_Sheet.html
+- OWASP Automated Threats: https://owasp.org/www-project-automated-threats-to-web-applications/
 
-- **Evil patterns**: `(a+)+`, `([a-zA-Z]+)*`, `(a|a?)+`, `(.*a){x}` z `x>10`
-- **Trigger**: `"a"*N + "!"` — exponential backtracking
-- **Blind exfil via ReDoS**: `^(?=<flag>)((.*)*)*salt$` — page freezes tylko jeśli prefix matches → extract char-by-char
-- **Tools**: `regexploit`, `vuln-regex-detector`
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V11.1.4 | Anti-automation controls. |
+| V11.1.5 | Defense against business flow abuse. |

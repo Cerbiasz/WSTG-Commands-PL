@@ -1,0 +1,151 @@
+# ============================================================================
+# WSTG-CRYP-03: Sensitive Information Sent via Unencrypted Channels (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CRYP-03 (existing repo):
+#   ✓ Login form action POSTuje na HTTP zamiast HTTPS
+#   ✓ Cookies bez Secure flag wysyłane przez HTTP
+#   ✓ HTTP endpoint zwracający sensitive data (403 vs 200 differential)
+#   ✓ Mixed content (cross-ref CRYP-01)
+#
+# Z research:
+#   ✓ HTTP form z password field (login lub registration)
+#   ✓ HTTP form z credit card field
+#   ✓ HTTP API endpoint z auth header
+#   ✓ Authorization Basic na HTTP (extreme leak)
+#
+# Performance budget: low (~3 requests - HTTPS + HTTP + login form)
+# ============================================================================
+
+id: wstg-cryp-03-unencrypted-channels
+
+info:
+  name: "WSTG-CRYP-03: Sensitive Data Over Unencrypted Channels (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa wrażliwe dane przesyłane przez HTTP (nieszyfrowane): login forms
+    z action HTTP, cookies bez Secure flag, password/credit card fields w
+    HTTP page, HTTP API endpoints akceptujące Authorization headers.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/03-Testing_for_Sensitive_Information_Sent_via_Unencrypted_Channels
+    - https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-319,CWE-311
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:H/A:N
+    cvss-score: 8.0
+  tags: dast,wstg,wstg-v42-cryp-03,plaintext,transport-security,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # Login form z action HTTP (nawet gdy strona HTTPS)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: login-form-action-http
+        regex:
+          - "(?i)<form[^>]*action=[\"']http://[^\"']*[\"'][^>]*>[\\s\\S]*?<input[^>]*type=[\"']password"
+
+      # =====================================================================
+      # Form z password field bez HTTPS w action (relative ale strona HTTP)
+      # =====================================================================
+      - type: dsl
+        name: password-field-on-http-page
+        dsl:
+          - "regex(\"^http://\", BaseURL)"
+          - "regex(\"(?i)<input[^>]*type=[\\\"']password\", body)"
+        condition: and
+
+      # =====================================================================
+      # Credit card field na HTTP
+      # =====================================================================
+      - type: dsl
+        name: credit-card-field-on-http
+        dsl:
+          - "regex(\"^http://\", BaseURL)"
+          - "regex(\"(?i)<input[^>]*(?:name|id)=[\\\"'](?:card[_-]?number|cc[_-]?num|credit[_-]?card)\", body)"
+        condition: and
+
+      # =====================================================================
+      # HTTP endpoint zwraca sensitive data (np. user info JSON)
+      # =====================================================================
+      - type: dsl
+        name: http-api-with-sensitive-data
+        dsl:
+          - "regex(\"^http://\", BaseURL)"
+          - "regex(\"(?i)\\\\b(?:password|api[_-]?key|access[_-]?token|secret|email|user_id|session|jwt)\\\\b\", body)"
+          - "len(body) > 100"
+        condition: and
+
+      # =====================================================================
+      # Authorization Basic header expected (HTTP) - leak credentials
+      # Detekcja: aplikacja wymaga Basic Auth na HTTP (401 z WWW-Authenticate)
+      # =====================================================================
+      - type: dsl
+        name: basic-auth-on-http
+        dsl:
+          - "regex(\"^http://\", BaseURL)"
+          - "regex(\"(?i)www-authenticate:\\\\s*Basic\", header)"
+        condition: and
+
+      # =====================================================================
+      # Cookie bez Secure flag (na każdym endpoincie)
+      # =====================================================================
+      - type: dsl
+        name: session-cookie-without-secure
+        dsl:
+          - "regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token)[^\\\\r\\\\n]*\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*(?:session|sid|auth|token)[^\\\\r\\\\n]*;\\\\s*Secure\", header)"
+        condition: and
+
+      # =====================================================================
+      # HTTP→HTTPS redirect missing (HTTP endpoint bez redirect)
+      # Test wymaga że BaseURL = http://, response = 200 (zamiast 301/302)
+      # =====================================================================
+      - type: dsl
+        name: http-not-redirecting-to-https
+        dsl:
+          - "regex(\"^http://\", BaseURL)"
+          - "status_code == 200"
+        condition: and
+
+    extractors:
+      - type: regex
+        name: insecure-form-action
+        part: body
+        group: 1
+        regex:
+          - "(?i)<form[^>]*action=[\"'](http://[^\"']+)"
+
+      - type: regex
+        name: password-field-context
+        part: body
+        group: 0
+        regex:
+          - "(?i)<input[^>]*type=[\"']password[\"'][^>]*>"
+
+# ============================================================================
+# Known limitations:
+# - Test wymaga że BaseURL/burp export zawiera oba: HTTP i HTTPS endpointy.
+#   Same HTTPS-only target nie testuje HTTP-side.
+# - Form action może być relative URL (`/login`) - jeśli strona HTTP, dalej
+#   submit przez HTTP (matcher to wykrywa przez dsl password-field-on-http-page)
+# - Dynamic forms (JS-generated) niewidoczne w initial HTML
+# - WebSocket cleartext (ws:// vs wss://) - poza zakresem (osobny test)
+# ============================================================================

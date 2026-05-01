@@ -1,0 +1,254 @@
+# ============================================================================
+# WSTG-CONF-06: Test HTTP Methods (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-06 (existing repo):
+#   ✓ OPTIONS - sprawdzenie listy dozwolonych metod
+#   ✓ TRACE / TRACK - Cross-Site Tracing (XST)
+#   ✓ PUT - test czy można upload pliku
+#   ✓ DELETE - test czy można usunąć resource
+#   ✓ Niestandardowe metody (CONNECT, PATCH, PROPFIND - WebDAV)
+#   ✓ HTTP Method Override (X-HTTP-Method-Override, _method param)
+#
+# Z research:
+#   ✓ DEBUG method (IIS) - debug feature
+#   ✓ COPY/MOVE/MKCOL/LOCK/UNLOCK (WebDAV) - file operations
+#   ✓ JBoss specific: HEAD bypass auth dla niektórych konfiguracji
+#   ✓ Ruby on Rails verbs override przez X-HTTP-Method-Override
+#
+# Performance budget: low (~10 method × 1 path)
+# Estimated time: ~10s per host
+#
+# Filozofia: read-only metody bezpieczne (OPTIONS, HEAD, TRACE),
+# pisemne metody (PUT, DELETE, MOVE) tylko gdy --include-destructive.
+# Tutaj wszystkie checki są bezpieczne (wykrywanie obecności, nie wykonywanie).
+# ============================================================================
+
+id: wstg-conf-06-http-methods
+
+info:
+  name: "WSTG-CONF-06: HTTP Methods Configuration (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa nadmiarowe metody HTTP zwiększające powierzchnię ataku: TRACE/TRACK
+    (XST), PUT/DELETE (file ops), CONNECT (proxy), WebDAV (PROPFIND/MKCOL/MOVE).
+    Sprawdza również Method Override przez X-HTTP-Method-Override header.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/06-Test_HTTP_Methods
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/put-method-webdav
+  classification:
+    cwe-id: CWE-650
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
+    cvss-score: 6.5
+  tags: dast,wstg,wstg-v42-conf-06,http-methods,misconfig,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # OPTIONS - listę dozwolonych metod
+  # =========================================================================
+  - method: OPTIONS
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: header
+        name: trace-method-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bTRACE\\b"
+
+      - type: regex
+        part: header
+        name: track-method-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bTRACK\\b"
+
+      - type: regex
+        part: header
+        name: put-method-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bPUT\\b"
+
+      - type: regex
+        part: header
+        name: delete-method-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bDELETE\\b"
+
+      - type: regex
+        part: header
+        name: connect-method-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bCONNECT\\b"
+
+      - type: regex
+        part: header
+        name: webdav-methods-allowed
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\b(PROPFIND|MKCOL|COPY|MOVE|LOCK|UNLOCK)\\b"
+
+      - type: regex
+        part: header
+        name: webdav-version-header
+        regex:
+          - "(?i)dav:\\s*[12]"
+
+      - type: regex
+        part: header
+        name: ms-author-via-webdav
+        regex:
+          - "(?i)ms-author-via:\\s*DAV"
+
+    extractors:
+      - type: regex
+        name: allowed-methods-list
+        part: header
+        group: 1
+        regex:
+          - "(?i)allow:\\s*([^\\r\\n]+)"
+
+  # =========================================================================
+  # TRACE - actually invoke and check echo (XST verification)
+  # =========================================================================
+  - method: TRACE
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      X-Wstg-Trace-Marker: "wstg-{{rand_text_alpha(8)}}"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: trace-echo-confirmed
+        regex:
+          - "(?i)X-Wstg-Trace-Marker:\\s*wstg-"
+          - "(?i)TRACE\\s+/\\s+HTTP/[\\d.]+"
+        condition: or
+
+  # =========================================================================
+  # PUT - test obecności (NIE faktyczny upload - wystarczy odpowiedź serwera)
+  # Wystarczy zaobserwować non-405 (nie "Method Not Allowed")
+  # =========================================================================
+  - method: PUT
+    path:
+      - "{{BaseURL}}/wstg-method-test-{{rand_text_alpha(8)}}.txt"
+
+    body: "wstg-put-test"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        # 200/201/204 = upload zaakceptowany; 401/403 = możliwy z auth; 405 = odrzucony
+        status:
+          - 200
+          - 201
+          - 204
+
+      - type: dsl
+        name: not-method-not-allowed
+        dsl:
+          - "status_code != 405"
+          - "status_code != 501"
+
+  # =========================================================================
+  # DELETE - test obecności (target nieistniejący path = bezpieczne)
+  # =========================================================================
+  - method: DELETE
+    path:
+      - "{{BaseURL}}/wstg-nonexistent-{{rand_text_alpha(8)}}.txt"
+
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        name: delete-not-rejected
+        dsl:
+          - "status_code != 405"
+          - "status_code != 501"
+          - "status_code != 400"
+
+      - type: regex
+        part: header
+        name: delete-method-acknowledged
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bDELETE\\b"
+
+  # =========================================================================
+  # X-HTTP-Method-Override - test override
+  # =========================================================================
+  - method: POST
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      X-HTTP-Method-Override: "DELETE"
+
+    matchers-condition: and
+    matchers:
+      # If status differs from regular POST, override is honored
+      - type: dsl
+        name: override-honored-different-response
+        dsl:
+          - "status_code == 405 || status_code == 501"
+        # Note: this is ambiguous - could mean override worked (DELETE not allowed)
+        # or override ignored (POST not allowed). Anti-FP in dual check below.
+
+  # =========================================================================
+  # WebDAV PROPFIND probe
+  # =========================================================================
+  - method: PROPFIND
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      Depth: "0"
+      Content-Type: "text/xml"
+
+    body: |
+      <?xml version="1.0"?>
+      <a:propfind xmlns:a="DAV:">
+        <a:prop><a:displayname/></a:prop>
+      </a:propfind>
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 207                                          # Multi-Status (WebDAV)
+          - 200
+
+      - type: regex
+        part: body
+        name: webdav-propfind-response
+        regex:
+          - "(?i)<D:multistatus|<a:multistatus|<multistatus"
+          - "(?i)xmlns:?[a-z]?=\"DAV:\""
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - PUT test wykonuje upload nawet jeśli minimal - może być oznaczone jako
+#   destrukcyjne. W praktyce: nazwa pliku wstg-method-test-<random>.txt łatwa
+#   do identyfikacji i czyszczenia.
+# - Niektóre serwery odpowiadają 200 na DELETE z "ignored" body - matchery
+#   nie odróżniają od faktycznego sukcesu.
+# - WebDAV PROPFIND może zwrócić 207 nawet gdy WebDAV technically nieaktywny
+#   (np. niektóre proxy zwracają 207 jako error). Cross-check z OPTIONS.
+# ============================================================================

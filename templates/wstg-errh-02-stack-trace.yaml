@@ -1,0 +1,235 @@
+# ============================================================================
+# WSTG-ERRH-02: Testing for Stack Traces (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-ERRH-02 (existing repo):
+#   ✓ Java stack trace (at com.example.Class.method(File.java:42))
+#   ✓ Python traceback (Traceback (most recent call last))
+#   ✓ Ruby stack trace (.rb:42:in `method')
+#   ✓ Node.js stack trace (at functionName (/path/file.js:42))
+#   ✓ PHP stack trace (in /path/file.php on line 42)
+#   ✓ ASP.NET stack trace ([Exception: ...])
+#
+# Z research:
+#   ✓ Spring Boot stack trace markers (org.springframework.*)
+#   ✓ Django traceback z route info
+#   ✓ Rails Action Controller exceptions
+#   ✓ Express.js error stack
+#   ✓ Go panic / runtime error
+#   ✓ Symfony exception class
+#
+# Filozofia: focus stricte na stack trace patterns. Generic error pages
+# pokrywa WSTG-ERRH-01.
+# ============================================================================
+
+id: wstg-errh-02-stack-trace
+
+info:
+  name: "WSTG-ERRH-02: Stack Trace Disclosure (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa ujawnienie stack trace w odpowiedziach aplikacji - krytyczne info
+    disclosure ujawniające klasy, metody, ścieżki plików, numery linii.
+    Pokrywa stack trace per stack: Java/Spring, Python/Django/Flask, Ruby/Rails,
+    Node.js/Express, PHP, ASP.NET, Go.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/02-Testing_for_Stack_Traces
+    - https://cwe.mitre.org/data/definitions/209.html
+  classification:
+    cwe-id: CWE-209
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-errh-02,stack-trace,info-disclosure,burp-history
+
+variables:
+  canary: "wstg-{{rand_text_alpha(8)}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Try to force errors via various attack vectors
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/?wstg-{{canary}}={{canary}}%00%3C%3E%5C"
+      - "{{BaseURL}}/?id=null&id[]=array"
+      - "{{BaseURL}}/?id=NaN&size=-1"
+      - "{{BaseURL}}/{{canary}}/../../../etc/passwd%00.jpg"
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # Java / JVM stack trace
+      # =====================================================================
+      - type: regex
+        part: body
+        name: java-stack-trace
+        regex:
+          - "(?i)at\\s+[\\w.$]+\\([\\w.]+\\.java:\\d+\\)"
+          - "(?i)Caused by:\\s+[\\w.]+Exception:"
+          - "(?i)java\\.lang\\.\\w+Exception:"
+          - "(?i)java\\.io\\.\\w+Exception:"
+          - "(?i)java\\.sql\\.\\w+Exception:"
+
+      - type: regex
+        part: body
+        name: spring-stack-trace
+        regex:
+          - "(?i)org\\.springframework\\.[\\w.]+Exception:"
+          - "(?i)org\\.springframework\\.web\\.servlet"
+          - "(?i)at org\\.springframework\\."
+
+      # =====================================================================
+      # Python traceback
+      # =====================================================================
+      - type: regex
+        part: body
+        name: python-traceback
+        regex:
+          - "(?i)Traceback \\(most recent call last\\):"
+          - "(?i)File \"[^\"]+\\.py\", line \\d+, in \\w+"
+          - "(?i)\\w+Error: [^<\\n]+"
+
+      - type: regex
+        part: body
+        name: django-traceback
+        regex:
+          - "(?i)Django Version:\\s*[\\d.]+"
+          - "(?i)Python Version:\\s*[\\d.]+"
+          - "(?i)<title>(?:[A-Za-z]+Error|TypeError|ValueError) at "
+
+      - type: regex
+        part: body
+        name: flask-werkzeug-trace
+        regex:
+          - "(?i)Werkzeug Debugger"
+          - "(?i)flask\\.app\\."
+          - "(?i)\\bin /[\\w/.-]+\\.py:\\d+"
+
+      # =====================================================================
+      # Ruby / Rails
+      # =====================================================================
+      - type: regex
+        part: body
+        name: ruby-stack-trace
+        regex:
+          - "(?i)/[\\w/.-]+\\.rb:\\d+:in `[\\w?!]+'"
+          - "(?i)from /[\\w/.-]+\\.rb:\\d+"
+
+      - type: regex
+        part: body
+        name: rails-exception-page
+        regex:
+          - "(?i)<title>Action Controller: Exception"
+          - "(?i)Application Trace.*Framework Trace"
+          - "(?i)Showing.*\\.erb where line"
+
+      # =====================================================================
+      # Node.js
+      # =====================================================================
+      - type: regex
+        part: body
+        name: nodejs-stack-trace
+        regex:
+          - "(?i)at\\s+\\w+\\s+\\(/[\\w/.-]+\\.js:\\d+:\\d+\\)"
+          - "(?i)at Object\\.\\w+ \\(/[\\w/.-]+\\.js:\\d+:\\d+\\)"
+          - "(?i)at Module\\._compile \\("
+          - "(?i)Error: [^<\\n]+\\s+at "
+
+      - type: regex
+        part: body
+        name: express-error-page
+        regex:
+          - "(?i)/node_modules/express/lib/"
+          - "(?i)at app\\.handle \\("
+
+      # =====================================================================
+      # PHP
+      # =====================================================================
+      - type: regex
+        part: body
+        name: php-stack-trace
+        regex:
+          - "(?i)Warning:.*?in /[^\\s]+\\.php on line \\d+"
+          - "(?i)Fatal error:.*?in /[^\\s]+\\.php on line \\d+"
+          - "(?i)Stack trace:[\\r\\n]+#\\d+"
+          - "(?i)thrown in /[^\\s]+\\.php on line \\d+"
+
+      - type: regex
+        part: body
+        name: laravel-whoops
+        regex:
+          - "(?i)<title>Whoops"
+          - "(?i)class=\"exception-message\""
+          - "(?i)Illuminate\\\\\\w+\\\\\\w+Exception"
+
+      - type: regex
+        part: body
+        name: symfony-exception
+        regex:
+          - "(?i)Symfony\\\\\\w+\\\\\\w+Exception"
+          - "(?i)class=\"trace[-_]"
+
+      # =====================================================================
+      # ASP.NET / .NET
+      # =====================================================================
+      - type: regex
+        part: body
+        name: aspnet-stack-trace
+        regex:
+          - "(?i)<b>Exception Details:</b>"
+          - "(?i)<b>Stack Trace:</b>"
+          - "(?i)\\[\\w+Exception:[^\\]]+\\]"
+          - "(?i)at \\w+\\.\\w+\\([^)]*\\) in [A-Z]:\\\\.*?\\.cs:line \\d+"
+
+      - type: regex
+        part: body
+        name: dotnet-core-error
+        regex:
+          - "(?i)System\\.\\w+\\.\\w+Exception:"
+          - "(?i)Microsoft\\.AspNetCore\\."
+          - "(?i)at Microsoft\\.\\w+\\."
+
+      # =====================================================================
+      # Go
+      # =====================================================================
+      - type: regex
+        part: body
+        name: go-panic-trace
+        regex:
+          - "(?i)panic: runtime error:"
+          - "(?i)goroutine \\d+ \\[running\\]:"
+          - "(?i)/[\\w/.-]+\\.go:\\d+ \\+0x[0-9a-f]+"
+
+    extractors:
+      - type: regex
+        name: stack-trace-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,30}(at\\s+\\w+\\.\\w+|Traceback \\(most recent|/[\\w.]+\\.\\w+:\\d+|<b>Stack Trace:</b>|panic: runtime).{0,200}"
+
+      - type: regex
+        name: leaked-file-paths
+        part: body
+        group: 1
+        regex:
+          - "(/[\\w/.-]{5,}\\.(?:py|rb|js|java|jsp|aspx?|cs|go|php))"
+          - "([A-Z]:\\\\[\\w\\\\.-]{5,}\\.(?:cs|java|aspx))"
+
+# ============================================================================
+# Known limitations:
+# - Aplikacje z proper error handling (custom 500 page) eliminują findings
+# - WAF blokujący malformed requests redirectuje do generic blocked page
+# - Niektóre stack traces są obfuscated lub minified - regex może nie złapać
+# - Generic error pages bez stack trace pokrywa WSTG-ERRH-01
+# ============================================================================

