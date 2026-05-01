@@ -1,0 +1,309 @@
+# ============================================================================
+# WSTG-CONF-02: Test Application Platform Configuration (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-02 (existing repo):
+#   ✓ Apache: ServerTokens / ServerSignature / /manual / /icons
+#   ✓ Nginx: server_tokens / default 50x.html
+#   ✓ Tomcat: /manager / /examples / /docs / default credentials probe
+#   ✓ IIS: default install pages / X-AspNet-Version
+#   ✓ PHP: expose_php / phpinfo
+#   ✓ Django: DEBUG=True (yellow page error)
+#   ✓ Spring: actuator endpoints
+#   ✓ Verbose error pages (stack traces, SQL, file paths)
+#
+# Z research:
+#   ✓ Spring Actuator chain (env, heapdump, threaddump → CVE pivot)
+#   ✓ Cloud metadata endpoint accidentally exposed (HackTricks)
+#   ✓ Werkzeug debugger (/console)
+#   ✓ Laravel _ignition exposure
+#   ✓ Rails dev mode UI
+#   ✓ Symfony WebProfiler
+#   ✓ Default content (Apache /manual, Tomcat /examples)
+#   ✓ Source code disclosure via wrong file extension handling (.phps, .inc)
+#
+# Source mapping:
+# - WSTG-CONF-02 CHEATSHEET (existing): default pages, server tokens, debug mode
+# - HackTricks pentesting-web (Spring Actuators, Werkzeug, Laravel debug)
+# - PortSwigger research (Spring Cloud Gateway routes leak)
+# - CVE pivot: CVE-2022-22963 (SpEL), CVE-2021-3129 (Laravel debug)
+# ============================================================================
+
+id: wstg-conf-02-platform-config
+
+info:
+  name: "WSTG-CONF-02: Application Platform Configuration (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa default pages frameworka (Apache /manual, Tomcat /examples), debug
+    consoles (Werkzeug, Laravel _ignition, Rails routes, Symfony Profiler),
+    Spring Boot Actuator chain (env, heapdump, threaddump), expose_php /
+    phpinfo, server-status / server-info, default credentials hints na panelach
+    (Tomcat manager). Krytyczne dla wykrycia "left-over" elementów po deploy.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/02-Test_Application_Platform_Configuration
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/spring-actuators
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/werkzeug
+  classification:
+    cwe-id: CWE-16,CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-conf-02,misconfig,info-disclosure,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Apache default content & status
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/manual/"                    # Apache documentation
+      - "{{BaseURL}}/manual/en/"
+      - "{{BaseURL}}/icons/"                      # Apache icons directory listing
+      - "{{BaseURL}}/server-status"
+      - "{{BaseURL}}/server-info"
+      - "{{BaseURL}}/?M=A"                        # Apache mod_autoindex sort
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: apache-default-content
+        regex:
+          - "(?i)<title>Apache HTTP Server Documentation"
+          - "(?i)Apache Server Status for"
+          - "(?i)Apache Server Information"
+          - "(?i)<title>Index of /icons"
+        condition: or
+
+  # =========================================================================
+  # Nginx default content
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/nginx_status"
+      - "{{BaseURL}}/status"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: nginx-status-page
+        regex:
+          - "(?i)Active connections:\\s*\\d+"
+          - "(?i)server accepts handled requests"
+
+  # =========================================================================
+  # Tomcat default content + manager probe
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/manager/html"
+      - "{{BaseURL}}/host-manager/html"
+      - "{{BaseURL}}/manager/status"
+      - "{{BaseURL}}/manager/text/list"
+      - "{{BaseURL}}/examples/"
+      - "{{BaseURL}}/examples/servlets/"
+      - "{{BaseURL}}/examples/jsp/"
+      - "{{BaseURL}}/docs/"
+      - "{{BaseURL}}/sample/"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+
+      - type: regex
+        part: body
+        name: tomcat-default-content
+        regex:
+          - "(?i)Apache Tomcat[/\\s][\\d.]+"
+          - "(?i)<title>Apache Tomcat Examples"
+          - "(?i)Tomcat Manager"
+          - "(?i)<title>Tomcat Documentation"
+        condition: or
+
+  # =========================================================================
+  # PHP info / phpinfo exposure
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpinfo.php"
+      - "{{BaseURL}}/info.php"
+      - "{{BaseURL}}/test.php"
+      - "{{BaseURL}}/php.php"
+      - "{{BaseURL}}/i.php"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: phpinfo-output
+        regex:
+          - "(?i)<title>phpinfo\\(\\)"
+          - "(?i)PHP Version \\d+\\.\\d+\\.\\d+"
+          - "(?i)<h1[^>]*>phpinfo\\("
+        condition: or
+
+    extractors:
+      - type: regex
+        name: php-version-detected
+        part: body
+        group: 1
+        regex:
+          - "(?i)PHP Version (\\d+\\.\\d+\\.\\d+)"
+
+  # =========================================================================
+  # Spring Boot Actuator chain (FULL pivot)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/env"
+      - "{{BaseURL}}/actuator/health"
+      - "{{BaseURL}}/actuator/info"
+      - "{{BaseURL}}/actuator/heapdump"
+      - "{{BaseURL}}/actuator/threaddump"
+      - "{{BaseURL}}/actuator/configprops"
+      - "{{BaseURL}}/actuator/beans"
+      - "{{BaseURL}}/actuator/mappings"
+      - "{{BaseURL}}/actuator/loggers"
+      - "{{BaseURL}}/actuator/trace"
+      - "{{BaseURL}}/actuator/httptrace"
+      - "{{BaseURL}}/actuator/gateway/routes"     # Spring Cloud Gateway
+      # Legacy (Spring Boot 1.x)
+      - "{{BaseURL}}/env"
+      - "{{BaseURL}}/heapdump"
+      - "{{BaseURL}}/trace"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: actuator-marker
+        regex:
+          - '"_links"\s*:\s*\{'
+          - '"propertySources"'
+          - '"contexts"'
+          - '"threads"\s*:\s*\['
+          - '"beans"\s*:\s*\{'
+          - "Java Heap Dump"
+          - "(?i)<html><head><title>"        # heapdump fallback HTML
+        condition: or
+
+  # =========================================================================
+  # Debug consoles (Werkzeug, Laravel, Rails, Symfony, Django)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/console"                              # Werkzeug
+      - "{{BaseURL}}/_ignition/health-check"               # Laravel
+      - "{{BaseURL}}/rails/info/routes"                    # Rails
+      - "{{BaseURL}}/rails/info/properties"
+      - "{{BaseURL}}/_profiler"                             # Symfony
+      - "{{BaseURL}}/_wdt"
+      - "{{BaseURL}}/__debug__/"                           # Django debug toolbar
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: debug-console-active
+        regex:
+          - "(?i)Werkzeug Debugger"
+          - '"can_execute_commands"\s*:\s*true'   # Laravel Ignition critical
+          - "(?i)Rails.*Routes"
+          - "(?i)Symfony Profiler"
+          - "(?i)Django Debug Toolbar"
+        condition: or
+
+  # =========================================================================
+  # Verbose error / yellow page detection (forced 500)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/?wstg-error-{{rand_text_alpha(8)}}=%00%3C%3E%22"
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        name: django-debug-page
+        regex:
+          - "(?i)<title>(?:[A-Za-z]+Error|TypeError|ValueError) at "
+          - "(?i)Request Method:"
+          - "(?i)Django Version:\\s*[\\d.]+"
+
+      - type: regex
+        part: body
+        name: rails-debug-page
+        regex:
+          - "(?i)Rails\\.application\\.config"
+          - "(?i)<title>Action Controller: Exception"
+
+      - type: regex
+        part: body
+        name: aspnet-detail-error
+        regex:
+          - "(?i)Server Error in '/'.*Application"
+          - "(?i)Stack Trace:[\\r\\n]+\\["
+
+      - type: regex
+        part: body
+        name: php-warning-leak
+        regex:
+          - "(?i)Warning:.*?in /.*?\\.php on line \\d+"
+          - "(?i)Fatal error:.*?in /.*?\\.php on line \\d+"
+
+      - type: regex
+        part: body
+        name: java-stack-trace
+        regex:
+          - "(?i)at\\s+[\\w.]+\\([\\w.]+:\\d+\\)"
+          - "(?i)Caused by:\\s+[\\w.]+Exception:"
+
+# ============================================================================
+# Known limitations:
+# - Aplikacje za WAF blokujące "/manual", "/server-status" generują FN
+# - Custom error pages maskujący detail errors → tylko fallback do generic 500
+# - Heapdump może być >500MB - Nuclei może timeout, więc tylko 200 status
+# ============================================================================

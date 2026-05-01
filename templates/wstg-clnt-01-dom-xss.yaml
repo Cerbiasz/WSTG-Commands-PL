@@ -1,0 +1,148 @@
+# ============================================================================
+# WSTG-CLNT-01: Testing for DOM-Based XSS (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage: detekcja źródeł i sinków DOM XSS w body (HTML/JS).
+# Pełna walidacja DOM XSS wymaga headless browsera - tu wykrywamy MARKERY
+# wskazujące na potencjalną podatność:
+#   ✓ document.write z user-controlled source
+#   ✓ innerHTML z user-controlled source (location/document.URL/document.referrer)
+#   ✓ eval() z user input
+#   ✓ setTimeout/setInterval z string parameter
+#   ✓ jQuery $.html(), $.parseHTML() z source
+#   ✓ Lokalizacja w postMessage handler bez origin check
+#
+# Filozofia: pasywne wykrycie PATTERN -> dalsze testy manualne z Burp DOM
+# Invader. Source mapping: PortSwigger DOM XSS research, hacktricks dom-xss.
+# ============================================================================
+
+id: wstg-clnt-01-dom-xss
+
+info:
+  name: "WSTG-CLNT-01: DOM-Based XSS Markers (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa pasywne wskaźniki potencjalnego DOM XSS w body strony: użycie
+    sinków (innerHTML, document.write, eval, setTimeout(string)) z source
+    typu location/document.URL/document.referrer/postMessage data.
+    Pełna weryfikacja wymaga Burp DOM Invader lub headless browsera.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/01-Testing_for_DOM-based_Cross_Site_Scripting
+    - https://portswigger.net/web-security/dom-based
+    - https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting/dom-xss
+  classification:
+    cwe-id: CWE-79
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 6.1
+  tags: dast,wstg,wstg-v42-clnt-01,dom-xss,xss,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # innerHTML / outerHTML z source
+      # =====================================================================
+      - type: regex
+        part: body
+        name: innerHTML-with-location-source
+        regex:
+          - "(?i)\\.innerHTML\\s*=\\s*[^;]*?\\b(?:location\\.(?:href|search|hash)|document\\.URL|document\\.referrer|window\\.name)"
+
+      - type: regex
+        part: body
+        name: outerHTML-with-source
+        regex:
+          - "(?i)\\.outerHTML\\s*=\\s*[^;]*?\\b(?:location\\.|document\\.URL|document\\.referrer)"
+
+      # =====================================================================
+      # document.write z source
+      # =====================================================================
+      - type: regex
+        part: body
+        name: document-write-with-source
+        regex:
+          - "(?i)document\\.write(?:ln)?\\([^;)]*?\\b(?:location\\.|document\\.URL|document\\.referrer|window\\.name)"
+
+      # =====================================================================
+      # eval / Function / setTimeout(string)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: eval-with-source
+        regex:
+          - "(?i)\\beval\\s*\\([^;)]*?\\b(?:location\\.|document\\.URL|document\\.referrer)"
+
+      - type: regex
+        part: body
+        name: function-constructor-with-source
+        regex:
+          - "(?i)\\bnew\\s+Function\\s*\\([^;)]*?\\b(?:location\\.|document\\.URL)"
+
+      - type: regex
+        part: body
+        name: settimeout-string-with-source
+        regex:
+          - "(?i)set(?:Timeout|Interval)\\s*\\(\\s*['\"][^'\"]*?(?:\\$\\{|\\+)[^'\"]*?\\b(?:location\\.|document\\.)"
+
+      # =====================================================================
+      # jQuery sinks
+      # =====================================================================
+      - type: regex
+        part: body
+        name: jquery-html-with-source
+        regex:
+          - "(?i)\\$\\([^)]+\\)\\.(?:html|append|prepend|after|before|replaceWith)\\s*\\([^;)]*?\\b(?:location\\.|document\\.URL|document\\.referrer)"
+
+      - type: regex
+        part: body
+        name: jquery-parseHTML-with-source
+        regex:
+          - "(?i)\\$\\.parseHTML\\s*\\([^;)]*?\\b(?:location\\.|document\\.URL)"
+
+      # =====================================================================
+      # postMessage handler bez origin check (potential DOM XSS via WM)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: postmessage-no-origin-check
+        regex:
+          - "(?is)addEventListener\\s*\\(\\s*['\"]message['\"][^;]*?function[^}]*?event\\.data[^}]*?\\.(?:innerHTML|outerHTML|src|href)"
+
+      # =====================================================================
+      # Source maps (sourceMappingURL) z .js plików w body — debug recon
+      # =====================================================================
+      - type: regex
+        part: body
+        name: dom-xss-source-map
+        regex:
+          - "//[#@]\\s*sourceMappingURL\\s*=.*?\\.map"
+
+    extractors:
+      - type: regex
+        name: dangerous-sink-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,40}(\\.innerHTML|document\\.write|\\beval\\(|new Function\\(|\\.html\\(|\\.parseHTML).{0,150}"
+
+# ============================================================================
+# Known limitations:
+# - Pasywna detekcja wzorców - false positives na safely-using sinks
+# - Pełna weryfikacja DOM XSS wymaga headless (Burp DOM Invader, Puppeteer)
+# - Bundled / minified JS może mieć obfuscated sinks - detekcja z accuracy
+#   spada
+# - Server-side rendered pages bez user input w DOM = mało findings
+# ============================================================================

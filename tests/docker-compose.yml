@@ -1,0 +1,92 @@
+# ============================================================================
+# tests/docker-compose.yml — środowisko walidacyjne WSTG Suite
+# ============================================================================
+#
+# Uruchamia podatne aplikacje (Juice Shop, DVWA, WebGoat, VAmPI) na lokalnych
+# portach. Po uruchomieniu, użyj run-validation.sh aby wykonać suite i
+# porównać wyniki z expected-findings.yaml.
+#
+# Użycie:
+#   cd tests/
+#   docker-compose up -d
+#   ./run-validation.sh
+#   docker-compose down
+# ============================================================================
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # OWASP Juice Shop - modern intentionally vulnerable webapp
+  # ==========================================================================
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: wstg-juiceshop
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "-O-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================================================
+  # DVWA - classic vulnerable PHP app
+  # ==========================================================================
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: wstg-dvwa
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    environment:
+      - MYSQL_PASSWORD=p@ssw0rd
+
+  # ==========================================================================
+  # WebGoat - Java vulnerable webapp
+  # ==========================================================================
+  webgoat:
+    image: webgoat/webgoat:latest
+    container_name: wstg-webgoat
+    ports:
+      - "8081:8080"
+      - "9090:9090"
+    restart: unless-stopped
+    environment:
+      - WEBGOAT_HOST=0.0.0.0
+      - WEBGOAT_PORT=8080
+
+  # ==========================================================================
+  # VAmPI - Vulnerable API (REST)
+  # ==========================================================================
+  vampi:
+    image: erev0s/vampi:latest
+    container_name: wstg-vampi
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - VULNERABLE=1
+      - TOKENTIMETOLIVE=60
+
+  # ==========================================================================
+  # crAPI - Completely Ridiculous API (multi-component)
+  # Optional - cięższy do uruchomienia, więc disabled by default
+  # ==========================================================================
+  # crapi:
+  #   image: crapi/crapi-web:latest
+  #   container_name: wstg-crapi
+  #   ports:
+  #     - "8888:80"
+  #   depends_on:
+  #     - crapi-mongodb
+  #     - crapi-postgres
+
+# ============================================================================
+# Notes:
+# - Juice Shop: http://localhost:3000  (OWASP Top 10 + custom challenges)
+# - DVWA:       http://localhost:8080  (login: admin/password, set security to "low")
+# - WebGoat:    http://localhost:8081/WebGoat (register account first)
+# - VAmPI:      http://localhost:5000  (REST API - browse swagger at /docs)
+# ============================================================================

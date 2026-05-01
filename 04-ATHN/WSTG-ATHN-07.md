@@ -1,258 +1,105 @@
 # WSTG-ATHN-07 — Testing for Weak Authentication Methods
 
-## Cele
+## Cel
 
-- Przetestowac odpornosc na brute force
-- Ocenic polityki hasel
-- Sprawdzic sile mechanizmow uwierzytelniania
+Audyt password policy i authentication strength: minimum długość, allowed chars (passphrases), max długość, blokowanie znanych breach passwords (HaveIBeenPwned), enforced password change after compromise.
 
-## KOMENDY
+> **Test mostly manual**: rejestracja test account z różnymi hasłami → analiza akceptacji.
 
-### Test polityki hasel - proby rejestracji ze slabymi haslami
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest1","password":"123","email":"w1@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest2","password":"password","email":"w2@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest3","password":"aaaa","email":"w3@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest4","password":"12345678","email":"w4@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weaktest5","password":"Password1","email":"w5@test.com"}' -v
+### Metodologia (5 kroków)
 
-```
+1. **Min length test**: rejestracja z 1-char password → akceptowane?
+2. **Max length test**: 1000-char password → akceptowane (NIST: minimum 64)?
+3. **Character classes**: passphrase z spacjami i Unicode → akceptowane (NIST permits all)?
+4. **Breach check**: rejestracja z `password123` (in HIBP) → blokowane?
+5. **Forced rotation**: czy aplikacja wymusza okresową zmianę (NIST odradza chyba że compromised)?
 
-### Test zmiany hasla na slabe
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s -X POST "https://TARGET/api/change-password" -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d '{"old_password":"StrongPass@1","new_password":"123"}' -v
-
-```
-
-### Sprawdzenie czy haslo moze byc takie samo jak username
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testuser","email":"same@test.com"}' -v
-
-```
-
-### Patator - brute force HTTP POST
-
-```bash
-patator http_fuzz url="https://TARGET/api/login" method=POST body='{"username":"admin","password":"FILE0"}' header="Content-Type: application/json" 0=Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt -x ignore:code=401
-
-```
-
-### Sprawdzenie HTTP Basic Auth
-
-```bash
-curl -s -v "https://TARGET/" -u "admin:admin"
-curl -s -v "https://TARGET/" -u "admin:password"
-
-```
-
-### Sprawdzenie Digest Auth
-
-```bash
-curl -s -v --digest -u "admin:admin" "https://TARGET/"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Hydra brute force HTTP POST form
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Hydra z darkweb top 10000
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/darkweb2017_top-10000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Hydra z xato-net milion hasel
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/xato-net-10-million-passwords-1000000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid" -t 4
-
-```
-
-### Hydra z leaked databases
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/rockyou-75.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Medusa brute force
-
-```bash
-medusa -h TARGET -u admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt -M http -m DIR:/api/login
-
-```
-
-### ffuf brute force
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt:PASS -u "https://TARGET/api/login" -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"PASS"}' -fc 401
-
-```
-
-### ffuf z darkweb top 1000
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/darkweb2017_top-1000.txt:PASS -u "https://TARGET/api/login" -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"PASS"}' -fc 401
-
-```
-
-### Hydra z Pwdb top 100000
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/Pwdb_top-100000.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Hydra SSH brute force
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt TARGET ssh
-
-```
-
-### Hydra z leaked databases - phpbb
-
-```bash
-hydra -l admin -P Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/phpbb-cleaned-up.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### Password spray z 200 najpopularniejszych hasel
-
-```bash
-hydra -L Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt -P Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/2025-199_most_used_passwords.txt TARGET https-post-form "/api/login:username=^USER^&password=^PASS^:F=Invalid"
-
-```
-
-### John the Ripper (offline hash cracking)
-
-```bash
-john --wordlist=Desktop/WSTG/SecLists-master/Passwords/Common-Credentials/10k-most-common.txt hashes.txt
-
-```
-
-### Hashcat (offline hash cracking)
-
-```bash
-hashcat -m 0 -a 0 hashes.txt Desktop/WSTG/SecLists-master/Passwords/Leaked-Databases/rockyou-75.txt
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Przetestuj polityki hasel: minimalna dlugosc, wymagane znaki, zlozonosc
-2. Sprawdz czy aplikacja blokuje najczesciej uzywane hasla
-3. W Burp Intruder skonfiguruj atak brute force i monitoruj odpowiedzi
-4. Sprawdz czy istnieje rate limiting na endpoincie logowania
-5. Przetestuj czy haslo moze byc takie samo jak username lub email
-6. Sprawdz czy aplikacja wymaga silnego hasla przy zmianie
-7. Przetestuj HTTP Basic/Digest authentication jesli jest uzywane
-8. Sprawdz czy tokeny sesji sa wystarczajaco losowe i dlugie
-
-
----
+- [ ] Min length: 8 (z MFA) lub 15 (bez)
+- [ ] Max length: minimum 64 chars
+- [ ] Pozwoli na passphrases (spaces, special chars, Unicode)
+- [ ] Brak max length truncation bez user notice
+- [ ] HaveIBeenPwned API check (breached passwords blocked)
+- [ ] Top-N common passwords blocked
+- [ ] Password ≠ username/email
+- [ ] Brak forced rotation (chyba że breach detected)
+- [ ] Password strength meter na rejestracji
+- [ ] Bcrypt/Argon2id storage (cross WSTG-CRYP-04)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Password_Storage_Cheat_Sheet.md
 
-### Polityka sily hasla (NIST SP800-63B)
+### Polityka siły hasła (NIST SP800-63B)
 
-- **Minimalna dlugosc**: 8 znakow z MFA, 15 znakow bez MFA
-- **Maksymalna dlugosc**: minimum **64 znaki** — pozwol na passphrases
-- **Nie obcinaj hasla cicho** (silent truncation) — uzytkownik musi wiedziec o limitach
-- Pozwol na **WSZYSTKIE znaki** wlacznie z Unicode i spacjami — brak regul kompozycji (duze/male/cyfry/specjalne)
-- NIST **ODRADZA** wymuszanie okresowej zmiany hasel — zmiana TYLKO po wycieku
-- Wlacz **password strength meter** (np. zxcvbn-ts) — pomaga uzytkownikowi stworzyc silne haslo
+- **Minimalna długość**: 8 znaków z MFA, 15 znaków bez MFA
+- **Maksymalna długość**: minimum **64 znaki** — pozwól na passphrases
+- **Nie obcinaj hasła cicho** (silent truncation) — użytkownik musi wiedzieć o limitach
+- Pozwól na **WSZYSTKIE znaki** włącznie z Unicode i spacjami — brak reguł kompozycji (duże/małe/cyfry/specjalne)
+- NIST **ODRADZA** wymuszanie okresowej zmiany haseł — zmiana TYLKO po wycieku
+- Włącz **password strength meter** (np. zxcvbn-ts) — pomaga użytkownikowi stworzyć silne hasło
 
-### Blokowanie slabych hasel
+### Blokowanie słabych haseł
 
-- Sprawdzaj hasla przeciw **bazom wycieknietych hasel**: [HaveIBeenPwned Passwords API](https://haveibeenpwned.com/API/v3#PwnedPasswords)
-- Blokuj **top-N najpopularniejszych hasel** — listy dostepne w SecLists
-- Blokuj hasla identyczne z username, email, nazwa aplikacji
+- Sprawdzaj hasła przeciw **bazom wycieknietych haseł**: [HaveIBeenPwned Passwords API](https://haveibeenpwned.com/API/v3#PwnedPasswords)
+- Blokuj **top-N najpopularniejszych haseł** — listy dostępne w SecLists
+- Blokuj hasła identyczne z username, email, nazwą aplikacji
 
-### Przechowywanie hasel — algorytmy hashowania
+### Przechowywanie haseł — algorytmy hashowania
 
-- **Argon2id** (REKOMENDOWANY): min 19 MiB pamieci, 2 iteracje, 1 stopien rownolegloscí
+- **Argon2id** (REKOMENDOWANY): min 19 MiB pamięci, 2 iteracje, 1 stopień równoległości
 - **scrypt**: min CPU/memory cost 2^17, block size 8 (1024 bytes), parallelization 1
-- **bcrypt**: work factor 10+, limit hasla 72 bajty
-- **PBKDF2** (jesli FIPS-140 wymagany): work factor 600000+, HMAC-SHA-256
-- **NIGDY**: plaintext, MD5, SHA1, SHA256 (bez key stretching)
+- **bcrypt**: work factor 10+, limit hasła 72 bajty
+- **PBKDF2** (jeśli FIPS-140 wymagany): work factor 600000+, HMAC-SHA-256
+- **NIGDY**: MD5, SHA-1 (do haseł), SHA-256 bez salt+cost
 
-### Salting i Peppering
+### Zmiana hasła
 
-- **Salt**: unikalny, losowy string per haslo — nowoczesne algorytmy (Argon2id, bcrypt) generuja go automatycznie
-- **Pepper**: wspolny sekret NIE przechowywany z hashami — dodatkowa warstwa obrony
-  - Pre-hashing: pepper dodany do hasla PRZED hashowaniem
-  - Post-hashing: HMAC na wyniku hashowania (HMAC-SHA256 z pepper jako klucz)
-  - Pepper przechowuj w secrets vault lub HSM — NIE w bazie danych
+- Wymagaj podania **bieżącego hasła** przy zmianie — chroni przed account takeover (XSS, CSRF)
+- Po zmianie: wyloguj wszystkie inne sesje, unieważnij remember-me tokens
+- Powiadom email — informuj użytkownika o zmianie hasła (alerting)
 
-### Work Factor
+## Pentesterskie deep dive
 
-- Obliczenie hashu powinno trwac **ponizej 1 sekundy** — balans miedzy bezpieczenstwem a wydajnoscia
-- Periodycznie zwiekszaj work factor w miare rosnacej mocy hardware
-- Re-hashuj hasla przy nastepnym logowaniu uzytkownika z nowym work factorem
+### Mniej znane techniki
 
-### Porownywanie haszy
+- **Password truncation**: bcrypt limit 72 bytes - długie passphrases truncated. User myśli że ma 100-char password, faktycznie 72.
+- **Unicode normalization mismatch**: registration NFC vs login NFD → password check fails dla legitymnego usera.
+- **Password as-is in URL** (forgot password reset): `?password=newpwd` w URL - logged everywhere.
+- **Password complexity = anti-pattern**: forced "1 uppercase + 1 number + 1 special" prowadzi do `Password1!` patterns.
 
-- Uzywaj **constant-time comparison** — obrona przed timing attacks
-- PHP: `password_verify()`, Python: `hmac.compare_digest()`
-- Ustaw max input length — obrona przed DoS przez bardzo dlugie hasla
+### Common pitfalls
 
-### Zmiana hasla
+- **Password length max=20**: niektóre legacy aplikacje truncate po 20 chars - bypass.
+- **Password ≠ username check tylko exact match**: `admin` vs `Admin1` not caught.
 
-- Wymagaj aktywnej sesji + weryfikacji aktualnego hasla
-- Obrona przed scenariuszem: uzytkownik zapominal sie wylogowac na publicznym komputerze
+### Świeżynki z research
 
-## ROZSZERZENIA BURP SUITE
+- **NIST SP 800-63B**: https://pages.nist.gov/800-63-3/sp800-63b.html
+- **HaveIBeenPwned API**: https://haveibeenpwned.com/API/v3
+- **zxcvbn (password strength)**: https://github.com/dropbox/zxcvbn
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+## Rozszerzenia Burp Suite
 
----
+| Rozszerzenie | Opis |
+|---|---|
+| Param Miner | Hidden password param discovery |
 
-## Wskazówki ASVS
+## Źródła
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/07-Testing_for_Weak_Authentication_Methods
+- OWASP Authentication CS: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- OWASP Password Storage CS: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+- NIST SP 800-63B: https://pages.nist.gov/800-63-3/sp800-63b.html
 
-### L1 (Podstawowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.2.1 | Password Security | Verify that user set passwords are at least 8 characters in length although a minimum of 15 characters is strongly recommended. |
-| V6.2.4 | Password Security | Verify that passwords submitted during account registration or password change are checked against an available set of, at least, the top 3000 passwords which match the application's password policy, e.g. minimum length. |
-| V6.2.5 | Password Security | Verify that passwords of any composition can be used, without rules limiting the type of characters permitted. There must be no requirement for a minimum number of upper or lower case characters, numbers, or special characters. |
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.2.9 | Password Security | Verify that passwords of at least 64 characters are permitted. |
-| V6.2.10 | Password Security | Verify that a user's password stays valid until it is discovered to be compromised or the user rotates it. The application must not require periodic credential rotation. |
-| V6.2.11 | Password Security | Verify that the documented list of context specific words is used to prevent easy to guess passwords being created. |
-| V6.2.12 | Password Security | Verify that passwords submitted during account registration or password changes are checked against a set of breached passwords. |
-
-
----
-
-## HackTricks Tips
-
-### Captcha Bypass
-
-- **Pomiń parametr captcha** entirely; spróbuj GET zamiast POST
-- **Puste pole**: `captcha=`
-- **Sprawdź source/cookies** — captcha value leaked
-- **Reuse** poprzedniej valid captcha value
-- **Mathematical captchas**: regex parsing + automatyzacja
-- **Limited image set**: hash MD5 → lookup table
-- **OCR**: Tesseract; audio → speech-to-text APIs
-- **Serwisy**: CapSolver (reCAPTCHA v2/v3, Cloudflare Turnstile, GeeTest)
+| ID | Wymaganie |
+|---|---|
+| V2.1.1 | Min 12 chars password. |
+| V2.1.5 | Allow passphrases (no composition rules). |
+| V2.1.7 | Check breached password lists. |
+| V2.4.1 | Argon2/bcrypt/scrypt/PBKDF2 storage. |

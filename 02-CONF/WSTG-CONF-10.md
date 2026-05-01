@@ -1,124 +1,86 @@
 # WSTG-CONF-10 — Test for Subdomain Takeover
 
-## Cele
+## Cel
 
-- Enumerate domains and identify forgotten or misconfigured subdomains
-- Detect dangling DNS records pointing to unclaimed services
-- Test for subdomain takeover vulnerability
+Identyfikacja dangling DNS records (CNAME wskazujący na nieistniejącą instancję cloud service) umożliwiających atakującemu rejestrację service i przejęcie subdomeny. Krytyczne — przejęcie subdomeny daje cookies stealing, phishing z trusted domain, CSP/OAuth bypass.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Enumeracja subdomen
+### Nasz dedykowany szablon
 
 ```bash
-subfinder -d TARGET -o output_subfinder.txt
-amass enum -passive -d TARGET -o output_amass.txt
-assetfinder --subs-only TARGET | tee output_assetfinder.txt
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-10-subdomain-takeover.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-10.jsonl
 ```
 
-### Sprawdzenie CNAME records
+Szablon w jednym requeście z 16 named matcherami: AWS S3, AWS CloudFront, GitHub Pages, Heroku, Azure, Shopify, Tumblr, Squarespace, Fastly, Pantheon, Bitbucket, Netlify, Surge, Statuspage, Helpjuice, UserVoice.
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-cat output_subfinder.txt | while read sub; do echo "$sub: $(dig CNAME +short $sub)"; done | tee output_cnames.txt
+# Pełna baza takeover patterns
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/takeovers/
 
+# Lub przez tag
+nuclei -l burp-export.xml -im burp -tags takeover
 ```
 
-### Subjack - automatyczny test subdomain takeover
+### Suplementarne narzędzia
 
 ```bash
-subjack -w output_subfinder.txt -t 100 -timeout 30 -ssl -c /usr/share/subjack/fingerprints.json -v -o output_subjack.txt
+# Subjack - DNS-side check (CNAME analysis)
+subjack -w subdomains.txt -t 100 -timeout 30 -ssl -c subjack-fingerprints.json -v
 
+# Subzy - akywne sprawdzanie service availability
+subzy run --targets subdomains.txt
+
+# Cloud-specific:
+# AWS S3 buckets
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/configs/aws-cloudfront-mil.yaml
 ```
 
-### Nuclei - szablony subdomain takeover
+## Coverage Matrix
 
-```bash
-nuclei -l output_subfinder.txt -t takeovers/ -o output_nuclei_takeover.txt
-nuclei -l output_subfinder.txt -tags takeover -o output_nuclei_takeover2.txt
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| AWS S3, CloudFront | ✓ | — |
+| GitHub Pages, Heroku, Azure | ✓ | — |
+| Shopify, Tumblr, Squarespace | ✓ | — |
+| Fastly, Pantheon, Bitbucket | ✓ | — |
+| Netlify, Surge, Statuspage | ✓ | — |
+| Helpjuice, UserVoice | ✓ | — |
+| DNS NS takeover (nameserver) | — | manual via `dig NS` |
+| Dangling A/AAAA z released cloud IP | — | wymaga DNS history (SecurityTrails) |
+| Email MX takeover | — | manual via `dig MX` |
+| Pełna baza 100+ services | częściowe | use http/takeovers/ official |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### dig CNAME - reczne sprawdzenie
+### Metodologia (6 kroków)
 
-```bash
-dig CNAME subdomain.TARGET +short
-dig CNAME www.TARGET +short
-dig CNAME mail.TARGET +short
-dig CNAME blog.TARGET +short
-dig CNAME shop.TARGET +short
-dig CNAME dev.TARGET +short
-dig CNAME staging.TARGET +short
+1. **Subdomain enumeration**: `subfinder + amass + crt.sh` → pełna lista subdomen.
+2. **DNS resolution check**: `dnsx -resp -a -aaaa -cname` — które subdomeny mają CNAME do cloud services.
+3. **Active probe**: `httpx -l subs.txt -title -tech-detect` — które serwują content.
+4. **Subjack/Subzy scan**: DNS-side analysis CNAME → identyfikuje dangling.
+5. **Nuclei takeover scan**: nasz szablon na każdej subdomenie.
+6. **Manual verification**: dla każdego potencjalnego — sprawdź czy faktycznie service jest dostępny do rejestracji (np. AWS S3: `aws s3 mb s3://target-bucket`).
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### DNSRecon
-
-```bash
-dnsrecon -d TARGET -t std -o output_dnsrecon.txt
-
-```
-
-### Sprawdzenie czy CNAME prowadzi do nieistniejacego zasobu
-
-```bash
-# Znaki subdomain takeover:
-# - NXDOMAIN na CNAME target
-# - "There isn't a GitHub Pages site here"
-# - "NoSuchBucket" (AWS S3)
-# - "The specified bucket does not exist" (AWS S3)
-# - "No settings were found for this company" (HelpScout)
-# - "Domain is not configured" (Fastly)
-
-```
-
-### Sprawdzenie CNAME i odpowiedzi HTTP
-
-```bash
-cat output_subfinder.txt | httpx -follow-redirects -status-code -title -content-length -o output_httpx.txt
-
-```
-
-### can-i-take-over-xyz checks
-
-```bash
-# Sprawdz https://github.com/EdOverflow/can-i-take-over-xyz dla aktualnej listy
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists subdomains brute-force
-
-```bash
-gobuster dns -d TARGET -w Desktop/WSTG/SecLists-master/Discovery/DNS/subdomains-top1million-5000.txt -o output_gobuster_dns_5k.txt
-
-gobuster dns -d TARGET -w Desktop/WSTG/SecLists-master/Discovery/DNS/subdomains-top1million-20000.txt -o output_gobuster_dns_20k.txt
-
-gobuster dns -d TARGET -w Desktop/WSTG/SecLists-master/Discovery/DNS/subdomains-top1million-110000.txt -o output_gobuster_dns_110k.txt
-
-```
-
-### Wynik gobuster -> sprawdzenie CNAME
-
-```bash
-cat output_gobuster_dns_5k.txt | awk '{print $2}' | while read sub; do cname=$(dig CNAME +short $sub); if [ ! -z "$cname" ]; then echo "$sub -> $cname"; fi; done | tee output_cname_check.txt
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zebierz liste subdomen za pomoca wielu narzedzi
-2. Sprawdz CNAME dla kazdej subdomeny - szukaj dangling records
-3. Odwiedz kazda subdomene w przegladarce - szukaj stron bledow uslug (GitHub Pages, AWS, Heroku)
-4. Sprawdz czy mozesz zarejestrowac/claim usluge wskazywana przez CNAME
-5. Zweryfikuj na can-i-take-over-xyz czy dana usluga jest podatna na takeover
-6. Sprawdz NS records - czy delegacja DNS prowadzi do kontrolowanego serwera
-7. Przetestuj rejestracje na platformach wskazywanych przez CNAME (S3, Heroku, GitHub)
-8. Dokumentuj wszystkie znalezione dangling DNS records
-
-
----
+- [ ] Pełna lista subdomen (passive + active)
+- [ ] DNS records: CNAME, A, AAAA, NS, MX per subdomena
+- [ ] Subjack/Subzy run
+- [ ] Nuclei takeover templates
+- [ ] AWS S3 specifically (NoSuchBucket markers)
+- [ ] Azure App Service domyślne strony
+- [ ] GitHub Pages "There isn't a GitHub Pages site"
+- [ ] Heroku "No such app"
+- [ ] DNS NS records pointing to wycofane nameservers
+- [ ] Dangling MX records (email takeover)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -128,17 +90,17 @@ cat output_gobuster_dns_5k.txt | awk '{print $2}' | while read sub; do cname=$(d
 
 1. Organizacja tworzy CNAME: `blog.target.com → target.herokuapp.com`
 2. Organizacja kasuje konto na Heroku, ale **nie usuwa rekordu CNAME**
-3. Atakujacy rejestruje `target.herokuapp.com` na swoim koncie Heroku
-4. `blog.target.com` teraz serwuje tresc atakujacego — moze krasc cookies, phishing
+3. Atakujący rejestruje `target.herokuapp.com` na swoim koncie Heroku
+4. `blog.target.com` teraz serwuje treść atakującego — może kraść cookies, phishing
 
-### Uslugi podatne na subdomain takeover
+### Usługi podatne na subdomain takeover
 
-| Usluga | Sygnatura (error message) | Podatna? |
+| Usługa | Sygnatura (error message) | Podatna? |
 |--------|--------------------------|----------|
 | GitHub Pages | "There isn't a GitHub Pages site here" | Tak |
 | AWS S3 | "NoSuchBucket", "The specified bucket does not exist" | Tak |
 | Heroku | "No such app" | Tak |
-| Azure (App Service) | Domyslna strona Azure | Tak (zalezy od konfiguracji) |
+| Azure (App Service) | Domyślna strona Azure | Tak (zależy od konfiguracji) |
 | Shopify | "Sorry, this shop is currently unavailable" | Tak |
 | Fastly | "Fastly error: unknown domain" | Tak |
 | Pantheon | "404 error unknown site" | Tak |
@@ -146,72 +108,78 @@ cat output_gobuster_dns_5k.txt | awk '{print $2}' | while read sub; do cname=$(d
 | WordPress.com | "Do you want to register" | Tak |
 | Ghost | "The thing you were looking for is no longer here" | Tak |
 | Surge.sh | "project not found" | Tak |
-| Cloudfront | "Bad Request: ERROR: The request could not be satisfied" | Mozliwa |
+| Cloudfront | "Bad Request: ERROR: The request could not be satisfied" | Możliwa |
 
 ### Typy dangling DNS records
 
 | Typ rekordu | Ryzyko |
 |-------------|--------|
-| CNAME → wycofana usluga | Subdomain takeover — najczestszy |
-| A/AAAA → zwolniony IP | IP moze byc przejety przez innego uzytkownika chmury |
-| NS → wycofany nameserver | Pelna kontrola nad subdomena (DNS takeover) |
+| CNAME → wycofana usługa | Subdomain takeover — najczęstszy |
+| A/AAAA → zwolniony IP | IP może być przejęty przez innego użytkownika chmury |
+| NS → wycofany nameserver | Pełna kontrola nad subdomeną (DNS takeover) |
 | MX → wycofany mail server | Przechwycenie maili — password reset, weryfikacja |
 
 ### Konsekwencje subdomain takeover
 
-- **Cookie stealing**: jesli cookie scope to `.target.com`, atakujacy moze krasc sesje
-- **Phishing**: legitymna subdomena target.com z trescia atakujacego
-- **CSP bypass**: jesli CSP zezwala na `*.target.com`
-- **OAuth/SAML bypass**: jesli redirect_uri akceptuje subdomeny
-- **Email spoofing**: jesli SPF zawiera `include:` dla przejętej domeny
+- **Cookie stealing**: jeśli cookie scope to `.target.com`, atakujący może kraść sesje
+- **Phishing**: legitymna subdomena target.com z treścią atakującego
+- **CSP bypass**: jeśli CSP zezwala na `*.target.com`
+- **OAuth/SAML bypass**: jeśli redirect_uri akceptuje subdomeny
+- **Email spoofing**: jeśli SPF zawiera `include:` dla przejętej domeny
 
 ### Obrona
 
-- **Usuwaj rekordy DNS** przed usunieciem uslugi/zasobu — nie odwrotnie
-- Regularnie skanuj subdomeny i sprawdzaj CNAME pod katem dangling records
-- Uzyj **DNS monitoring** do alertowania o zmianach rekordow
+- **Usuwaj rekordy DNS** przed usunięciem usługi/zasobu — nie odwrotnie
+- Regularnie skanuj subdomeny i sprawdzaj CNAME pod kątem dangling records
+- Użyj **DNS monitoring** do alertowania o zmianach rekordów
 - Scope cookies do konkretnej subdomeny (`blog.target.com`), nie `.target.com`
 - Zminimalizuj wildcard w CSP i OAuth redirect_uri
-- Prowadz **inwentarz subdomen** i ich powiazania z uslugami
+- Prowadź **inwentarz subdomen** i ich powiązania z usługami
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **Cookie scope abuse via takeover**: `.target.com` cookie scope = takeover ANY subdomeny pozwala czytać auth cookies. Przykład: `staging.target.com` takeover → wszystkie sesje na produkcji vulnerable.
+- **OAuth `redirect_uri` whitelist `*.target.com`**: po takeover atakujący ma legitimate subdomenę → OAuth flow oddaje token atakującemu (Sam Curry research na bug bounty).
+- **CSP `script-src *.target.com`**: takeover daje JS execution context jako zaufana domena → bypass CSP defenses.
+- **DNS NS record takeover**: rzadsze ale gorsze — przejęcie nameserver pozwala na pełną kontrolę DNS subdomeny + wystawianie certs (nawet z DNS-01 challenge).
+- **Email takeover via dangling MX**: atakujący przejmuje mail flow → otrzymuje password reset emails → account takeover.
+- **Cloudfront subdomain takeover bez CNAME**: niektóre warianty CloudFront pozwalają na takeover poprzez wskazanie wycofanego dystrybucji.
+
+### Common pitfalls
+
+- **CNAME pointing to existing-but-not-claimed service**: serwis istnieje (status 404 z brand markerami), ale atakujący nie zawsze może go zarejestrować. Każdy provider ma inne mechanizmy.
+- **Cloudflare protected → false positive**: jeśli subdomena jest za Cloudflare, error page może być Cloudflare 522/523 a nie service-specific.
+- **DNS caching**: TTL może powodować że subjack widzi old CNAME. Use `dig +short @8.8.8.8` for fresh resolution.
+
+### Świeżynki z research
+
+- **Sam Curry — Apple subdomain takeover chain**: https://samcurry.net/hacking-apple/
+- **EdOverflow Can-I-Take-Over-XYZ**: https://github.com/EdOverflow/can-i-take-over-xyz (live database)
+- **Frans Rosén research na cloud subdomain takeover**: https://hackerone.com/reports
+- **HackerOne disclosed reports na subdomain takeover**: filterowane po type "Subdomain Takeover"
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Broken Link Hijacking | Pasywne wykrywanie zepsutych linkow do potencjalnego subdomain takeover | [GitHub](https://github.com/arbazkiraak/BurpBLH) |
-| Domain Hunter | Wyszukiwanie powiazanych domen i subdomen | [GitHub](https://github.com/bit4woo/domain_hunter) |
+| Asset Discover | Discovery powiązanych zasobów | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
+| Subjack (CLI) | DNS-side dangling CNAME check | [GitHub](https://github.com/haccer/subjack) |
+| Subzy (CLI) | Active service availability check | [GitHub](https://github.com/PentestPad/subzy) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/10-Test_for_Subdomain_Takeover
+- Can-I-Take-Over-XYZ: https://github.com/EdOverflow/can-i-take-over-xyz
+- Subjack: https://github.com/haccer/subjack
+- Subzy: https://github.com/PentestPad/subzy
+- 0xpatrik Subdomain Takeover Basics: https://0xpatrik.com/subdomain-takeover-basics/
+- HackerOne disclosed reports: https://hackerone.com/hacktivity
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
-| V12.2.2 | HTTPS Communication with External Facing Services | Verify that external facing services use publicly trusted TLS certificates. |
-
-
----
-
-## HackTricks Tips
-
-- **Detection**: CNAME/A records pointing do deleted services (S3, GitHub Pages, Heroku, Netlify, Vercel, Azure)
-- **Error signatures per provider**: `can-i-take-over-xyz` repo
-- **DNS wildcard amplification**: `*.example.com` CNAME do third-party → infinite valid subdomains
-
-### Impact
-
-- **Cookie theft**: subdomain może set/read cookies scoped do parent domain
-- **CORS bypass**: target whitelistuje `*.example.com`
-- **SameSite bypass**: subdomain wysyła cookies do main/sibling
-- **OAuth token theft**: jeśli takeover domain = valid `redirect_uri`
-- **CSP bypass**: jeśli subdomain w `script-src`
-- **NS record takeover**: kontrola DNS zone → set high TTL
-
-### Tools
-
-`subjack`, `subzy`, `tko-subs`, `bbot`, `dnsReaper`, `Subdominator`, nuclei `-tags takeover`
+| V13.4.6 | Information Leakage (L3) | No detailed version information of backend components. |
+| V14.1.1 | Configuration (L1) | Build process documented and repeatable. |

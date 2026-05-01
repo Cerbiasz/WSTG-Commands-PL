@@ -1,127 +1,35 @@
 # WSTG-BUSL-01 — Test Business Logic Data Validation
 
-## Cele
+## Cel
 
-- Zidentyfikowac punkty wstrzykniecia danych
-- Zwalidowac kontrole po stronie backendu
+Wykrycie błędów walidacji danych w kontekście biznesowym: ujemne ceny, ilości większe niż stan magazynu, daty z przeszłości w polach future-only, currency manipulation, integer overflow.
 
-## KOMENDY
+> **Test manual-only**: business logic z definicji wymaga rozumienia kontekstu biznesowego.
 
-### Testowanie negatywnych wartosci
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": -1, "price": 100}'
-curl -v -X POST TARGET/api/transfer -H "Content-Type: application/json" -d '{"amount": -1000}'
+### Metodologia (5 kroków)
 
-```
+1. **Map business rules**: rozmowa z dev/PM o oczekiwanym behavior per field.
+2. **Boundary testing**: dla każdego numeric field - test ujemnych, zerowych, ogromnych wartości, zmiennoprzecinkowych w int field.
+3. **Type confusion**: integer w string field, array zamiast string.
+4. **Workflow specific**: w e-commerce - cena 0.01 dla high-value item, ujemna ilość daje refund.
+5. **Currency / locale**: zmień waluta z EUR na zimbabwe dollar?
 
-### Testowanie ekstremalnych wartosci
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": 99999999}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": 0}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"price": 0.001}'
-
-```
-
-### Testowanie type confusion
-
-```bash
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": "abc"}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": true}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": null}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": []}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": {}}'
-
-```
-
-### Testowanie integer overflow
-
-```bash
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": 2147483647}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": 2147483648}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"quantity": 9999999999999999}'
-
-```
-
-### Testowanie float precision
-
-```bash
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"price": 0.1 + 0.2}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"price": 1e308}'
-curl -v -X POST TARGET/api/order -H "Content-Type: application/json" -d '{"price": -1e308}'
-
-```
-
-### Testowanie specjalnych znakow w polach tekstowych
-
-```bash
-curl -v -X POST TARGET/api/user -H "Content-Type: application/json" -d '{"name": "<script>alert(1)</script>"}'
-curl -v -X POST TARGET/api/user -H "Content-Type: application/json" -d '{"name": "admin'\''--"}'
-curl -v -X POST TARGET/api/user -H "Content-Type: application/json" -d '{"email": "test@test@test.com"}'
-
-```
-
-### Testowanie dodatkowych nieoczekiwanych pol
-
-```bash
-curl -v -X POST TARGET/api/register -H "Content-Type: application/json" -d '{"user": "test", "pass": "test", "role": "admin"}'
-curl -v -X POST TARGET/api/register -H "Content-Type: application/json" -d '{"user": "test", "pass": "test", "isAdmin": true}'
-
-```
-
-### Burp Intruder - automatyczne fuzzowanie wartosci
-
-```bash
-# 1. Przechwytuj request z parametrami
-# 2. Wyslij do Intruder
-# 3. Ustaw pozycje na wartosci parametrow
-# 4. Uzyj listy big-list-of-naughty-strings.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Fuzzowanie parametrow z naughty strings (SecLists)
-
-```bash
-ffuf -u TARGET/api/search -X POST -H "Content-Type: application/json" -d '{"query": "FUZZ"}' -w Desktop/WSTG/SecLists-master/Fuzzing/big-list-of-naughty-strings.txt -mc all -fc 200 -c
-
-```
-
-### Fuzzowanie z debug param names (fuzzdb business-logic)
-
-```bash
-ffuf -u "TARGET/page?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/CommonDebugParamNames.txt -mc all -c
-
-```
-
-### Fuzzowanie z debug param names JSON (fuzzdb)
-
-```bash
-ffuf -u "TARGET/api/debug" -X POST -H "Content-Type: application/json" -d '{"FUZZ": true}' -w Desktop/WSTG/fuzzdb-master/attack/business-logic/DebugParams.Json.fuzz.txt -mc all -c
-
-```
-
-### Fuzzowanie z common method names (fuzzdb)
-
-```bash
-ffuf -u "TARGET/api/FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/CommonMethodNames.txt -mc all -c
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Suite -> Repeater: modyfikuj wartosci parametrow (negatywne, zerowe, ogromne)
-2. Testuj walidacje po stronie serwera usuwajac walidacje JavaScript (DevTools)
-3. Sprawdz czy backend akceptuje dane ktore frontend odrzuca
-4. Testuj granice wartosci: min-1, min, max, max+1
-5. Sprawdz czy mozna przeslac puste wymagane pola
-6. Testuj podwojne parametry: ?id=1&id=2 (HTTP Parameter Pollution)
-7. Sprawdz czy filtrowanie/sanityzacja dziala na backendzie a nie tylko na frontendzie
-
-
----
+- [ ] Ujemne ceny / ilości (refund attack)
+- [ ] Cena 0 / 0.01 dla expensive items
+- [ ] Integer overflow (np. 9999999999 × 1)
+- [ ] Decimal precision (0.001 cents = effective free)
+- [ ] Currency manipulation
+- [ ] Date validation (past/future)
+- [ ] Email format edge cases (`a@b`, `user@.com`)
+- [ ] Phone number internationalisation
+- [ ] Address fields (PII length limits)
+- [ ] Quantity > inventory
+- [ ] Discount > price (negative total)
+- [ ] Tax calculation manipulation
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -129,53 +37,65 @@ ffuf -u "TARGET/api/FUZZ" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/Co
 
 ### Walidacja danych — hierarchia
 
-- **Syntactic validation**: format danych — typ, dlugosc, zakres, encoding, regex
-- **Semantic validation**: znaczenie biznesowe — czy cena jest dodatnia, czy ilosc jest sensowna
-- **OBIE** warstwy sa wymagane — syntactyczna walidacja nie wylapie logicznych bledow
+- **Syntactic validation**: format danych — typ, długość, zakres, encoding, regex
+- **Semantic validation**: znaczenie biznesowe — czy cena jest dodatnia, czy ilość jest sensowna
+- **OBIE** warstwy są wymagane — syntaktyczna walidacja nie wyłapie logicznych błędów
 
 ### Server-side validation — KLUCZOWE
 
-- Walidacja kliencka (JavaScript) to **UX** — latwa do ominięcia (Burp, curl, DevTools)
-- Walidacja SERVER-SIDE jest **obowiazkowa** — jedyna skuteczna obrona
-- Kazdy parametr musi byc walidowany: typ, dlugosc, zakres, format, dozwolone wartosci
+- Walidacja kliencka (JavaScript) to **UX** — łatwa do ominięcia (Burp, curl, DevTools)
+- Walidacja SERVER-SIDE jest **obowiązkowa** — jedyna skuteczna obrona
+- Każdy parametr musi być walidowany: typ, długość, zakres, format, dozwolone wartości
 
 ### Allowlist vs Denylist
 
-- **Allowlist** (PREFEROWANE): jawnie okresl co jest dozwolone — `[a-zA-Z0-9]`
-- **Denylist** (SLABE): probuj zablokowac co jest niebezpieczne — atakujacy znajdzie obejscie
-- Uzywaj regex do walidacji formatow: email, telefon, ZIP code, daty
+- **Allowlist** (PREFEROWANE): jawnie określ co jest dozwolone — `[a-zA-Z0-9]`
+- **Denylist** (SŁABE): próbuj zablokować co jest niebezpieczne — atakujący znajdzie obejście
+- Używaj regex do walidacji formatów: email, telefon, ZIP code, daty
 
-### Reguly biznesowe do walidacji
+### Reguły biznesowe do walidacji
 
-- Cena: musi byc **dodatnia**, nie moze byc **zerowa** (chyba ze dozwolone)
-- Ilosc: nie moze przekraczac stanu magazynowego, nie moze byc ujemna
-- Rabat/kupon: nie moze dawac ujemnej ceny, limit uzyc per uzytkownik
-- Integer overflow: `2147483647 + 1` = `-2147483648` — nieprzewidywalne zachowanie
-- Float precision: `0.1 + 0.2 != 0.3` — nie uzywaj float do operacji finansowych (uzyj Decimal)
+- Cena: musi być **dodatnia**, nie może być **zerowa** (chyba że dozwolone)
+- Ilość: minimum 1, maximum sensowne (np. 1000 dla retail)
+- Stan magazynu: ilość zamówiona <= stan magazynu
+- Data: w przeszłości/przyszłości zależnie od pola (urodzenia vs wygaśnięcia)
+- Status: tylko dozwolone wartości (`pending`, `paid`, `shipped`)
 
-### Abuse Cases — definiuj OBOK use cases
+## Pentesterskie deep dive
 
-- Dla kazdej funkcji zdefiniuj: "jak moze byc naduzona?"
-- Przyklad: rejestracja → mass account creation, login → brute force, checkout → price manipulation
-- Implementuj kontrole anty-abuse: rate limiting, CAPTCHA, monitoring anomalii
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **Integer overflow w JavaScript Number**: `Number.MAX_SAFE_INTEGER + 1 = 9007199254740992` - niektóre frameworki returnują wrong values.
+- **Floating point precision**: `0.1 + 0.2 = 0.30000000000000004` - subtraction może dać 0 lub negative.
+- **Locale-aware parsing**: `1,234.56` (US) vs `1.234,56` (EU) - aplikacja może parse różnie per locale.
+- **String → number coercion**: PHP `"1abc" == 1` - input "1abc" passes type check.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Agartha | Generowanie payloadow i testowanie logiki biznesowej | [GitHub](https://github.com/volkandindar/agartha) |
-| Active Scan++ | Rozszerzony skaner z dodatkowymi checkami | [GitHub](https://github.com/albinowax/ActiveScanPlusPlus) |
+### Common pitfalls
 
----
+- **Frontend validation only**: bypass via Burp.
+- **Server-side parseInt without bounds**: accepts `Infinity` or `NaN` w niektórych frameworks.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **PortSwigger Business Logic labs**: https://portswigger.net/web-security/logic-flaws
+- **HackTricks Business Logic**: https://book.hacktricks.xyz/pentesting-web
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.1.1 | Validation and Business Logic Documentation | Verify that the application's documentation defines input validation rules for how to check the validity of data items against an expected structure. This could be common data formats such as credit card numbers, email addresses, telephone numbers, or it could be an internal data format. |
-| V2.2.1 | Input Validation | Verify that input is validated to enforce business or functional expectations for that input. This should either use positive validation against an allow list of values, patterns, and ranges, or be based on comparing the input to an expected structure and logical limits according to predefined rules. For L1, this can focus on input which is used to make specific business or security decisions. For L2 and up, this should apply to all input. |
-| V2.2.2 | Input Validation | Verify that the application is designed to enforce input validation at a trusted service layer. While client-side validation improves usability and should be encouraged, it must not be relied upon as a security control. |
+| Rozszerzenie | Opis |
+|---|---|
+| Param Miner | Hidden parameter discovery |
+| Logger++ | State change tracking |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/01-Test_Business_Logic_Data_Validation
+- OWASP Input Validation CS: https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html
+- PortSwigger Business Logic: https://portswigger.net/web-security/logic-flaws
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V5.1.3 | Input validated using positive validation. |
+| V5.1.5 | URL redirects only allow whitelisted destinations. |

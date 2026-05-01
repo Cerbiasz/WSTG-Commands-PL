@@ -1,0 +1,75 @@
+# ============================================================================
+# WSTG-CLNT-14: Reverse Tabnabbing (Universal)
+# ============================================================================
+#
+# Coverage: detekcja `<a target="_blank">` bez `rel="noopener noreferrer"`.
+# Brakujący noopener pozwala otwartemu oknu kontrolować window.opener →
+# atakujący może przekierować original page na phishing.
+#
+# Modern browsers (Chrome 88+, Firefox 79+) automatycznie ustawiają
+# noopener dla target=_blank, ale aplikacja nadal powinna explicit ustawić
+# (defense in depth + legacy browsers).
+# ============================================================================
+
+id: wstg-clnt-14-reverse-tabnabbing
+
+info:
+  name: "WSTG-CLNT-14: Reverse Tabnabbing (Universal)"
+  author: pentest-team
+  severity: low
+  description: |
+    Wykrywa linki target="_blank" bez rel="noopener" / rel="noreferrer".
+    Atakujący kontrolujący link target może użyć window.opener.location
+    do redirect original page (phishing). Modern browsers auto-set
+    noopener ale defense-in-depth wymaga explicit attribute.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/13.1-Testing_for_Reverse_Tabnabbing
+    - https://owasp.org/www-community/attacks/Reverse_Tabnabbing
+  classification:
+    cwe-id: CWE-1022
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N
+    cvss-score: 3.1
+  tags: dast,wstg,wstg-v42-clnt-14,tabnabbing,phishing,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: body
+        name: target-blank-without-noopener
+        regex:
+          - "(?is)<a\\s[^>]*\\btarget\\s*=\\s*['\"]?_blank['\"]?[^>]*>"
+
+      # Anti-FP: spróbować wykluczyć przypadki gdzie noopener JEST obecne
+      # (regex wyżej matches też te z noopener - to ograniczenie pojedynczego
+      # regex; tutaj sprawdzamy że jest target=_blank link bez noopener)
+      - type: regex
+        part: body
+        name: at-least-one-blank-without-noopener
+        regex:
+          - "(?is)<a\\s[^>]*\\btarget\\s*=\\s*['\"]?_blank['\"]?[^>]*>(?:(?!rel\\s*=\\s*['\"][^'\"]*noopener)[^>])*?>"
+
+    extractors:
+      - type: regex
+        name: vulnerable-link-snippet
+        part: body
+        group: 0
+        regex:
+          - "<a\\s[^>]*target\\s*=\\s*['\"]?_blank['\"]?[^>]*>"
+
+# ============================================================================
+# Known limitations:
+# - Modern browsers (Chrome 88+, Firefox 79+) auto-set noopener dla target=_blank
+#   - finding nadal valid jako defense-in-depth ale impact niższy
+# - JS-generated links (window.open()) bez `noopener` flag - nie wykrywane tym
+#   regex - manual review
+# - rel="external" lub rel="opener" nie chroni - tylko noopener/noreferrer
+# ============================================================================

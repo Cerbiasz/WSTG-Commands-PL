@@ -1,0 +1,194 @@
+# ============================================================================
+# WSTG-CONF-10: Test for Subdomain Takeover (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-10 (existing repo):
+#   ✓ AWS S3 dangling CNAME
+#   ✓ GitHub Pages takeover
+#   ✓ Heroku app takeover
+#   ✓ Azure (cloudapp.net) takeover
+#   ✓ Shopify, Tumblr, Squarespace
+#
+# Z research:
+#   ✓ AWS CloudFront takeover (NoSuchBucket)
+#   ✓ Bitbucket Pages
+#   ✓ Fastly takeover
+#   ✓ Pantheon, Netlify, Surge.sh
+#   ✓ Helpjuice, Helpscout, Statuspage
+#   ✓ Tumblr.com (cofnięte)
+#
+# Filozofia: matchery sprawdzają charakterystyczne strony błędów cloud
+# providerów które zwracają content gdy subdomain wskazuje na ich service
+# ale konto/bucket nie istnieje.
+#
+# Source mapping:
+# - Can-I-Take-Over-XYZ database: https://github.com/EdOverflow/can-i-take-over-xyz
+# - PortSwigger research (Frans Rosén / Sam Curry)
+# - Subjack patterns
+# ============================================================================
+
+id: wstg-conf-10-subdomain-takeover
+
+info:
+  name: "WSTG-CONF-10: Subdomain Takeover Detection (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa subdomain takeover: dangling CNAME wskazuje na cloud service
+    (AWS S3, CloudFront, GitHub Pages, Heroku, Azure, Shopify, Fastly...)
+    którego konto/bucket nie istnieje. Atakujący może zarejestrować service
+    z tym samym name i przejąć subdomenę.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/10-Test_for_Subdomain_Takeover
+    - https://github.com/EdOverflow/can-i-take-over-xyz
+    - https://0xpatrik.com/subdomain-takeover-basics/
+  classification:
+    cwe-id: CWE-200,CWE-350
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N
+    cvss-score: 9.0
+  tags: dast,wstg,wstg-v42-conf-10,subdomain-takeover,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        name: takeover-aws-s3
+        regex:
+          - "(?i)<Code>NoSuchBucket</Code>"
+          - "(?i)The specified bucket does not exist"
+
+      - type: regex
+        part: body
+        name: takeover-aws-cloudfront
+        regex:
+          - "(?i)Bad request\\.[\\s\\S]*?cloudfront"
+          - "(?i)ERROR: The request could not be satisfied[\\s\\S]*?CloudFront"
+
+      - type: regex
+        part: body
+        name: takeover-github-pages
+        regex:
+          - "(?i)There isn't a GitHub Pages site here"
+          - "(?i)For root URLs.*?GitHub.com"
+
+      - type: regex
+        part: body
+        name: takeover-heroku
+        regex:
+          - "(?i)<title>No such app</title>"
+          - "(?i)herokucdn\\.com[\\s\\S]*?no-such-app"
+          - "(?i)There is no app configured at that hostname"
+
+      - type: regex
+        part: body
+        name: takeover-azure
+        regex:
+          - "(?i)404 Web Site not found[\\s\\S]*?azurewebsites"
+          - "(?i)<title>Microsoft Azure App Service - Welcome</title>"
+
+      - type: regex
+        part: body
+        name: takeover-shopify
+        regex:
+          - "(?i)Sorry, this shop is currently unavailable"
+          - "(?i)Only one step left!"
+          - "(?i)<title>[^<]*Shopify"
+
+      - type: regex
+        part: body
+        name: takeover-tumblr
+        regex:
+          - "(?i)Whatever you were looking for doesn't currently exist at this address"
+          - "(?i)There's nothing here"
+
+      - type: regex
+        part: body
+        name: takeover-squarespace
+        regex:
+          - "(?i)No Such Account[\\s\\S]*?Squarespace"
+          - "(?i)Domain mapped, but website not found"
+
+      - type: regex
+        part: body
+        name: takeover-fastly
+        regex:
+          - "(?i)Fastly error: unknown domain"
+
+      - type: regex
+        part: body
+        name: takeover-pantheon
+        regex:
+          - "(?i)The gods are wise[\\s\\S]*?Pantheon"
+          - "(?i)404 - The page you were looking for[\\s\\S]*?pantheon"
+
+      - type: regex
+        part: body
+        name: takeover-bitbucket
+        regex:
+          - "(?i)Repository not found[\\s\\S]*?Bitbucket"
+
+      - type: regex
+        part: body
+        name: takeover-netlify
+        regex:
+          - "(?i)<title>Page Not Found - Netlify</title>"
+          - "(?i)Not Found - Request ID: [a-f0-9-]+"
+
+      - type: regex
+        part: body
+        name: takeover-surge
+        regex:
+          - "(?i)project not found"
+          - "(?i)<title>Surge Project Not Found"
+
+      - type: regex
+        part: body
+        name: takeover-statuspage
+        regex:
+          - "(?i)You are being.*?<a href.*?statuspage\\.io"
+
+      - type: regex
+        part: body
+        name: takeover-helpjuice
+        regex:
+          - "(?i)We could not find what you're looking for[\\s\\S]*?helpjuice"
+
+      - type: regex
+        part: body
+        name: takeover-uservoice
+        regex:
+          - "(?i)This UserVoice subdomain is currently available!"
+
+    extractors:
+      - type: regex
+        name: takeover-service-detected
+        part: body
+        group: 0
+        regex:
+          - ".{0,30}(NoSuchBucket|cloudfront|GitHub Pages|heroku|azurewebsites|shopify|fastly|pantheon|netlify|surge|statuspage).{0,80}"
+
+# ============================================================================
+# Known limitations:
+# - Wymaga że subdomain JEST już skonfigurowana z dangling CNAME do service.
+#   Subjack/subzy z DNS-side check są bardziej kompletne.
+# - Niektóre takeoverable services nie mają charakterystycznej error page
+#   (np. nie pokazują "service unavailable") - false negative
+# - Wykrywanie typu "service is available for registration" wymaga interakcji
+#   z provider API (subzy --provider-keys)
+# - Cloudflare / Akamai mogą maskować backend errors → testować z bezpośrednim IP
+# ============================================================================

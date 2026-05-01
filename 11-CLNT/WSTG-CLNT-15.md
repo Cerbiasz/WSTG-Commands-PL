@@ -1,63 +1,51 @@
 # WSTG-CLNT-15 — Testing for Client-side Template Injection (CSTI)
 
-## Cele
+## Cel
 
-- Identify the client-side framework and its version
-- Detect injection points where user input is reflected into DOM and processed by template engine
-- Assess if injection allows arbitrary JavaScript execution (XSS)
+Wykrycie reflectowania user input w syntax `{{...}}` (Angular/Vue/Handlebars/Mustache) bez sanityzacji — pivot do JavaScript execution w sandbox lub bypass do XSS. AngularJS 1.6+ usunął sandbox = direct RCE-equivalent w aplikacji.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Identyfikacja frameworka
+### Nasz dedykowany szablon
 
 ```bash
-curl -s "https://TARGET/" | grep -i "angular\|vue\|react\|ember\|knockout\|handlebars"
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-clnt-15-csti.yaml
 ```
 
-### Testowanie CSTI - Angular
+Fuzzuje typowe CSTI payloads (`{{7*7}}`, `{{ '7'*7 }}`, constructor escape) - detekcja: `49` (= 7*7) lub `7777777` (Vue '7'*7) reflectowane w body z client-side content-type.
 
-```bash
-curl -s "https://TARGET/page?input={{constructor.constructor('alert(1)')()**}}"
-curl -s "https://TARGET/page?input={{7*7}}" | grep "49"
+## Coverage Matrix
 
-```
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Math evaluation (7*7=49) | ✓ | — |
+| Vue '7'*7 → "7777777" | ✓ | — |
+| AngularJS sandbox escape patterns | ✓ payloady | actual sandbox bypass per version → manual |
+| Constructor.constructor RCE pattern | ✓ payload | — |
+| Vue 3 sandbox (harder to escape) | częściowe | manual research per version |
+| Handlebars / Mustache | częściowe | wymaga specific syntax tests |
 
-### Vue.js
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s "https://TARGET/page?input={{_c.constructor('alert(1)')()}}"
+### Metodologia (5 kroków)
 
-```
+1. **Framework identification**: cross WSTG-INFO-08 — które framework ({{}}-syntax) jest używany.
+2. **Probe: simple math**: `{{7*7}}` → 49 reflectowane = CSTI exists.
+3. **Per-framework payload**: AngularJS 1.x ma znane sandbox escape gadgets per version.
+4. **Sandbox bypass research**: PortSwigger XSS cheatsheet, JSFuck.com, AngularJS bypasses repository.
+5. **Pivot to XSS**: jeśli sandbox bypass succeeds → arbitrary JS execution.
 
-### Testowanie polyglot CSTI
+### Co MUSI być sprawdzone (8 punktów)
 
-```bash
-curl -s "https://TARGET/page?input=\${7*7}{{7*7}}<%= 7*7 %>"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists template engines
-
-```bash
-ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/template-engines-expression.txt -mc all -o output_ffuf_csti.json
-
-ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing/template-engines-special-vars.txt -mc all -o output_ffuf_csti_vars.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj framework JS i jego wersje (Wappalyzer, whatweb)
-2. Wstaw {{7*7}} i sprawdz czy wynik to 49 w przegladarce
-3. Testuj payloady specyficzne dla frameworka (Angular, Vue)
-4. Sprawdz CSP - CSTI wymaga unsafe-eval do eksploitacji w nowszych frameworkach
-5. Testuj sandbox bypass dla danej wersji frameworka
-
-
----
+- [ ] Framework identification (Angular vs Vue vs Handlebars)
+- [ ] `{{7*7}}` simple test
+- [ ] `{{constructor.constructor('alert(1)')()}}` AngularJS classic
+- [ ] `{{$on.constructor('alert(1)')()}}` AngularJS 1.6+
+- [ ] `{{_c.constructor('alert(1)')()}}` Vue 2.x
+- [ ] Per-framework version specific bypass
+- [ ] CSP audit (czy chroni przed CSTI?)
+- [ ] Production framework version (newer = harder to bypass)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -65,9 +53,9 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 
 ### CSTI — Client-Side Template Injection
 
-- Dane uzytkownika sa **wstawiane do szablonu client-side** (Angular, Vue, Handlebars)
-- Skutek: wykonanie **JavaScript** w kontekscie strony — XSS
-- Roznica vs SSTI: kod wykonywany w **przegladarce**, nie na serwerze
+- Dane użytkownika są **wstawiane do szablonu client-side** (Angular, Vue, Handlebars)
+- Skutek: wykonanie **JavaScript** w kontekście strony — XSS
+- Różnica vs SSTI: kod wykonywany w **przeglądarce**, nie na serwerze
 
 ### Payloady per framework
 
@@ -77,58 +65,68 @@ ffuf -u "https://TARGET/page?input=FUZZ" -w Desktop/WSTG/SecLists-master/Fuzzing
 | AngularJS 1.6+ | `{{$on.constructor('alert(1)')()}}` | >= 1.6 (sandbox removed) |
 | Vue.js 2.x | `{{_c.constructor('alert(1)')()}}` | 2.x |
 | Vue.js 3.x | Sandbox — trudniejsze do eksploitacji | 3.x |
-| Handlebars | `{{#with "s" as |string|}}...{{/with}}` | Rozne |
+| Handlebars | `{{#with "s" as \|string\|}}...{{/with}}` | Różne |
 
 ### AngularJS sandbox escape — historia
 
-- AngularJS 1.0-1.5: sandbox — probowal ograniczyc wykonanie kodu
-- Sandbox byl **wielokrotnie obchodzony** — nowe bypass w kazdej wersji
-- AngularJS 1.6+: **sandbox usuniety** — `{{constructor.constructor('alert(1)')()}}` dziala bezposrednio
-- Angular (2+): nie interpretuje `{{}}` z danych uzytkownika — bezpieczne domyslnie
+- AngularJS 1.0-1.5: sandbox — próbował ograniczyć wykonanie kodu
+- Sandbox był **wielokrotnie obchodzony** — nowe bypass w każdej wersji
+- AngularJS 1.6+: **sandbox usunięty** — `{{constructor.constructor('alert(1)')()}}` działa bezpośrednio
+- Angular (2+): nie interpretuje `{{}}` z danych użytkownika — bezpieczne domyślnie
 
 ### Obrona
 
-- **Nie wstawiaj danych uzytkownika** do szablonow client-side bez enkodowania
-- Uzyj **CSP** z `script-src 'self'` — blokuje eval(), Function() (wymagane przez wiele exploitow CSTI)
-- Aktualizuj frameworki — nowsze wersje maja lepsze zabezpieczenia
-- Angular (2+) i React: domyslnie bezpieczne — enkoduja output
+- **Nie wstawiaj danych użytkownika** do szablonów client-side bez enkodowania
+- Użyj **CSP** z `script-src 'self'` — blokuje eval(), Function() (wymagane przez wiele exploitów CSTI)
+- Aktualizuj frameworki — nowsze wersje mają lepsze zabezpieczenia
+- Angular (2+) i React: domyślnie bezpieczne — enkodują output
 - Vue 3: bardziej restrykcyjny sandbox — trudniejsze do exploitacji
 
 ### Subresource Integrity (SRI) — third-party JS
 
 - `<script src="cdn.com/lib.js" integrity="sha384-..." crossorigin="anonymous">`
-- Przegladarka weryfikuje hash pliku — jesli CDN skompromitowany, plik nie zostanie zaladowany
+- Przeglądarka weryfikuje hash pliku — jeśli CDN skompromitowany, plik nie zostanie załadowany
 - Pinuj wersje: `lib@1.2.3` zamiast `lib@latest`
 - CSP: `require-sri-for script style` — wymuszaj SRI
 - Monitoruj zmiany w third-party zasobach — supply chain attacks
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **AngularJS sandbox escapes per version**: każda wersja AngularJS przed 1.6 miała różne sandbox escape. https://portswigger.net/research/dom-based-angular-sandbox-escapes
+- **Vue 3 hidden gadgets**: Vue 3 ma stricter sandbox ale gadgets w polyfills/internal APIs mogą być wykorzystywane.
+- **Handlebars custom helpers RCE**: jeśli aplikacja akceptuje user-defined helpers w Handlebars - direct RCE.
+- **Server-Side rendering w Next.js + CSTI**: SSR Next.js może render SSTI z client-controlled string → XSS via SSR.
+
+### Common pitfalls
+
+- **AngularJS 1.x w produkcji**: AngularJS jest EOL od stycznia 2022 — wszystkie aplikacje powinny migrować do Angular 2+.
+- **CSP nie blokuje CSTI**: jeśli `script-src 'self'`, CSTI nadal może wykonać `eval()` w niektórych frameworks (zależy od bypass).
+
+### Świeżynki z research
+
+- **PortSwigger AngularJS sandbox**: https://portswigger.net/research/dom-based-angular-sandbox-escapes
+- **HackTricks CSTI**: https://book.hacktricks.xyz/pentesting-web/client-side-template-injection-csti
+- **PayloadsAllTheThings CSTI**: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/CSTI
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| SRI Check | Wykrywanie brakujacych atrybutow Subresource Integrity | [GitHub](https://github.com/SolomonSklash/sri-check) |
+| DOM Invader | CSTI auto-detection | Built-in |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/15-Testing_for_Client-side_Template_Injection
+- PortSwigger AngularJS: https://portswigger.net/research/dom-based-angular-sandbox-escapes
+- HackTricks CSTI: https://book.hacktricks.xyz/pentesting-web/client-side-template-injection-csti
+- PayloadsAllTheThings CSTI: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/CSTI
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V1.3.5 | Sanitization | Verify that the application sanitizes or disables user-supplied scriptable or expression template language content, such as Markdown, CSS or XSL stylesheets, BBCode, or similar. |
-| V1.3.7 | Sanitization | Verify that the application protects against template injection attacks by not allowing templates to be built based on untrusted input. Where there is no alternative, any untrusted input being included dynamically during template creation must be sanitized or strictly validated. |
-
-
----
-
-## HackTricks Tips
-
-- **Detection**: `{{7*7}}` → jeśli `49` = CSTI confirmed
-- **AngularJS (ng-app)**: `{{constructor.constructor('alert(1)')()}}` lub `<input ng-focus=$event.view.alert('XSS')>`
-- **VueJS v2**: `{{constructor.constructor('alert(1)')()}}`
-- **VueJS v3**: `{{_openBlock.constructor('alert(1)')()}}`
-- **Mavo**: `[self.alert(1)]`
-- **AngularJS + CDN bypass CSP**: load Angular 1.x + prototype.js z `cdnjs.cloudflare.com` → `{{$on.curry.call().alert(1)}}`
+| V5.3.3 | Output Encoding (L1) | Context-aware output encoding. |
+| V14.2.1 | Dependency (L1) | Components up to date. |
+| V14.4.3 | Configuration (L1) | CSP set deny by default. |

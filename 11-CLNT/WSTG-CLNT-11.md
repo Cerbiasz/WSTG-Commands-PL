@@ -1,53 +1,38 @@
-# WSTG-CLNT-11 — Testing Web Messaging
+# WSTG-CLNT-11 — Testing Web Messaging (postMessage)
 
-## Cele
+## Cel
 
-- Assess the security of the message's origin
-- Validate that it's using safe methods and validating its input
+Wykrycie vulnerability w `window.postMessage()` API: brak walidacji `event.origin` w handler, użycie `targetOrigin: "*"` przy wysyłaniu, sinki typu innerHTML/eval/location na danych z postMessage.
 
-## KOMENDY
+> **Test mostly manual**: postMessage requires DOM Invader / static analysis JS bundles. Cross-ref WSTG-CLNT-01 markery.
 
-### Szukaj postMessage w kodzie JS
-
-```bash
-curl -s "https://TARGET/" | grep -i "postMessage\|addEventListener.*message"
-# Pobierz JS files i szukaj:
-# window.postMessage, addEventListener('message', ...)
-
-```
-
-### PoC HTML do testowania
+## Automatyzacja Nuclei
 
 ```bash
-# <html><body>
-# <iframe src="https://TARGET" id="target"></iframe>
-# <script>
-# document.getElementById('target').onload = function(){
-#   this.contentWindow.postMessage('<img src=x onerror=alert(1)>','*');
-# }
-# </script>
-# </body></html>
-
+# DOM XSS markers wykrywa postMessage handlers bez origin check
+nuclei -l burp-export.xml -im burp -t templates/wstg-clnt-01-dom-xss.yaml
 ```
 
-## KOMENDY Z WORDLISTAMI
+## Standard pentesterski — jak to robi się wzorowo
 
-### Brak dedykowanych wordlist - test manualny
+### Metodologia (5 kroków)
 
-```bash
+1. **Find handlers**: `grep -E "addEventListener\\(['\\\"]message['\\\"]" *.js`.
+2. **Origin validation check**: w każdym handler sprawdzić `if (event.origin !== ...)`.
+3. **Sink trace**: jeśli brak origin check, prześledzić `event.data` do sinks (innerHTML, eval, location).
+4. **PoC creation**: stworzyć attacker page → embed iframe target → `frames[0].postMessage(payload, "*")`.
+5. **Sender check**: w aplikacji szukać `postMessage(data, "*")` — wycieka data do dowolnej strony.
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. DevTools Console: monitoruj wiadomosci postMessage
-2. Sprawdz czy event listener waliduje event.origin
-3. Sprawdz czy dane z message sa sanityzowane przed uzyciem
-4. Testuj wstrzykiwanie HTML/JS przez postMessage
-5. Szukaj sinkow w handlerach message (innerHTML, eval, location)
-
-
----
+- [ ] Wszystkie `addEventListener('message', ...)` handlers
+- [ ] Origin validation w handler
+- [ ] event.data → innerHTML/outerHTML
+- [ ] event.data → eval/Function
+- [ ] event.data → location.href / location.assign
+- [ ] event.data → JSON.parse + access (potential prototype pollution)
+- [ ] `postMessage(data, "*")` calls (data leak risk)
+- [ ] Cross-origin postMessage logic (intentional iframe communication)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -55,60 +40,73 @@ curl -s "https://TARGET/" | grep -i "postMessage\|addEventListener.*message"
 
 ### postMessage — ryzyka
 
-- `window.postMessage()` pozwala na cross-origin komunikacje miedzy oknami/iframe
-- Jesli listener nie waliduje `event.origin` — dowolna strona moze wyslac wiadomosc
-- Dane z postMessage moga trafic do: `innerHTML` (XSS), `eval()`, `location.href` (redirect)
+- `window.postMessage()` pozwala na cross-origin komunikację między oknami/iframe
+- Jeśli listener nie waliduje `event.origin` — dowolna strona może wysłać wiadomość
+- Dane z postMessage mogą trafić do: `innerHTML` (XSS), `eval()`, `location.href` (redirect)
 
-### Obrona — wysylanie
+### Obrona — wysyłanie
 
-- **ZAWSZE** uzywaj explicit `targetOrigin`: `target.postMessage(data, "https://trusted.com")`
-- **NIGDY** `targetOrigin: "*"` — wiadomosc moze byc odczytana przez dowolna strone
-- Nie wysylaj wrazliwych danych (tokenow, PII) przez postMessage jesli to mozliwe
+- **ZAWSZE** używaj explicit `targetOrigin`: `target.postMessage(data, "https://trusted.com")`
+- **NIGDY** `targetOrigin: "*"` — wiadomość może być odczytana przez dowolną stronę
+- Nie wysyłaj wrażliwych danych (tokenów, PII) przez postMessage jeśli to możliwe
 
 ### Obrona — odbieranie
 
 - **ZAWSZE** waliduj `event.origin`: `if (event.origin !== "https://trusted.com") return;`
-- **Waliduj format danych**: sprawdz typ, dlugosc, schemat — nie ufaj danym z postMessage
-- **Sanityzuj dane** przed uzyciem w DOM — nie wstawiaj do `innerHTML`, `eval()`, `location.*`
-- Uzywaj `JSON.parse()` na danych — nie `eval()`
+- **Waliduj format danych**: sprawdź typ, długość, schemat — nie ufaj danym z postMessage
+- **Sanityzuj dane** przed użyciem w DOM — nie wstawiaj do `innerHTML`, `eval()`, `location.*`
+- Używaj `JSON.parse()` na danych — nie `eval()`
 
 ### Typowe podatne wzorce
 
 - `window.addEventListener("message", (e) => { document.body.innerHTML = e.data })` — XSS via postMessage
 - `window.addEventListener("message", (e) => { eval(e.data) })` — RCE via postMessage
 - `window.addEventListener("message", (e) => { location.href = e.data })` — redirect via postMessage
-- Brak walidacji `event.origin` — kazda strona moze wyslac payload
+- Brak walidacji `event.origin` — każda strona może wysłać payload
 
 ### Testowanie
 
-- Stworz PoC HTML: `<iframe src="TARGET"><script>frames[0].postMessage("payload","*")</script>`
+- Stwórz PoC HTML: `<iframe src="TARGET"><script>frames[0].postMessage("payload","*")</script>`
 - Wstrzyknij HTML/JS payloady przez postMessage
-- Szukaj w kodzie JS: `addEventListener("message"` — znajdz handlery i sprawdz walidacje
+- Szukaj w kodzie JS: `addEventListener("message"` — znajdź handlery i sprawdź walidację
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **postMessage origin check bypass via subdomain takeover**: handler waliduje `*.target.com` ale `wycofana.target.com` jest takeoverable → atakujący ma legitimate origin.
+- **Origin spoofing via document.domain**: aplikacja ustawiająca `document.domain = 'target.com'` zmienia origin reporting w postMessage events.
+- **Cross-frame data leak**: `postMessage(secret, "*")` w sender → atakujący w iframe receiver dostaje dane.
+- **Storage events propagate cross-tab**: `localStorage.setItem` triggers `storage` event w innych tabach tej samej origin → leak data jeśli atakujący ma open tab.
+- **MessageChannel side channel**: nowsze API `MessageChannel` ma własne security model — lokalny port communication often pominął origin checks.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Origin sprawdzany ale `===` z trusted variable**: jeśli atakujący XSS-uje pomniejszą część aplikacji, może zmienić zmienną `trustedOrigin` → bypass.
+- **Indirect sink: data → JSON.parse → access object property**: `JSON.parse(event.data).action` z prototype pollution → trigger gadget.
 
-### L2 (Standardowy)
+### Świeżynki z research
+
+- **PortSwigger postMessage Lab**: https://portswigger.net/web-security/dom-based/dom-xss-via-web-messaging
+- **HackTricks postMessage**: https://book.hacktricks.xyz/pentesting-web/postmessage-vulnerabilities
+- **DOMPurify dla event.data sanitization**: https://github.com/cure53/DOMPurify
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| DOM Invader | postMessage + DOM XSS analysis | Built-in PortSwigger |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/11-Testing_Web_Messaging
+- OWASP HTML5 Security CS: https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html
+- PortSwigger DOM XSS Web Messaging: https://portswigger.net/web-security/dom-based/dom-xss-via-web-messaging
+- HackTricks postMessage: https://book.hacktricks.xyz/pentesting-web/postmessage-vulnerabilities
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.5.5 | Browser Origin Separation | Verify that messages received by the postMessage interface are discarded if the origin of the message is not trusted, or if the syntax of the message is invalid. |
-
-
----
-
-## HackTricks Tips
-
-- **Enumerate listeners**: DevTools → `getEventListeners(window)` lub szukaj `window.addEventListener("message"`
-- **Origin check bypass — `indexOf`/`search`**: `evil.com?trusted.com` passes `indexOf("trusted.com")`
-- **Wildcard targetOrigin leak**: jeśli page framable i wysyła postMessages z `*` → zmień iframe origin
-- **`null == null` bypass**: sandboxed iframe bez `allow-popups-to-escape-sandbox` → `null` origin obu stron → `e.origin === window.origin` = true
-- **Force `e.source` null**: create iframe → postMessage → delete iframe → `e.source` = null
-- **Trusted relay gadget**: znajdź "relay" page na trusted origin forwarding URL params via postMessage
+| V14.4.3 | Configuration (L1) | CSP set deny by default + nonce/hash. |
+| V13.5.2 | (L2) | Origin validation in cross-origin messaging. |

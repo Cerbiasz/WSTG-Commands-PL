@@ -1,0 +1,162 @@
+# ============================================================================
+# expected-findings.yaml — oczekiwane podatności per testowa aplikacja
+# ============================================================================
+#
+# Lista podatności które WSTG Suite POWINNA wykryć na każdej z testowych aplikacji.
+# Używany przez run-validation.sh do oceny detection rate.
+#
+# Format:
+#   <app_name>:
+#     <wstg_test_id>:
+#       expected: true|false
+#       severity: critical|high|medium|low|info
+#       notes: ...
+# ============================================================================
+
+juiceshop:
+  base_url: "http://localhost:3000"
+
+  # WSTG-INFO
+  WSTG-INFO-02:
+    expected: true
+    severity: low
+    notes: "Express w X-Powered-By header (zazwyczaj)"
+
+  WSTG-INFO-05:
+    expected: true
+    severity: medium
+    notes: "Hidden API endpoints w JS bundles"
+
+  WSTG-INFO-08:
+    expected: true
+    severity: info
+    notes: "Angular framework markers"
+
+  # WSTG-CONF
+  WSTG-CONF-12:
+    expected: true
+    severity: medium
+    notes: "Brak proper CSP"
+
+  WSTG-CONF-14:
+    expected: true
+    severity: medium
+    notes: "Brak X-Content-Type-Options, Referrer-Policy, etc."
+
+  # WSTG-INPV
+  WSTG-INPV-01:
+    expected: true
+    severity: high
+    notes: "Reflected XSS w search functionality"
+
+  WSTG-INPV-05:
+    expected: true
+    severity: critical
+    notes: "SQLi na /rest/user/login z `'OR 1=1--`"
+
+  # WSTG-SESS
+  WSTG-SESS-02:
+    expected: true
+    severity: medium
+    notes: "Cookies bez HttpOnly flag"
+
+  # WSTG-ATHZ
+  WSTG-ATHZ-04:
+    expected: true
+    severity: high
+    notes: "IDOR na /api/Users/{id} (jeśli admin endpoints exposed)"
+
+dvwa:
+  base_url: "http://localhost:8080"
+
+  WSTG-INPV-01:
+    expected: true
+    severity: high
+    notes: "DVWA ma reflected XSS w 'XSS (Reflected)' module"
+
+  WSTG-INPV-05:
+    expected: true
+    severity: critical
+    notes: "SQL Injection module"
+
+  WSTG-INPV-11:
+    expected: true
+    severity: high
+    notes: "File Inclusion module"
+
+  WSTG-INPV-12:
+    expected: true
+    severity: critical
+    notes: "Command Injection module"
+
+  WSTG-INPV-19:
+    expected: true
+    severity: medium
+    notes: "Server-Side Request Forgery (DVWA security: low)"
+
+  WSTG-CONF-02:
+    expected: true
+    severity: medium
+    notes: "Default DVWA login page, exposed phpinfo"
+
+  WSTG-SESS-05:
+    expected: true
+    severity: medium
+    notes: "CSRF (login.php)"
+
+webgoat:
+  base_url: "http://localhost:8081/WebGoat"
+
+  WSTG-INPV-05:
+    expected: true
+    severity: critical
+    notes: "WebGoat SQL Injection lessons"
+
+  WSTG-INPV-01:
+    expected: true
+    severity: high
+    notes: "XSS lessons"
+
+  WSTG-INPV-07:
+    expected: true
+    severity: high
+    notes: "XXE lessons"
+
+  WSTG-SESS-05:
+    expected: true
+    severity: medium
+
+vampi:
+  base_url: "http://localhost:5000"
+
+  WSTG-APIT-01:
+    expected: true
+    severity: medium
+    notes: "OpenAPI/Swagger exposed at /api/help"
+
+  WSTG-ATHZ-04:
+    expected: true
+    severity: high
+    notes: "BOLA - /api/users/v1/{username} returns other users data"
+
+  WSTG-ATHN-04:
+    expected: true
+    severity: high
+    notes: "Auth bypass via JWT none algorithm"
+
+  WSTG-SESS-10:
+    expected: true
+    severity: high
+    notes: "JWT none/HS256 weak"
+
+# ============================================================================
+# How to use:
+#
+# 1. Start docker-compose: `docker-compose up -d`
+# 2. Wait for services healthy (~ 1 min)
+# 3. Run validation: `./run-validation.sh`
+# 4. Compare detected findings vs expected
+#
+# Detection rate score = (detected / expected) * 100%
+# Target: >= 80% per application
+# ============================================================================

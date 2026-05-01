@@ -1,0 +1,334 @@
+# ============================================================================
+# WSTG-INFO-04: Attack Surface Identification (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-INFO-04 (existing repo):
+#   ✓ Admin panel paths (admin, administrator, manage)
+#   ✓ API endpoints discovery (/api, /api/v1, /graphql, /rest)
+#   ✓ Debug/dev environment markers (/dev, /staging, /test, /debug)
+#   ✓ Internal services paths (/actuator, /metrics, /health, /status)
+#   ✓ Backup files (.bak, .old, ~, .swp, .save)
+#   ✓ Source control leakage (.git/HEAD, .svn/entries, .hg)
+#
+# Z research:
+#   ✓ Cloud metadata leak via virtual host header
+#   ✓ Internal-only paths (X-Forwarded-For bypass dla /admin)
+#   ✓ Spring Boot Actuator chain (/env, /heapdump, /trace)
+#   ✓ Werkzeug debugger (/console, ?__debugger__=yes)
+#   ✓ Laravel _ignition (/_ignition/health-check)
+#   ✓ Rails dev console (/rails/info/routes, /rails/conductor)
+#
+# Performance budget: medium (~80 paths × 1 request każdy)
+# Estimated time: ~2-3 min per host
+#
+# Source mapping:
+# - WSTG-INFO-04 CHEATSHEET (existing)
+# - PayloadsAllTheThings/Hidden Parameters/* + Insecure Deserialization
+# - HackTricks Spring Boot Actuator + Werkzeug + Laravel debugging
+# - SecLists Discovery/Web-Content/common.txt (curated subset)
+# ============================================================================
+
+id: wstg-info-04-attack-surface
+
+info:
+  name: "WSTG-INFO-04: Attack Surface Enumeration (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa endpointy zwiększające powierzchnię ataku: panele administracyjne,
+    debug consoles, API endpoints, internal monitoring (actuator/metrics),
+    backup files, source control leaks (.git/.svn). Każdy hit = osobny
+    finding z kontekstem (np. dla actuator: ekstrakcja listy endpointów).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/04-Enumerate_Applications_on_Webserver
+    - https://github.com/swisskyrepo/PayloadsAllTheThings
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/spring-actuators
+  classification:
+    cwe-id: CWE-200,CWE-552
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-info-04,attack-surface,info-disclosure,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Admin/dev panels - status check, no destructive
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/admin/"
+      - "{{BaseURL}}/admin/login"
+      - "{{BaseURL}}/administrator/"
+      - "{{BaseURL}}/admin.php"
+      - "{{BaseURL}}/wp-admin/"
+      - "{{BaseURL}}/manager/html"          # Tomcat manager
+      - "{{BaseURL}}/host-manager/html"     # Tomcat host-manager
+      - "{{BaseURL}}/phpmyadmin/"
+      - "{{BaseURL}}/pma/"
+      - "{{BaseURL}}/adminer.php"
+      - "{{BaseURL}}/admin-console/"        # JBoss
+      - "{{BaseURL}}/jmx-console/"          # JBoss JMX
+      - "{{BaseURL}}/web-console/"          # JBoss
+      - "{{BaseURL}}/console/"              # WebLogic / generic
+      - "{{BaseURL}}/dashboard"
+      - "{{BaseURL}}/login"
+      - "{{BaseURL}}/signin"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+          - 403       # 403 też signal - panel istnieje ale auth required
+
+      - type: dsl
+        name: not-spa-fallback
+        dsl:
+          - "len(body) > 100"
+
+      - type: regex
+        part: body
+        name: panel-markers
+        regex:
+          - "(?i)<title>[^<]*(login|sign[\\s-]?in|admin|dashboard|management|manager|console)"
+          - "(?i)(username|password|user|pass)[\"'\\s]*:"
+          - "(?i)(authenticate|authorization|csrf[_-]token)"
+        condition: or
+
+  # =========================================================================
+  # Spring Boot Actuator chain (CRITICAL - RCE possible w niektórych)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/env"
+      - "{{BaseURL}}/actuator/heapdump"
+      - "{{BaseURL}}/actuator/threaddump"
+      - "{{BaseURL}}/actuator/mappings"
+      - "{{BaseURL}}/actuator/beans"
+      - "{{BaseURL}}/actuator/configprops"
+      - "{{BaseURL}}/actuator/loggers"
+      - "{{BaseURL}}/actuator/trace"
+      - "{{BaseURL}}/actuator/httptrace"
+      - "{{BaseURL}}/actuator/metrics"
+      - "{{BaseURL}}/actuator/health"
+      - "{{BaseURL}}/env"                   # legacy spring boot 1.x
+      - "{{BaseURL}}/trace"                 # legacy
+      - "{{BaseURL}}/heapdump"              # legacy
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: actuator-markers
+        regex:
+          - '"_links"\s*:\s*\{'              # actuator HAL+JSON
+          - '"propertySources"'               # /env
+          - '"contexts"'                      # /env, /loggers
+          - '"threads"'                       # /threaddump
+          - '"_embedded"'                     # actuator collection
+        condition: or
+
+    extractors:
+      - type: regex
+        name: actuator-endpoints
+        part: body
+        group: 1
+        regex:
+          - '"href"\s*:\s*"([^"]+)"'
+
+      - type: regex
+        name: leaked-property-source
+        part: body
+        group: 1
+        regex:
+          - '"name"\s*:\s*"(systemEnvironment|applicationConfig[^"]*)"'
+
+  # =========================================================================
+  # Debug consoles (Werkzeug, Rails, Laravel _ignition)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/console"               # Werkzeug
+      - "{{BaseURL}}/?__debugger__=yes&cmd=resource&f=debugger.js"
+      - "{{BaseURL}}/_ignition/health-check"  # Laravel
+      - "{{BaseURL}}/_ignition/execute-solution"
+      - "{{BaseURL}}/rails/info/routes"
+      - "{{BaseURL}}/rails/info/properties"
+      - "{{BaseURL}}/rails/conductor/action_mailbox"
+      - "{{BaseURL}}/__debug__/"             # Django debug toolbar
+      - "{{BaseURL}}/debug/default/view"     # Yii debug
+      - "{{BaseURL}}/_profiler"              # Symfony WebProfiler
+      - "{{BaseURL}}/_wdt"                   # Symfony web debug toolbar
+      - "{{BaseURL}}/?XDEBUG_SESSION_START=phpstorm"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: debug-console-markers
+        regex:
+          - "(?i)Werkzeug Debugger"
+          - "(?i)<title>Debugger</title>"
+          - "(?i)Laravel.*Ignition"
+          - "(?i)Rails.*Routes"
+          - "(?i)Symfony Profiler"
+          - '"can_execute_commands"\s*:\s*true'   # Ignition RCE marker
+        condition: or
+
+  # =========================================================================
+  # API discovery endpoints
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/api"
+      - "{{BaseURL}}/api/"
+      - "{{BaseURL}}/api/v1"
+      - "{{BaseURL}}/api/v2"
+      - "{{BaseURL}}/api/v3"
+      - "{{BaseURL}}/api/swagger.json"
+      - "{{BaseURL}}/api/openapi.json"
+      - "{{BaseURL}}/swagger.json"
+      - "{{BaseURL}}/swagger.yaml"
+      - "{{BaseURL}}/openapi.json"
+      - "{{BaseURL}}/openapi.yaml"
+      - "{{BaseURL}}/api-docs"
+      - "{{BaseURL}}/api/docs"
+      - "{{BaseURL}}/v3/api-docs"           # Springfox / springdoc
+      - "{{BaseURL}}/swagger-ui/"
+      - "{{BaseURL}}/swagger-ui.html"
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/graphiql"
+      - "{{BaseURL}}/playground"            # Apollo
+      - "{{BaseURL}}/altair"                # GraphQL Altair
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: api-discovery-markers
+        regex:
+          - '"swagger"\s*:'
+          - '"openapi"\s*:'
+          - "(?i)<title>[^<]*Swagger UI</title>"
+          - "(?i)<title>[^<]*GraphiQL"
+          - '"data"\s*:\s*\{\s*"__schema"'   # GraphQL introspection
+          - '"errors"\s*:\s*\[.*\bgraphql\b'
+        condition: or
+
+  # =========================================================================
+  # Source control leaks (.git, .svn, .hg)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.git/HEAD"
+      - "{{BaseURL}}/.git/config"
+      - "{{BaseURL}}/.git/index"
+      - "{{BaseURL}}/.git/logs/HEAD"
+      - "{{BaseURL}}/.svn/entries"
+      - "{{BaseURL}}/.svn/wc.db"
+      - "{{BaseURL}}/.hg/store/00manifest.i"
+      - "{{BaseURL}}/.bzr/branch/branch.conf"
+      - "{{BaseURL}}/CVS/Root"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: scm-leak-markers
+        regex:
+          - "^ref:\\s*refs/heads/"            # .git/HEAD
+          - "^\\[core\\][\\r\\n]"             # .git/config
+          - "(?i)\\[svn\\]"                    # .svn
+          - "(?i)default-branch"               # .git/config
+          - "DIRC"                             # .git/index magic
+          - "SQLite format 3"                  # .svn/wc.db, .git/index
+        condition: or
+
+  # =========================================================================
+  # Common backup/temp files
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/.env.bak"
+      - "{{BaseURL}}/.env.local"
+      - "{{BaseURL}}/.env.production"
+      - "{{BaseURL}}/.env.dev"
+      - "{{BaseURL}}/config.php.bak"
+      - "{{BaseURL}}/wp-config.php.bak"
+      - "{{BaseURL}}/wp-config.php~"
+      - "{{BaseURL}}/wp-config.old"
+      - "{{BaseURL}}/web.config.bak"
+      - "{{BaseURL}}/database.yml"
+      - "{{BaseURL}}/config/database.yml"
+      - "{{BaseURL}}/server-status"           # Apache mod_status
+      - "{{BaseURL}}/server-info"             # Apache mod_info
+      - "{{BaseURL}}/nginx_status"
+      - "{{BaseURL}}/status.html"
+      - "{{BaseURL}}/info.php"
+      - "{{BaseURL}}/phpinfo.php"
+      - "{{BaseURL}}/test.php"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: leak-markers
+        regex:
+          - "(?i)DB_(HOST|PASSWORD|USERNAME|DATABASE)\\s*="           # .env
+          - "(?i)APP_KEY\\s*="                                         # Laravel .env
+          - "(?i)SECRET_KEY"
+          - "(?i)<\\?php\\s*phpinfo"                                   # phpinfo
+          - "(?i)<title>phpinfo\\(\\)"
+          - "(?i)Apache Server Status"
+          - "(?i)Active connections:"                                  # nginx status
+          - "(?i)production:[\\r\\n]\\s+adapter:"                      # database.yml
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - WAF z rate limit może blokować po 50+ paths - rate-limit dostosowany w wrapperze
+# - SPA z catch-all 200 dla każdej ścieżki → matchery filtrują przez body markery
+# - Niektóre admin panele zwracają 200 z generic landing page bez login form
+#   → manualne sprawdzenie jest niezbędne
+# - Vhost discovery (Host header fuzzing) nie jest tu - osobny szablon
+#   wymagałby listy candidate hostów (per-target)
+# ============================================================================

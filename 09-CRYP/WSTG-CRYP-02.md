@@ -1,108 +1,42 @@
 # WSTG-CRYP-02 — Testing for Padding Oracle
 
-## Cele
+## Cel
 
-- Zidentyfikowac zaszyfrowane wiadomosci z paddingiem (np. CBC mode)
-- Probowac zlamac padding w celu odszyfrowania/modyfikacji danych
+Wykrycie podatności padding oracle: aplikacja używająca CBC mode z osobną walidacją padding (PKCS#7) może wyciec rozróżnienie "zły padding" vs "zła wartość" — atakujący dekryptuje ciphertext bajt po bajcie BEZ klucza.
 
-## KOMENDY
+> **Test manual-heavy**: padding oracle wymaga 256 requestów per byte ciphertext + analizy differential responses (różny status code/timing/error message). Automatyzacja Nuclei nie ma tu zastosowania — używamy `padbuster` lub `PadBuster.pl`.
 
-### PadBuster - automatyczny atak padding oracle
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# Przyklad: atak na zaszyfrowany cookie
-padbuster TARGET/page ENCRYPTED_COOKIE_VALUE 8 -cookies "auth=ENCRYPTED_COOKIE_VALUE"
+### Metodologia (5 kroków)
 
-```
+1. **Identify CBC ciphertext**: wartości base64-encoded w cookies/URL params/hidden fields które wyglądają na ciphertext (długość % 16 == 0, base64).
+2. **Differential probe**: zmodyfikuj 1 bajt ciphertext → obserwuj response. Jeśli różny error/status/timing dla padding-error vs decryption-error = padding oracle.
+3. **PadBuster automation**: `padbuster <url> <ciphertext> <block_size> -cookies "auth=<ct>"` — automatyczna dekrypcja.
+4. **Encryption attack**: padding oracle pozwala też na ENCRYPTION arbitrary plaintext (nie tylko decryption) — sfałszowanie session token z desired role.
+5. **Verify in safer alternatives**: po identyfikacji aplikacja powinna migrować do AES-GCM (authenticated encryption).
 
-### PadBuster z blokiem 16 bajtow (AES)
+### Co MUSI być sprawdzone (8 punktów)
 
-```bash
-padbuster TARGET/page ENCRYPTED_VALUE 16
+- [ ] Identify base64/hex-encoded ciphertext w session cookies
+- [ ] Identify ciphertext w URL params (e.g., `?token=xxx`)
+- [ ] Identify ciphertext w hidden form fields
+- [ ] Differential probe: bit flip → observe response
+- [ ] Different status codes per padding error vs decryption error?
+- [ ] Different error messages per padding error?
+- [ ] Different response time?
+- [ ] PadBuster run against suspected oracle
 
-```
+### Per stack — typowe lokacje ciphertext
 
-### PadBuster - odszyfrowanie
-
-```bash
-padbuster TARGET/page ENCRYPTED_VALUE 8 -plaintext "user=admin"
-
-```
-
-### PadBuster - szyfrowanie nowej wartosci
-
-```bash
-padbuster TARGET/page ENCRYPTED_VALUE 8 -plaintext "admin=1" -encoding 0
-
-```
-
-### PadBuster z roznymi encodings
-
-```bash
-# 0 = Base64, 1 = Lowercase HEX, 2 = Uppercase HEX, 3 = .NET URL Token, 4 = WebSafe Base64
-padbuster TARGET/page ENCRYPTED_VALUE 8 -encoding 0
-padbuster TARGET/page ENCRYPTED_VALUE 8 -encoding 1
-
-```
-
-### curl - manualne testowanie roznic w odpowiedziach na padding
-
-```bash
-# Prawidlowy padding (oryginalny ciphertext):
-curl -v TARGET/page -H "Cookie: token=VALID_ENCRYPTED_VALUE"
-
-# Zmodyfikowany ostatni bajt (zly padding):
-curl -v TARGET/page -H "Cookie: token=MODIFIED_ENCRYPTED_VALUE"
-
-```
-
-### Porownanie odpowiedzi (czas, kod statusu, tresc)
-
-```bash
-# Prawidlowy padding vs nieprawidlowy padding - roznice wskazuja na padding oracle
-for i in $(seq 0 255); do
-    HEX=$(printf '%02x' $i)
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}:%{time_total}" TARGET/page -H "Cookie: token=MODIFIED_${HEX}")
-    echo "Byte $HEX: $RESPONSE"
-done
-
-```
-
-### Burp Intruder - bit-flipping atak
-
-```bash
-# 1. Przechwytuj request z zaszyfrowanym parametrem
-# 2. Wyslij do Intruder
-# 3. Ustaw pozycje na ostatni blok ciphertextu
-# 4. Uzywaj Bit Flipper payload type
-# 5. Analizuj roznice w odpowiedziach
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - atak oparty na kryptoanalizie
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj zaszyfrowane wartosci w cookies, hidden fields, URL parametrach
-```bash
-   (zwykle Base64 lub HEX, dlugosc podzielna przez 8 lub 16)
-```
-
-2. W Burp Suite -> Repeater: zmien ostatni bajt ciphertextu i obserwuj odpowiedz
-3. Porownaj odpowiedzi: rozny blad (np. 500 vs 200 vs 403) wskazuje na padding oracle
-4. Zmierz czas odpowiedzi - roznice czasowe moga wskazywac na timing-based padding oracle
-5. Sprawdz czy aplikacja uzywa CBC mode (podatny na padding oracle)
-6. Sprawdz czy istnieje ViewState (ASP.NET) - czesty cel padding oracle
-7. Testuj rozne pozycje bitow w ciphertekscie dla potwierdzenia podatnosci
-
-
----
+| Stack | Lokacja | Algorytm |
+|---|---|---|
+| ASP.NET ViewState (legacy) | `__VIEWSTATE` hidden field | AES-CBC bez MAC (legacy) → CVE-2017-9248 |
+| ASP.NET FormsAuth (legacy) | `.ASPXAUTH` cookie | AES-CBC z MAC (Encrypt-then-MAC) |
+| Java JSF | `javax.faces.ViewState` | AES-CBC |
+| Symfony | `REMEMBERME` cookie | AES-CBC w starszych wersjach |
+| Custom token | `?token=base64...` | typowy custom AES-CBC |
+| Django session | `sessionid` | nie używa CBC bezpośrednio (signed cookie) |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -110,81 +44,94 @@ done
 
 ### Authenticated Encryption — obrona przed padding oracle
 
-- **AES-GCM** (REKOMENDOWANY) — zapewnia poufnosc + integralnosc + autentycznosc w jednej operacji
-- **ChaCha20-Poly1305** — alternatywa, dobra wydajnosc na urzadzeniach bez AES-NI
+- **AES-GCM** (REKOMENDOWANY) — zapewnia poufność + integralność + autentyczność w jednej operacji
+- **ChaCha20-Poly1305** — alternatywa, dobra wydajność na urządzeniach bez AES-NI
 - **CCM** — kolejna opcja authenticated encryption
-- Authenticated modes ELIMINUJA padding oracle — nie ma osobnego kroku walidacji padding
+- Authenticated modes ELIMINUJĄ padding oracle — nie ma osobnego kroku walidacji padding
 
 ### Dlaczego CBC jest podatny
 
 - CBC (Cipher Block Chaining) wymaga osobnej walidacji padding (PKCS#7)
-- Jesli serwer rozroznia "zly padding" od "zla wartosc" — atakujacy dekryptuje ciphertext bajt po bajcie
-- Roznice moga byc: rozny kod HTTP (500 vs 200), rozny czas odpowiedzi, rozny komunikat bledu
-- **Encrypt-then-MAC**: jesli MUSISZ uzyc CBC — oblicz HMAC na ciphertext PRZED dekrypcja, zweryfikuj HMAC first
+- Jeśli serwer rozróżnia "zły padding" od "zła wartość" — atakujący dekryptuje ciphertext bajt po bajcie
+- Różnice mogą być: różny kod HTTP (500 vs 200), różny czas odpowiedzi, różny komunikat błędu
+- **Encrypt-then-MAC**: jeśli MUSISZ użyć CBC — oblicz HMAC na ciphertext PRZED dekrypcją, zweryfikuj HMAC first
 
-### Bezpieczne porownywanie MAC/HMAC
+### Bezpieczne porównywanie MAC/HMAC
 
-- Uzywaj **constant-time comparison** — obrona przed timing attacks
+- Używaj **constant-time comparison** — obrona przed timing attacks
 - Python: `hmac.compare_digest()`, Java: `MessageDigest.isEqual()`, PHP: `hash_equals()`
-- NIGDY nie porownuj hashow przez `==` lub `equals()` — timing side-channel
+- NIGDY nie porównuj hashów przez `==` lub `equals()` — timing side-channel
 
 ### Algorytmy szyfrowania symetrycznego
 
 - **AES-128** minimum, **AES-256** preferowany, z trybem **GCM** lub **CCM**
-- **NIGDY**: DES, 3DES, RC4, Blowfish (przestarzale, slabe klucze)
+- **NIGDY**: DES, 3DES, RC4, Blowfish (przestarzałe, słabe klucze)
 - **NIGDY**: tryb **ECB** — ten sam plaintext daje ten sam ciphertext (wzorce widoczne)
 
 ### Algorytmy asymetryczne
 
 - **ECC Curve25519** (preferowany) lub **RSA >= 2048 bit**
-- RSA: ZAWSZE uzywaj **OAEP padding** (Optimal Asymmetric Encryption Padding) — obrona przed known plaintext attacks
+- RSA: ZAWSZE używaj **OAEP padding** (Optimal Asymmetric Encryption Padding) — obrona przed known plaintext attacks
 - NIGDY: RSA z PKCS#1 v1.5 padding — podatny na Bleichenbacher attack
 
 ### Secure Random Number Generation
 
-- Kryptograficznie bezpieczne PRNG (CSPRNG) dla kluczy, IV, tokenow:
+- Kryptograficznie bezpieczne PRNG (CSPRNG) dla kluczy, IV, tokenów:
   - Java: `SecureRandom`, Python: `secrets`, PHP: `random_bytes()`, Node: `crypto.randomBytes()`
   - C: `getrandom(2)`, .NET: `RandomNumberGenerator`, Go: `crypto/rand`
 - **NIGDY**: `Math.random()`, `rand()`, `mt_rand()` — przewidywalne, NIE do kryptografii
 
-### Zarzadzanie kluczami
+### Zarządzanie kluczami
 
 - Przechowuj klucze ODDZIELNIE od zaszyfrowanych danych (np. klucze na filesystem, dane w DB)
-- Uzywaj **Key Encryption Key (KEK)** do szyfrowania **Data Encryption Key (DEK)** — envelope encryption
-- Rotuj klucze: po kompromitacji, po uplywie cryptoperiod, po zaszyfrowaniu duzej ilosci danych
-- Przechowuj klucze w: HSM, AWS KMS, Azure Key Vault, HashiCorp Vault — NIE w kodzie zrodlowym
+- Używaj **Key Encryption Key (KEK)** do szyfrowania **Data Encryption Key (DEK)** — envelope encryption
+- Rotuj klucze: po kompromitacji, po upływie cryptoperiod, po zaszyfrowaniu dużej ilości danych
+- Przechowuj klucze w: HSM, AWS KMS, Azure Key Vault, HashiCorp Vault — NIE w kodzie źródłowym
 - NIE hard-coduj kluczy w kodzie, NIE commituj do VCS, NIE przechowuj w env vars (phpinfo exposure)
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **POODLE attack on TLS** (CVE-2014-3566): padding oracle on SSL 3.0 / TLS 1.0. Modern TLS 1.2+ z AES-GCM eliminuje, ale legacy serwery nadal vulnerable.
+- **Lucky 13 (CVE-2013-0169)**: timing-based padding oracle na TLS 1.0/1.1 CBC mode — różnice w µs pozwalają atakującemu odzyskać plaintext przez wiele requestów.
+- **CVE-2017-9248 ASP.NET ViewState**: Telerik UI for ASP.NET → padding oracle → RCE. Klasyczny enterprise finding.
+- **Bleichenbacher attack on RSA PKCS#1 v1.5**: gdy backend rozróżnia "valid padding" vs "invalid padding" w RSA decryption — chosen ciphertext attack pozwala odzyskać plaintext (wpływa też na TLS w niektórych wariantach: ROBOT attack 2017).
+- **Manger's attack (RSA-OAEP)**: timing attack na OAEP gdy implementacja nie jest constant-time — rzadkie ale teoretyczna luka.
+- **CBC bit-flipping bez oracle**: nawet bez padding oracle, jeśli aplikacja ufa plaintext z CBC bez MAC, atakujący może modyfikować specific plaintext bytes (cookie tampering). Nie wymaga decryption — tylko XOR.
+
+### Common pitfalls
+
+- **Generic 500 ukrywający padding oracle**: aplikacja zwraca generic 500 dla wszystkich błędów ale **timing differential** wciąż wskazuje oracle. Wymagana statystyczna analiza.
+- **Encrypt-then-MAC z incorrect order**: aplikacje computing MAC PO decryption (zamiast PRZED) wciąż mają oracle.
+- **Constant-time comparison ignored in framework**: niektóre stary framework używają `==` zamiast `MessageDigest.isEqual()` → timing leak.
+
+### Świeżynki z research
+
+- **Web Padding Oracle in modern frameworks** — community pattern; mimo świadomości, custom implementations w PHP/Node nadal wprowadzają oracle.
+- **POODLE attack research**: https://www.openssl.org/~bodo/ssl-poodle.pdf
+- **PadBuster tool**: https://github.com/AonCyberLabs/PadBuster
+- **HackTricks Padding Oracle**: https://book.hacktricks.xyz/cryptography/padding-oracle-priv
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Padding Oracle Hunter | Wykrywanie i eksploatacja podatnosci Padding Oracle | [GitHub](https://github.com/AresS31/padding-oracle-hunter) |
-| Crypto Attacker | Narzedzie do atakow kryptograficznych | [GitHub](https://github.com/PortSwigger/crypto-attacker) |
+| Hackvertor | Encoding/encryption manipulation w request | [GitHub](https://github.com/PortSwigger/hackvertor) |
+| PadBuster (CLI) | Automated padding oracle exploit | [GitHub](https://github.com/AonCyberLabs/PadBuster) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/02-Testing_for_Padding_Oracle
+- OWASP Cryptographic Storage CS: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+- PadBuster: https://github.com/AonCyberLabs/PadBuster
+- POODLE attack: https://www.openssl.org/~bodo/ssl-poodle.pdf
+- HackTricks Padding Oracle: https://book.hacktricks.xyz/cryptography/padding-oracle-priv
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V11.3.1 | Encryption Algorithms | Verify that insecure block modes (e.g., ECB) and weak padding schemes (e.g., PKCS#1 v1.5) are not used. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V11.2.5 | Secure Cryptography Implementation | Verify that all cryptographic modules fail securely, and errors are handled in a way that does not enable vulnerabilities, such as Padding Oracle attacks. |
-
-
----
-
-## HackTricks Tips
-
-- **Cookie**: `padbuster <url> <encrypted_cookie> <block_size> -cookies "auth=<cookie>"`
-- **ECB mode detection**: identyczne dane użytkowników → powtórzone bloki w cookie → block-swapping
-- **CBC-MAC z null IV**: sign `administ`, sign `rator\x00\x00\x00 XOR t` → forge `administrator`
+| V6.2.5 | Cryptography (L2) | Authenticated encryption (e.g. GCM) used. |
+| V6.2.6 | Cryptography (L2) | NIST insecure modes (e.g. CBC) deprecated. |
+| V6.2.4 | Cryptography (L2) | Approved cryptographic functions used. |

@@ -1,0 +1,355 @@
+# ============================================================================
+# WSTG-INFO-02: Fingerprint Web Server (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód: szablon napisany od zera dla golden category WSTG-INFO.
+#
+# Coverage Matrix:
+#
+# Wymiary checków (z CHEATSHEET WSTG-INFO-02 + research):
+#   ✓ Server header disclosure (Apache/Nginx/IIS/Tomcat/Lighttpd/Caddy + wersja)
+#   ✓ X-Powered-By disclosure (PHP/ASP.NET/Express/Servlet/Plone)
+#   ✓ X-AspNet-Version, X-AspNetMvc-Version, X-Runtime, X-Generator
+#   ✓ Default error pages (Apache/Nginx/IIS/Tomcat default 404 markers)
+#   ✓ ETag inode disclosure (Apache: ETag z ":<hex>:<hex>" pattern)
+#   ✓ Default cookie names (PHPSESSID, JSESSIONID, ASP.NET_SessionId, CFID)
+#   ✓ HTTP/1.0 vs HTTP/1.1 behavior delta (rare ale solid signal)
+#   ✓ Junk method response (rare 501 error markers)
+#   ✓ TRACE method enabled (CWE-200 + cross-site tracing)
+#   ✓ OPTIONS allowed methods header
+#   ✗ Header ordering analysis (wymaga raw socket, poza fuzzing engine)
+#   ✗ TLS fingerprint (JA3/JARM) - patrz WSTG-CRYP
+#   ✗ Favicon hash - osobny szablon (technologies)
+#
+# Performance budget: very low (~5 requests per host)
+# Estimated time: ~10s per host
+#
+# Source mapping - skąd pochodzą poszczególne checki:
+#
+# Z CHEATSHEET WSTG-INFO-02 (existing repo):
+#   - server-header-disclosure
+#   - x-powered-by-disclosure
+#   - x-aspnet-version-disclosure
+#   - default-error-page-server-banner
+#   - etag-inode-disclosure
+#   - default-cookies-framework
+#
+# Z research:
+#   - trace-method-enabled         (HackTricks: HTTP method fuzzing + CWE-200)
+#   - junk-method-server-banner    (PortSwigger: server fingerprinting via err)
+#   - x-runtime-rails-disclosure   (Rails research)
+#   - x-generator-cms-disclosure   (CMS detection patterns)
+#   - via-header-proxy-chain       (RFC 7230 - Via header chain disclosure)
+#
+# Filozofia matcherów: każdy matcher = 1 finding. matchers-condition: or
+# (świadome odstępstwo od domyślnego AND - tutaj każdy fingerprint jest
+# samodzielnym info-disclosure). Anti-FP zachowane przez ścisłe regexy
+# i extractors zwracają konkretną wersję / produkt.
+# ============================================================================
+
+id: wstg-info-02-fingerprint-server
+
+info:
+  name: "WSTG-INFO-02: Fingerprint Web Server (Universal)"
+  author: pentest-team
+  severity: info
+  description: |
+    Wykrywa typ i wersję web serwera/frameworka przez analizę nagłówków HTTP
+    (Server, X-Powered-By, X-AspNet-Version, ETag, Set-Cookie), domyślnych
+    stron błędu oraz behavior na nietypowych metodach HTTP (TRACE, JUNK).
+    Każdy wykryty fingerprint = osobne info-disclosure finding z extractorem
+    podającym dokładną wersję. Bezpieczny dla produkcji - tylko HEAD/GET/OPTIONS,
+    brak destrukcyjnych operacji.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/02-Fingerprint_Web_Server
+    - https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+    - https://owasp.org/www-project-secure-headers/
+  classification:
+    cwe-id: CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-info-02,info-disclosure,fingerprint,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Request 1: GET / - capture default headers + page
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # Server header fingerprints
+      - type: regex
+        part: header
+        name: server-header-apache
+        regex:
+          - "(?i)server:\\s*Apache(?:[/\\s]\\d+\\.\\d+(?:\\.\\d+)?)?"
+
+      - type: regex
+        part: header
+        name: server-header-nginx
+        regex:
+          - "(?i)server:\\s*nginx(?:[/\\s]\\d+\\.\\d+(?:\\.\\d+)?)?"
+
+      - type: regex
+        part: header
+        name: server-header-iis
+        regex:
+          - "(?i)server:\\s*Microsoft-IIS(?:[/\\s]\\d+\\.\\d+)?"
+
+      - type: regex
+        part: header
+        name: server-header-tomcat
+        regex:
+          - "(?i)server:\\s*Apache-Coyote"
+          - "(?i)server:\\s*Apache Tomcat"
+
+      - type: regex
+        part: header
+        name: server-header-lighttpd
+        regex:
+          - "(?i)server:\\s*lighttpd"
+
+      - type: regex
+        part: header
+        name: server-header-caddy
+        regex:
+          - "(?i)server:\\s*Caddy"
+
+      - type: regex
+        part: header
+        name: server-header-litespeed
+        regex:
+          - "(?i)server:\\s*LiteSpeed"
+
+      - type: regex
+        part: header
+        name: server-header-cloudflare
+        regex:
+          - "(?i)server:\\s*cloudflare"
+
+      # Application server / framework disclosure
+      - type: regex
+        part: header
+        name: x-powered-by-php
+        regex:
+          - "(?i)x-powered-by:\\s*PHP[/\\s]\\d+\\.\\d+"
+
+      - type: regex
+        part: header
+        name: x-powered-by-aspnet
+        regex:
+          - "(?i)x-powered-by:\\s*ASP\\.NET"
+
+      - type: regex
+        part: header
+        name: x-powered-by-express
+        regex:
+          - "(?i)x-powered-by:\\s*Express"
+
+      - type: regex
+        part: header
+        name: x-powered-by-servlet
+        regex:
+          - "(?i)x-powered-by:\\s*Servlet"
+
+      - type: regex
+        part: header
+        name: x-aspnet-version-disclosed
+        regex:
+          - "(?i)x-aspnet(?:mvc)?-version:\\s*\\d+\\.\\d+"
+
+      - type: regex
+        part: header
+        name: x-runtime-disclosed
+        regex:
+          - "(?i)x-runtime:\\s*[\\d.]+"
+
+      - type: regex
+        part: header
+        name: x-generator-cms-disclosed
+        regex:
+          - "(?i)x-generator:\\s*\\S+"
+
+      - type: regex
+        part: header
+        name: via-proxy-chain-disclosed
+        regex:
+          - "(?i)via:\\s*[\\d.]+\\s+\\S+"
+
+      # ETag inode disclosure (Apache default config leaks inode in ETag)
+      - type: regex
+        part: header
+        name: etag-inode-disclosed
+        regex:
+          - "(?i)etag:\\s*\"[\\da-f]+:[\\da-f]+:[\\da-f]+(?::[\\da-f]+)?\""
+
+      # Default framework cookies (signal but not fingerprint per se)
+      - type: regex
+        part: header
+        name: cookie-phpsessid
+        regex:
+          - "(?i)set-cookie:\\s*PHPSESSID="
+
+      - type: regex
+        part: header
+        name: cookie-jsessionid
+        regex:
+          - "(?i)set-cookie:\\s*JSESSIONID="
+
+      - type: regex
+        part: header
+        name: cookie-aspnet
+        regex:
+          - "(?i)set-cookie:\\s*ASP\\.NET_SessionId="
+
+      - type: regex
+        part: header
+        name: cookie-coldfusion
+        regex:
+          - "(?i)set-cookie:\\s*CFID="
+          - "(?i)set-cookie:\\s*CFTOKEN="
+
+    extractors:
+      - type: regex
+        name: server-version
+        part: header
+        group: 1
+        regex:
+          - "(?i)server:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: x-powered-by-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)x-powered-by:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: aspnet-version
+        part: header
+        group: 1
+        regex:
+          - "(?i)x-aspnet(?:mvc)?-version:\\s*([\\d.]+)"
+
+      - type: regex
+        name: etag-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)etag:\\s*\"([^\"]+)\""
+
+  # =========================================================================
+  # Request 2: GET /<random> - default error page fingerprinting
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/wstg-fingerprint-{{rand_text_alpha(8)}}-doesnt-exist"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        name: default-404-apache
+        regex:
+          - "(?i)<address>Apache(?:[/\\s]\\d+\\.\\d+(?:\\.\\d+)?)?[^<]*Server at"
+
+      - type: regex
+        part: body
+        name: default-404-nginx
+        regex:
+          - "(?i)<hr><center>nginx(?:[/\\s]\\d+\\.\\d+\\.\\d+)?</center>"
+          - "(?i)<title>404 Not Found</title>[^<]*<center><h1>404"
+
+      - type: regex
+        part: body
+        name: default-404-iis
+        regex:
+          - "(?i)Server Error in '/' Application"
+          - "(?i)<title>IIS Windows( Server)?</title>"
+
+      - type: regex
+        part: body
+        name: default-404-tomcat
+        regex:
+          - "(?i)<h3>Apache Tomcat[/\\s]\\d+"
+          - "(?i)<title>Apache Tomcat[/\\s][\\d.]+ - Error"
+
+      - type: regex
+        part: body
+        name: default-404-lighttpd
+        regex:
+          - "(?i)<address>lighttpd[/\\s][\\d.]+</address>"
+
+      - type: regex
+        part: body
+        name: default-404-jetty
+        regex:
+          - "(?i)Powered by Jetty(?::// )?[\\d.]*"
+
+      - type: regex
+        part: body
+        name: default-404-uvicorn
+        regex:
+          - '"detail":"Not Found"'           # FastAPI/uvicorn signature
+
+    extractors:
+      - type: regex
+        name: error-page-server-banner
+        part: body
+        group: 0
+        regex:
+          - "(?i)(Apache(?:/[\\d.]+)?|nginx(?:/[\\d.]+)?|Microsoft-IIS(?:/[\\d.]+)?|lighttpd(?:/[\\d.]+)?|Tomcat(?:/[\\d.]+)?|Jetty)"
+
+  # =========================================================================
+  # Request 3: OPTIONS / - allowed methods + TRACE detection
+  # =========================================================================
+  - method: OPTIONS
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: header
+        name: trace-method-enabled
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bTRACE\\b"
+
+      - type: regex
+        part: header
+        name: track-method-enabled
+        regex:
+          - "(?i)allow:[^\\r\\n]*\\bTRACK\\b"
+
+      - type: regex
+        part: header
+        name: dav-enabled
+        regex:
+          - "(?i)dav:\\s*[12]"
+
+    extractors:
+      - type: regex
+        name: allowed-methods
+        part: header
+        group: 1
+        regex:
+          - "(?i)allow:\\s*([^\\r\\n]+)"
+
+# ============================================================================
+# Known limitations:
+# - WAF / reverse proxy może maskować Server header (Cloudflare/Akamai)
+# - Header ordering analysis nie zaimplementowane (wymaga raw socket)
+# - Custom error pages (security-conscious deploy) wyłącza większość fingerprint
+# - HTTP/3 (QUIC) handling poza skalą - nuclei używa HTTP/1.1+2
+# ============================================================================

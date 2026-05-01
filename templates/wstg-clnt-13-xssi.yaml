@@ -1,0 +1,94 @@
+# ============================================================================
+# WSTG-CLNT-13: Cross Site Script Inclusion (XSSI) (Universal)
+# ============================================================================
+#
+# Coverage: detekcja JavaScript / JSON endpoints które są loadable cross-origin
+# poprzez `<script src="">` i ujawniają sensitive data. Klasyczny atak na
+# starsze API które zwracają JSONP-style lub naked JSON arrays.
+# ============================================================================
+
+id: wstg-clnt-13-xssi
+
+info:
+  name: "WSTG-CLNT-13: Cross Site Script Inclusion - XSSI (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa endpointy zwracające JS/JSON które są loadable cross-origin
+    przez `<script src="">`. Sensitive data w response = atakujący może
+    wykraść przez prototype pollution lub global function override.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/13-Testing_for_Cross_Site_Script_Inclusion
+    - https://book.hacktricks.xyz/pentesting-web/xssi-cross-site-script-inclusion
+  classification:
+    cwe-id: CWE-829
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:N/A:N
+    cvss-score: 4.7
+  tags: dast,wstg,wstg-v42-clnt-13,xssi,burp-history
+
+variables:
+  attacker_origin: "https://wstg-{{rand_text_alpha(6)}}.example.com"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    headers:
+      Origin: "{{attacker_origin}}"
+      Referer: "{{attacker_origin}}/"
+
+    matchers-condition: or
+    matchers:
+      # Naked JSON array (XSSI classic - JSON array prefixed with [ to start)
+      - type: dsl
+        name: naked-json-array
+        dsl:
+          - "regex(\"(?i)content-type:\\\\s*application/json\", header)"
+          - "regex(\"^\\\\s*\\\\[\", body)"
+          - "!regex(\"^\\\\s*\\\\[\\\\s*\\\\]\", body)"      # not empty array
+        condition: and
+
+      # JSONP-style endpoint (callback parameter)
+      - type: dsl
+        name: jsonp-callback-pattern
+        dsl:
+          - "regex(\"(?i)content-type:\\\\s*(?:application/javascript|text/javascript)\", header)"
+          - "regex(\"^\\\\w+\\\\(\", body)"
+        condition: and
+
+      # JSON without anti-XSSI prefix (e.g. `)]}',\n` Google-style)
+      - type: dsl
+        name: json-without-anti-xssi-prefix
+        dsl:
+          - "regex(\"(?i)content-type:\\\\s*application/json\", header)"
+          - "regex(\"^\\\\s*\\\\{\", body)"
+          - "!regex(\"^\\\\)\\\\]\\\\}'\", body)"
+          - "!regex(\"^while\\\\(1\\\\);\", body)"
+          - "!regex(\"^for\\\\(;;\\\\);\", body)"
+        condition: and
+
+      # JS file with global variable assignment
+      - type: regex
+        part: body
+        name: global-variable-with-sensitive-data
+        regex:
+          - "(?i)^\\s*(?:var|let|const)\\s+\\w+\\s*=\\s*\\{[^}]*?(?:user|email|token|api_key|csrf|session)"
+
+      # JS file z function returning sensitive data
+      - type: regex
+        part: body
+        name: js-function-returning-sensitive
+        regex:
+          - "(?i)return\\s*\\{[^}]*?(?:user|email|password|token)"
+
+# ============================================================================
+# Known limitations:
+# - XSSI to dziedziczna luka - większość modern frameworków używa anti-XSSI
+#   prefixów. Findings głównie w legacy Angular.js / starszych SPA.
+# - Pełna eksploitacja wymaga PoC w HTML z `<script src="...">` na evil.com
+#   + global function override - manual test.
+# - JSON Hijacking (legacy IE) - już nie istnieje w nowoczesnych browserach.
+# ============================================================================

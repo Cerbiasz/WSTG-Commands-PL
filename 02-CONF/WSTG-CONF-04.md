@@ -1,212 +1,79 @@
 # WSTG-CONF-04 — Review Old Backup and Unreferenced Files
 
-## Cele
+## Cel
 
-- Find unreferenced files with sensitive information
-- Discover backup files, old versions, archives left on the server
-- Identify development/staging artifacts accessible in production
+Identyfikacja plików backup, niereferencjonowanych zasobów (orphaned files), starych wersji aplikacji w katalogu webowym. Klasyczny pivot — dev zostawia `index.php.bak` po refactor, atakujący czyta surowy kod.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### ffuf - brute-force plikow i katalogow
+Test pokrywa się z **WSTG-CONF-03** (file extensions) i **WSTG-INFO-04** (attack surface). Używamy tych samych szablonów:
 
 ```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -mc 200,301,302,403 -o output_ffuf_common.json
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/big.txt -mc 200,301,302,403 -o output_ffuf_big.json
+# WSTG-CONF-03 dla typowych backup paths
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-03-file-extensions.yaml
 
+# WSTG-INFO-04 dla unreferenced admin / config / source paths
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-info-04-attack-surface.yaml
+
+# Oficjalne backup discovery
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/backups/
+
+# Brute-force comprehensive
+ffuf -u https://target/FUZZ \
+     -w resources/seclists/Discovery/Web-Content/raft-large-files.txt \
+     -mc 200,206 -fs <baseline_size>
 ```
 
-### gobuster
+## Coverage Matrix
 
-```bash
-gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x bak,old,zip,tar,tar.gz,gz,7z,rar,sql,db,conf,config,log,txt -o output_gobuster_backup.txt
+| Wymiar | Pokryte przez | Notka |
+|---|---|---|
+| Backup pliki (.bak/.old/~) | WSTG-CONF-03 | nasz szablon |
+| Niereferencjonowane admin paths | WSTG-INFO-04 | nasz szablon |
+| Niereferencjonowane source files | WSTG-CONF-03 | wzorce z source disclosure |
+| Stare wersje aplikacji w `/old/` | manual + ffuf | brute-force discovery |
+| Orphaned uploads w `/uploads/` | manual | wymaga directory listing lub guess |
+| `Copy of`, Windows artifacts | manual | rzadkie, ale możliwe |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### dirsearch
+### Metodologia (5 kroków)
 
-```bash
-dirsearch -u https://TARGET -e bak,old,zip,tar,gz,sql,log,conf -o output_dirsearch_backup.txt
+1. **Sample test**: WSTG-CONF-03 + WSTG-INFO-04 templates dla typowych wzorców.
+2. **Catalog brute-force**: ffuf z wordlistą `/old/`, `/backup/`, `/archive/`, `/temp/`, `/dev/`, `/staging/`.
+3. **Pattern fuzzing**: dla każdej znanej nazwy pliku (z robots/sitemap/crawl) test warianty `<filename>.bak`, `<filename>~`, `<filename>.old`, `Copy of <filename>`.
+4. **Wayback diff**: porównanie aktualnego sitemap z historical Wayback URLs — różnice ujawniają usunięte pliki które nadal mogą być serwowane.
+5. **Date-stamped backups**: `db.sql.20240101`, `backup_2024-08.zip` — wzorce używane przez admins.
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-### feroxbuster - rekursywny brute-force
-
-```bash
-feroxbuster -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x bak,old,zip,tar.gz,sql,conf --depth 3 -o output_feroxbuster.txt
-
-```
-
-### Sprawdzenie typowych plikow backupowych
-
-```bash
-curl -sI https://TARGET/backup.zip | head -1
-curl -sI https://TARGET/backup.tar.gz | head -1
-curl -sI https://TARGET/backup.sql | head -1
-curl -sI https://TARGET/db.sql | head -1
-curl -sI https://TARGET/database.sql | head -1
-curl -sI https://TARGET/dump.sql | head -1
-curl -sI https://TARGET/site.zip | head -1
-curl -sI https://TARGET/www.zip | head -1
-curl -sI https://TARGET/TARGET.zip | head -1
-curl -sI https://TARGET/TARGET.tar.gz | head -1
-curl -sI https://TARGET/old/ | head -1
-curl -sI https://TARGET/backup/ | head -1
-curl -sI https://TARGET/bak/ | head -1
-curl -sI https://TARGET/temp/ | head -1
-curl -sI https://TARGET/tmp/ | head -1
-curl -sI https://TARGET/test/ | head -1
-
-```
-
-### Sprawdzenie plikow konfiguracyjnych
-
-```bash
-curl -sI https://TARGET/.env | head -1
-curl -sI https://TARGET/.git/config | head -1
-curl -sI https://TARGET/.git/HEAD | head -1
-curl -sI https://TARGET/.svn/entries | head -1
-curl -sI https://TARGET/.DS_Store | head -1
-curl -sI https://TARGET/.htaccess | head -1
-curl -sI https://TARGET/web.config | head -1
-curl -sI https://TARGET/wp-config.php.bak | head -1
-curl -sI https://TARGET/config.php.bak | head -1
-
-```
-
-### Sprawdzenie Common DB backups
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/Common-DB-Backups.txt -mc 200 -o output_ffuf_db_backups.json
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists raft-large-files
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-files.txt -mc 200 -o output_ffuf_raft_files.json
-
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-files-lowercase.txt -mc 200 -o output_ffuf_raft_files_lower.json
-
-```
-
-### SecLists Common-DB-Backups
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/Common-DB-Backups.txt -mc 200 -o output_ffuf_db_backup.json
-
-```
-
-### Bug-Bounty-Wordlists backup files
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/backup_files_only.txt -mc 200 -o output_ffuf_bbw_backup_only.json
-
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/backup_files_with_path.txt -mc 200 -o output_ffuf_bbw_backup_path.json
-
-```
-
-### Bug-Bounty-Wordlists all leaked files
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/all-files-leaked.txt -mc 200 -o output_ffuf_bbw_leaked.json
-
-```
-
-### fuzzdb predictable filepaths
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/raft-large-files.txt -mc 200 -o output_ffuf_fuzzdb_raft_files.json
-
-```
-
-### fuzzdb backup extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Backup.txt -mc 200 -o output_ffuf_fuzzdb_backup_ext.json
-
-```
-
-### fuzzdb password file locations
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/password-file-locations/Passwords.txt -mc 200 -o output_ffuf_fuzzdb_passwords.json
-
-```
-
-### fuzzdb UnixDotfiles
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/UnixDotfiles.txt -mc 200 -o output_ffuf_fuzzdb_dotfiles.json
-
-```
-
-### Bug-Bounty-Wordlists dotfiles
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/dotfiles.txt -mc 200 -o output_ffuf_bbw_dotfiles.json
-
-```
-
-### Bug-Bounty-Wordlists env
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/env.txt -mc 200 -o output_ffuf_bbw_env.json
-
-```
-
-### Bug-Bounty-Wordlists log
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/log.txt -mc 200 -o output_ffuf_bbw_log.json
-
-```
-
-### Duza wordlista ogolna
-
-```bash
-gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/DirBuster-2007_directory-list-2.3-medium.txt -x bak,old,zip,sql -o output_gobuster_dirbuster.txt
-
-```
-
-### OneListForAll
-
-```bash
-ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshort.txt -mc 200 -o output_ffuf_onelistforall.json
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz typowe nazwy backupow: backup, bak, old, temp, test, dev, staging
-2. Sprawdz rozszerzenia: .bak, .old, .orig, .save, .swp, .zip, .tar.gz, .sql
-3. Szukaj plikow .git/, .svn/, .DS_Store, .env
-4. Sprawdz czy istnieje kopia strony z data w nazwie (backup_2024, site_old)
-5. W Burp Suite: przejrzyj odpowiedzi 403 - moze mozna ominac ograniczenie
-6. Sprawdz directory listing na znalezionych katalogach
-7. Szukaj plikow archiwum z nazwa domeny (TARGET.zip, TARGET.tar.gz)
-8. Sprawdz WebDAV i metody PUT/MOVE jesli aktywne
-
-
----
+- [ ] WSTG-CONF-03 paths (backup extensions)
+- [ ] `/old/`, `/backup/`, `/archive/`, `/dev/`, `/staging/` — directory existence
+- [ ] Date-stamped variants per known filename
+- [ ] Wayback Machine: `gau target.com | grep -E "\.(bak|old|sql|zip)$"`
+- [ ] Common log paths (`/log/`, `/logs/`, `/error.log`)
+- [ ] Sample/example files (`/example/`, `/test/`, `/sample/`)
+- [ ] Documentation paths (`/docs/`, `/README.md`, `/CHANGELOG.md`)
+- [ ] `Copy of <filename>` Windows convention
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
 
-### Pliki backup i artefakty — co szukac
+### Pliki backup i artefakty — co szukać
 
-| Wzorzec nazwy | Przyklad | Opis |
+| Wzorzec nazwy | Przykład | Opis |
 |--------------|---------|------|
-| `file.ext.bak` | `config.php.bak` | Kopia zapasowa z kodem zrodlowym |
+| `file.ext.bak` | `config.php.bak` | Kopia zapasowa z kodem źródłowym |
 | `file.ext~` | `index.php~` | Backup edytora (vim, emacs) |
 | `file.ext.old` | `web.config.old` | Stara wersja |
 | `#file.ext#` | `#config.py#` | Emacs auto-save |
 | `.file.ext.swp` | `.config.php.swp` | Vim swap file |
-| `file.ext.YYYYMMDD` | `db.sql.20240101` | Backup z data |
-| `file.ext.orig` | `settings.py.orig` | Oryginal przed zmiana |
+| `file.ext.YYYYMMDD` | `db.sql.20240101` | Backup z datą |
+| `file.ext.orig` | `settings.py.orig` | Oryginał przed zmianą |
 | `Copy of file.ext` | `Copy of web.config` | Windows copy |
 | `file.ext.dist` | `config.yml.dist` | Dystrybucyjny szablon |
 
@@ -220,39 +87,50 @@ ffuf -u https://TARGET/FUZZ -w Desktop/WSTG/OneListForAll-main/onelistforallshor
 
 ### Obrona
 
-- Nigdy nie tworzonych backupow w katalogach webowych
+- Nigdy nie tworzyć backupów w katalogach webowych
 - Dodaj do `.gitignore` pliki tymczasowe i backup
-- Regularnie skanuj katalogu webowe pod katem niepotrzebnych plikow
-- Blokuj dostep do katalogow VCS (`.git`, `.svn`) na serwerze
+- Regularnie skanuj katalogi webowe pod kątem niepotrzebnych plików
+- Blokuj dostęp do katalogów VCS (`.git`, `.svn`) na serwerze
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **Wayback Machine "phantom files"**: pliki usunięte z aktualnej aplikacji ale wciąż serwowane przez backend (route bez delete). `gau target.com | grep -v "<current_paths>"` pokazuje phantom URLs.
+- **Backup w nietypowych lokalizacjach**: `/var/log/`, `/etc/backup/` — teoretycznie poza webroot, ale błędne aliasy `/log/` lub volume mount mogą je ujawnić.
+- **`.dist` / `.example` configs**: `composer.json.dist`, `config/parameters.yml.dist` — szkielety konfiguracji często ujawniają nazwy ENV vars i strukturę.
+- **Compressed sitemap**: `sitemap.xml.gz` zawierający ścieżki do orphaned files — Skanery Burp domyślnie nie dekompresują.
+- **HTTP/1.0 vs HTTP/1.1 difference**: niektóre serwery dla HTTP/1.0 pokazują listę katalogów nawet gdy HTTP/1.1 jest zhardenowany.
+
+### Common pitfalls
+
+- **WAF rule blocking `/old`, `/backup`**: bypass przez encoding (`/o%6Cd`) lub case (`/Old`).
+- **Catch-all 200**: SPA może serwować index.html dla każdego path → matchery wymagają body content patterns.
+- **Skanner ignorujący 206 Partial Content**: niektóre serwery zwracają 206 dla zip files — Nuclei domyślnie nie traktuje jako finding.
+
+### Świeżynki z research
+
+- **Massive `.git/` exposure surveys** — community reports; tysiące orgs ze zniepublicznych repo deploys.
+- **Wayback CDX API** — programatyczny pull historical URLs: `https://web.archive.org/cdx/search/cdx?url=target.com/*&output=json`
+- **PortSwigger Academy — Information disclosure labs**: https://portswigger.net/web-security/information-disclosure
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Backup Finder | Wyszukiwanie plikow backup, starych i tymczasowych | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
-| CTFHelper | Skanowanie wrazliwych plikow (.swp, .git) na serwerze | [GitHub](https://github.com/unamer/CTFHelper) |
-| Interesting Files Scanner | Wykrywanie interesujacych plikow i katalogow | [GitHub](https://github.com/modzero/interestingFileScanner) |
+| Backup Finder | Wyszukiwanie plików backup | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| Wayback Burp | Pull historical URLs | community ext |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/04-Review_Old_Backup_and_Unreferenced_Files_for_Sensitive_Information
+- Wayback Machine CDX API: https://archive.org/help/wayback_api.php
+- gau (GetAllUrls): https://github.com/lc/gau
+- waybackurls: https://github.com/tomnomnom/waybackurls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.4.1 | Unintended Information Leakage | Verify that the application is deployed either without any source control metadata, including the .git or .svn folders, or in a way that these folders are inaccessible both externally and to the application itself. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V13.4.5 | Unintended Information Leakage | Verify that documentation (such as for internal APIs) and monitoring endpoints are not exposed unless explicitly intended. |
-
-### L3 (Zaawansowany)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V13.4.7 | Unintended Information Leakage | Verify that the web tier is configured to only serve files with specific file extensions to prevent unintentional information, configuration, and source code leakage. |
+| V14.1.5 | Configuration (L2) | Build pipeline removes development artifacts before deployment. |
+| V13.4.7 | Information Leakage (L3) | Web tier serves only specific file extensions. |

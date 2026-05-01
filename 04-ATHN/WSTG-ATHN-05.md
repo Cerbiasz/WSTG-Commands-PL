@@ -1,125 +1,33 @@
 # WSTG-ATHN-05 — Testing for Vulnerable Remember Password
 
-## Cele
+## Cel
 
-- Zwalidowac zarzadzanie sesjami dla funkcji "zapamietaj mnie"
-- Sprawdzic bezpieczenstwo tokena remember-me
-- Ocenic czy token moze byc odgadniety lub ponownie uzyty
+Audyt funkcji "Remember Me": czy token jest cryptographically random (CSPRNG), jednorazowy, hashowany w DB, ma rozsądny TTL (7-30 dni), invalidowany przy logout/zmianie hasła.
 
-## KOMENDY
+> **Test mostly manual**: wymaga interakcji z aplikacją.
 
-### Logowanie z opcja remember me i analiza cookies
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testpass","remember":true}' -c cookies_remember.txt -v 2>&1
+### Metodologia (5 kroków)
 
-```
+1. **Token analysis**: po zaznaczeniu "Remember Me", sprawdź cookie - czy looks random? Czy zawiera username/ID w plaintext (Base64-decode)?
+2. **Token TTL**: sprawdź `Max-Age` lub `Expires` cookie - <= 30 dni?
+3. **Cookie attributes**: Secure + HttpOnly + SameSite=Lax/Strict?
+4. **Token rotation**: po użyciu, czy token się zmienia? (Rotation defense vs replay).
+5. **Invalidation**: po logout, czy stary token nadal działa? Po zmianie hasła?
 
-### Logowanie bez remember me i porownanie cookies
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testpass","remember":false}' -c cookies_normal.txt -v 2>&1
-
-```
-
-### Porownanie cookies
-
-```bash
-diff cookies_remember.txt cookies_normal.txt
-
-```
-
-### Analiza tokena remember-me
-
-```bash
-cat cookies_remember.txt
-
-```
-
-### Dekodowanie Base64 tokena remember-me
-
-```bash
-echo "REMEMBER_ME_TOKEN_VALUE" | base64 -d
-
-```
-
-### Dekodowanie JWT tokena
-
-```bash
-echo "JWT_TOKEN_VALUE" | cut -d'.' -f1 | base64 -d 2>/dev/null; echo
-echo "JWT_TOKEN_VALUE" | cut -d'.' -f2 | base64 -d 2>/dev/null; echo
-
-```
-
-### Sprawdzenie atrybutow cookie
-
-```bash
-curl -s -I "https://TARGET/" -b cookies_remember.txt 2>&1 | grep -i "Set-Cookie"
-
-```
-
-### Proba uzycia starego tokena po zmianie hasla
-
-```bash
-curl -s "https://TARGET/api/profile" -b cookies_remember.txt -v
-
-```
-
-### Proba uzycia tokena po wylogowaniu
-
-```bash
-curl -s "https://TARGET/api/logout" -b cookies_remember.txt -v
-curl -s "https://TARGET/api/profile" -b cookies_remember.txt -v
-
-```
-
-### Test przewidywalnosci tokena - wielokrotne logowanie
-
-```bash
-for i in $(seq 1 5); do echo "--- Proba $i ---"; curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testpass","remember":true}' -v 2>&1 | grep -i "set-cookie"; done
-
-```
-
-### Sprawdzenie czasu wygasniecia cookie
-
-```bash
-curl -s -X POST "https://TARGET/api/login" -H "Content-Type: application/json" -d '{"username":"testuser","password":"testpass","remember":true}' -v 2>&1 | grep -iE "expires|max-age"
-
-```
-
-### Proba manipulacji tokenem
-
-```bash
-curl -s "https://TARGET/api/profile" -b "remember_me=admin" -v
-curl -s "https://TARGET/api/profile" -b "remember_me=1" -v
-curl -s "https://TARGET/api/profile" -H "Cookie: remember_token=MODIFIED_TOKEN" -v
-
-```
-
-### Sprawdzenie flag bezpieczenstwa cookie
-
-```bash
-curl -s -v "https://TARGET/api/login" -X POST -d '{"username":"testuser","password":"testpass","remember":true}' -H "Content-Type: application/json" 2>&1 | grep -iE "httponly|secure|samesite"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak wordlist - test logiczny analizy tokena remember-me
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zaloguj sie z opcja "Zapamietaj mnie" i przeanalizuj ustawione cookies w DevTools
-2. Sprawdz czy cookie remember-me ma flagi: Secure, HttpOnly, SameSite
-3. W Burp Suite sprawdz wartosc tokena - czy jest losowy czy przewidywalny
-4. Przetestuj wielokrotne logowanie i porownaj generowane tokeny
-5. Sprawdz czy token zawiera dane uzytkownika (username, ID) w jawnej formie
-6. Przetestuj czy zmiana hasla uniewaznaia token remember-me
-7. Sprawdz czas wygasniecia cookie (czy nie jest zbyt dlugi)
-8. Przetestuj czy token dziala po wylogowaniu z innej sesji
-
-
----
+- [ ] Token: minimum 128-bit entropy
+- [ ] Token: nie zawiera username/ID w plaintext
+- [ ] Cookie Secure flag
+- [ ] Cookie HttpOnly flag
+- [ ] Cookie SameSite=Lax/Strict
+- [ ] TTL <= 30 days
+- [ ] Token rotation per use
+- [ ] Logout invalidates token
+- [ ] Password change invalidates wszystkie tokens
+- [ ] DB stores hashed token (nie raw)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -127,59 +35,62 @@ curl -s -v "https://TARGET/api/login" -X POST -d '{"username":"testuser","passwo
 
 ### Remember Me — bezpieczna implementacja
 
-- Token remember-me musi byc **kryptograficznie losowy** (CSPRNG) — minimum 128 bitow entropii
-- Token NIE MOZE zawierac danych uzytkownika w jawnej formie (username, ID, email)
-- Przechowuj token **zahaszowany** po stronie serwera (bcrypt/SHA-256) — jak haslo
-- Kazdy token musi byc **jednorazowy** — po uzyciu generuj nowy (token rotation)
-- Ustaw rozsadny czas wygasniecia: 7-30 dni (NIE bezterminowo)
+- Token remember-me musi być **kryptograficznie losowy** (CSPRNG) — minimum 128 bitów entropii
+- Token NIE MOŻE zawierać danych użytkownika w jawnej formie (username, ID, email)
+- Przechowuj token **zahaszowany** po stronie serwera (bcrypt/SHA-256) — jak hasło
+- Każdy token musi być **jednorazowy** — po użyciu generuj nowy (token rotation)
+- Ustaw rozsądny czas wygaśnięcia: 7-30 dni (NIE bezterminowo)
 
-### Cookie remember-me — atrybuty bezpieczenstwa
+### Cookie remember-me — atrybuty bezpieczeństwa
 
-- **Secure**: przesylaj TYLKO przez HTTPS
-- **HttpOnly**: niedostepny z JavaScript — chroni przed XSS
+- **Secure**: przesyłaj TYLKO przez HTTPS
+- **HttpOnly**: niedostępny z JavaScript — chroni przed XSS
 - **SameSite=Lax/Strict**: ochrona przed CSRF
-- **Path=/**: ograniczony do niezbednych sciezek
-- Uzyj prefixu `__Secure-` lub `__Host-` dla dodatkowej ochrony
-- Cookie remember-me powinno byc **oddzielne** od session cookie
+- **Path=/**: ograniczony do niezbędnych ścieżek
+- Użyj prefixu `__Secure-` lub `__Host-` dla dodatkowej ochrony
+- Cookie remember-me powinno być **oddzielne** od session cookie
 
-### Uniewaznanie tokenow
+### Unieważnianie tokenów
 
-- **Zmiana hasla**: uniewaznij WSZYSTKIE tokeny remember-me dla uzytkownika
-- **Wylogowanie**: uniewaznij token powiazany z biezaca sesja
-- **Wykrycie kompromitacji**: uniewaznij wszystkie tokeny i sesje
-- Implementuj "Wyloguj ze wszystkich urzadzen" — kasuje wszystkie tokeny
-- Przechowuj timestamp utworzenia tokenu — odrzucaj tokeny starsze niz zmiana hasla
+- **Zmiana hasła**: unieważnij WSZYSTKIE tokeny remember-me dla użytkownika
+- **Wylogowanie**: unieważnij token powiązany z bieżącą sesją
+- **Wykrycie kompromitacji** (ujawniony login z innej geolokalizacji): unieważnij tokeny
+- Pozwól użytkownikowi przejrzeć aktywne sesje i wylogować je manualnie
 
-### Czego NIE robic
+## Pentesterskie deep dive
 
-- NIE przechowuj tokenow w localStorage/sessionStorage — podatne na XSS
-- NIE koduj danych uzytkownika w tokenie (Base64 username:timestamp) — przewidywalne
-- NIE uzywaj stalego tokenu ktory sie nie zmienia — brak rotacji = wyzsze ryzyko
-- NIE implementuj remember-me dla kont o wysokich uprawnieniach (admin) — lub wymagaj MFA
-- NIE uzywaj tego samego tokenu na wiele urzadzen — kazde urzadzenie powinno miec wlasny token
+### Mniej znane techniki
 
-### Testowanie
+- **Remember-me token rotation race**: jeśli aplikacja rotuje token at use, race condition może użyć stary token przed invalidation.
+- **Predictable token via weak PRNG**: niektóre legacy aplikacje używają Math.random() lub time-based - przewidywalne.
+- **Token exfil via XSS na non-HttpOnly cookie**: jeśli flag missing, każdy XSS = stolen.
+- **Cross-app cookie scope**: cookie z `Domain=.target.com` może być stolen przez kompromis subdomeny.
 
-- Porownaj tokeny z wielu logowan — czy sa losowe i unikalne?
-- Sprawdz czy token dziala po: zmianie hasla, wylogowaniu, wygasnieciu sesji
-- Sprawdz czy mozna manipulowac tokenem (zmien bajty i przetestuj)
-- Zweryfikuj atrybuty cookie (Secure, HttpOnly, SameSite, Expires)
-- Sprawdz czy token zawiera zrozumiale dane (Base64 decode, JWT decode)
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **Token contains user ID Base64**: dekodowanie ujawnia user ID → atakujący zna którego user impersonate.
+- **No expiry**: token "Remember Me forever" = długoterminowy attack window.
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Świeżynki z research
 
----
+- **PortSwigger Authentication labs**: https://portswigger.net/web-security/authentication
+- **OWASP Session Management CS**: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| Cookie Editor | Token analysis |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.2.7 | Password Security | Verify that "paste" functionality, browser password helpers, and external password managers are permitted. |
-| V7.2.2 | Fundamental Session Management Security | Verify that the application uses either self-contained or reference tokens that are dynamically generated for session management, i.e. not using static API secrets and keys. |
-| V7.2.3 | Fundamental Session Management Security | Verify that if reference tokens are used to represent user sessions, they are unique and generated using a cryptographically secure pseudo-random number generator (CSPRNG) and possess at least 128 bits of entropy. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/05-Testing_for_Vulnerable_Remember_Password
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V3.4.1 | Session token entropy ≥ 64 bits. |
+| V3.5.2 | Remember me uses random token, not password derivative. |
+| V3.5.3 | Tokens invalidated on logout/password change. |

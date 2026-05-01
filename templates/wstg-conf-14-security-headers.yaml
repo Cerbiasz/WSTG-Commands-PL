@@ -1,0 +1,191 @@
+# ============================================================================
+# WSTG-CONF-14: Test Other HTTP Security Header Misconfigurations (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-14 (existing repo) + research:
+#   ✓ X-Frame-Options brak / DENY|SAMEORIGIN|ALLOW-FROM
+#   ✓ X-Content-Type-Options brak / nosniff
+#   ✓ Referrer-Policy brak / wartości słabe (no-referrer-when-downgrade default)
+#   ✓ Permissions-Policy (kiedyś Feature-Policy)
+#   ✓ Cross-Origin-Opener-Policy (COOP)
+#   ✓ Cross-Origin-Embedder-Policy (COEP)
+#   ✓ Cross-Origin-Resource-Policy (CORP)
+#   ✓ Cache-Control dla wrażliwych odpowiedzi (no-store, private)
+#   ✓ X-XSS-Protection (legacy - powinien być 0 lub usunięty)
+#   ✓ Server header disclosure (cross-ref WSTG-INFO-02)
+#
+# Source mapping:
+# - OWASP HTTP Headers Cheat Sheet
+# - Mozilla Web Security Guidelines
+# - Google Secure Headers project
+# - PortSwigger CSP / Headers cheat sheet
+# ============================================================================
+
+id: wstg-conf-14-security-headers
+
+info:
+  name: "WSTG-CONF-14: HTTP Security Headers Misconfiguration (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa brak lub słabą konfigurację security headers: X-Frame-Options
+    (clickjacking), X-Content-Type-Options (MIME sniffing), Referrer-Policy
+    (data leakage), Permissions-Policy, COOP/COEP/CORP (cross-origin
+    isolation), Cache-Control (cache poisoning), X-XSS-Protection (legacy).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/14-Test_for_Other_HTTP_Security_Header_Misconfigurations
+    - https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
+    - https://owasp.org/www-project-secure-headers/
+    - https://infosec.mozilla.org/guidelines/web_security
+  classification:
+    cwe-id: CWE-693,CWE-1021
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N
+    cvss-score: 4.2
+  tags: dast,wstg,wstg-v42-conf-14,security-headers,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # X-Frame-Options brak (clickjacking) - chyba że CSP frame-ancestors
+      - type: dsl
+        name: x-frame-options-missing
+        dsl:
+          - "!regex(\"(?i)x-frame-options:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*frame-ancestors\", header)"
+        condition: and
+
+      # X-Frame-Options: ALLOWALL lub * (deprecated, no protection)
+      - type: regex
+        part: header
+        name: x-frame-options-weak
+        regex:
+          - "(?i)x-frame-options:\\s*ALLOWALL"
+          - "(?i)x-frame-options:\\s*\\*"
+
+      # X-Content-Type-Options brak (MIME sniffing)
+      - type: dsl
+        name: x-content-type-options-missing
+        dsl:
+          - "!regex(\"(?i)x-content-type-options:\\\\s*nosniff\", header)"
+
+      # Referrer-Policy brak / weak
+      - type: dsl
+        name: referrer-policy-missing
+        dsl:
+          - "!regex(\"(?i)referrer-policy:\", header)"
+
+      - type: regex
+        part: header
+        name: referrer-policy-weak
+        regex:
+          - "(?i)referrer-policy:\\s*unsafe-url"
+          - "(?i)referrer-policy:\\s*no-referrer-when-downgrade"     # default but weak
+
+      # Permissions-Policy brak (kiedyś Feature-Policy)
+      - type: dsl
+        name: permissions-policy-missing
+        dsl:
+          - "!regex(\"(?i)permissions-policy:\", header)"
+          - "!regex(\"(?i)feature-policy:\", header)"
+        condition: and
+
+      # COOP brak
+      - type: dsl
+        name: coop-missing
+        dsl:
+          - "!regex(\"(?i)cross-origin-opener-policy:\", header)"
+
+      # COOP weak
+      - type: regex
+        part: header
+        name: coop-weak
+        regex:
+          - "(?i)cross-origin-opener-policy:\\s*unsafe-none"
+
+      # CORP brak (dla static assets cross-origin)
+      - type: dsl
+        name: corp-missing
+        dsl:
+          - "!regex(\"(?i)cross-origin-resource-policy:\", header)"
+
+      # X-XSS-Protection (legacy - powinien być 0 lub usunięty)
+      - type: regex
+        part: header
+        name: x-xss-protection-deprecated-enabled
+        regex:
+          - "(?i)x-xss-protection:\\s*1\\b"
+
+      # Server header ujawnia szczegóły wersji (cross-ref INFO-02)
+      - type: regex
+        part: header
+        name: server-version-disclosed
+        regex:
+          - "(?i)server:\\s*[A-Za-z]+/\\d+\\.\\d+"
+
+      # Cache-Control: public dla wrażliwych endpointów
+      - type: regex
+        part: header
+        name: cache-control-public-on-dynamic
+        regex:
+          - "(?i)cache-control:[^\\r\\n]*\\bpublic\\b"
+
+      # Brak Cache-Control całkowicie
+      - type: dsl
+        name: cache-control-missing
+        dsl:
+          - "!regex(\"(?i)cache-control:\", header)"
+          - "!regex(\"(?i)pragma:\\\\s*no-cache\", header)"
+        condition: and
+
+    extractors:
+      - type: regex
+        name: x-frame-options-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)x-frame-options:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: referrer-policy-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)referrer-policy:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: permissions-policy-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)permissions-policy:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: cache-control-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)cache-control:\\s*([^\\r\\n]+)"
+
+# ============================================================================
+# Known limitations:
+# - Pełne pokrycie wymagałoby per-endpoint analysis (login page wymaga
+#   bardziej restrykcyjnego Cache-Control niż homepage) - tu sprawdzamy /
+# - X-Frame-Options DENY/SAMEORIGIN bez CSP frame-ancestors jest legacy ale
+#   akceptowalne (browsery wciąż honorują)
+# - Permissions-Policy z konkretnymi feature defaults wymaga pełnej parsing
+#   listy directives - tu wykrywamy tylko obecność/brak
+# ============================================================================

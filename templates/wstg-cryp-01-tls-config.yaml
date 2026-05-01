@@ -1,0 +1,139 @@
+# ============================================================================
+# WSTG-CRYP-01: Testing for Weak Transport Layer Security (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CRYP-01 (existing repo):
+#   ✓ HSTS poprawność (cross-ref WSTG-CONF-07)
+#   ✓ Mixed content na HTTPS pages (HTTP resources)
+#   ✓ Secure flag na cookies
+#   ✓ HTTPS jako default (HTTP redirect)
+#
+# Z research:
+#   ✓ HTTP/HTTPS reachability (test obu portów)
+#   ✓ Cookie attributes (cross WSTG-SESS-02)
+#
+# Filozofia: szablon HTTP-side (z perspektywy Nuclei). Pełna analiza TLS
+# (cipher suites, protocol versions, certificate chain) wymaga dedicated
+# tooling: nuclei ssl/ templates + testssl.sh + sslyze. Tu agregujemy
+# HTTP-level findings.
+# ============================================================================
+
+id: wstg-cryp-01-tls-config
+
+info:
+  name: "WSTG-CRYP-01: Transport Layer Security HTTP-side (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa HTTP-side wskaźniki słabej TLS configuration: brak HSTS, mixed
+    content (HTTPS strona ładuje HTTP zasoby), cookies bez Secure flag,
+    HTTP endpoint serwujący login form. Pełna analiza TLS (protocols,
+    cipher suites) - patrz testssl.sh / nuclei ssl/ templates.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/01-Testing_for_Weak_Transport_Layer_Security
+    - https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+    - https://cheatsheetseries.owasp.org/cheatsheets/TLS_Cipher_String_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-319,CWE-326,CWE-327
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N
+    cvss-score: 7.4
+  tags: dast,wstg,wstg-v42-cryp-01,tls,transport-security,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # HTTPS endpoint - HSTS verification + mixed content
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # HSTS missing (na HTTPS)
+      - type: dsl
+        name: hsts-missing-on-https
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "!regex(\"(?i)strict-transport-security:\", header)"
+        condition: and
+
+      # Mixed content - HTTPS page ładuje HTTP resources
+      - type: dsl
+        name: mixed-content-active
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "regex(\"(?i)<(?:script|iframe|link|object|embed)[^>]*src=[\\\"']http://\", body)"
+        condition: and
+
+      - type: dsl
+        name: mixed-content-passive
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "regex(\"(?i)<(?:img|video|audio|source)[^>]*src=[\\\"']http://[^/\\\"']+\", body)"
+        condition: and
+
+      # Cookie bez Secure flag (na HTTPS)
+      - type: dsl
+        name: cookie-without-secure-flag
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "regex(\"(?i)set-cookie:\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*;\\\\s*Secure\", header)"
+        condition: and
+
+      # Cookie bez HttpOnly flag (cross WSTG-SESS-02)
+      - type: dsl
+        name: cookie-without-httponly-flag
+        dsl:
+          - "regex(\"(?i)set-cookie:\", header)"
+          - "!regex(\"(?i)set-cookie:[^\\\\r\\\\n]*;\\\\s*HttpOnly\", header)"
+        condition: and
+
+      # CSP brak `upgrade-insecure-requests` (auto-upgrade HTTP → HTTPS)
+      - type: dsl
+        name: csp-no-upgrade-insecure
+        dsl:
+          - "regex(\"(?i)content-security-policy:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*upgrade-insecure-requests\", header)"
+        condition: and
+
+    extractors:
+      - type: regex
+        name: hsts-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)strict-transport-security:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: mixed-content-resources
+        part: body
+        group: 1
+        regex:
+          - "(?i)src=[\"']?(http://[^\"'\\s>]+)"
+
+      - type: regex
+        name: cookies-without-secure
+        part: header
+        group: 1
+        regex:
+          - "(?i)set-cookie:\\s*([A-Za-z_.]+)=[^;]+(?:;(?![^;]*Secure)[^;]+)*$"
+
+# ============================================================================
+# Known limitations:
+# - Pełna analiza TLS (protocols, ciphers, cert chain) wymaga TLS-level
+#   scanner: testssl.sh, nuclei ssl/ templates, sslyze. Ten szablon HTTP-side.
+# - Mixed content może być dynamicznie generated (JS) - nie wykrywany
+#   bez headless browser
+# - Cert pinning, certificate transparency, OCSP - poza zakresem
+# ============================================================================

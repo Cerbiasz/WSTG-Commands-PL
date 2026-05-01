@@ -1,151 +1,99 @@
 # WSTG-BUSL-03 — Test Integrity Checks
 
-## Cele
+## Cel
 
-- Przegladnac obsluge danych pod katem kontroli integralnosci
-- Sprobowac nieautoryzowanej modyfikacji danych
+Audyt integrity checks: HMAC validation per cena/ID/order, JWT signature, ViewState MAC validation, server-side price recalculation, idempotency keys.
 
-## KOMENDY
+> **Test manual-only**.
 
-### Testowanie modyfikacji danych w tranzycie
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -v -X POST TARGET/api/payment -H "Content-Type: application/json" \
-  -d '{"amount": 1, "currency": "USD", "item": "product_1"}'
-# Zmien amount na 0.01:
-curl -v -X POST TARGET/api/payment -H "Content-Type: application/json" \
-  -d '{"amount": 0.01, "currency": "USD", "item": "product_1"}'
+### Metodologia (5 kroków)
 
-```
+1. **Identify signed parameters**: HMAC, JWT, encrypted blobs w request body.
+2. **Tampering test**: zmień value, zostaw signature → akceptowane?
+3. **Constant-time comparison**: timing diff dla różnych signatures (Burp Repeater + monitor latency).
+4. **JWT test**: alg=none, signature change.
+5. **Server-side validation**: czy serwer recalculates prices niezależnie od client value?
 
-### Testowanie HMAC/signature bypass
+### Co MUSI być sprawdzone (8 punktów)
 
-```bash
-# Jezeli request zawiera podpis:
-curl -v -X POST TARGET/api/transfer \
-  -H "X-Signature: ORIGINAL_SIGNATURE" \
-  -d '{"from": "user1", "to": "attacker", "amount": 1000}'
-# Testuj z pustym podpisem:
-curl -v -X POST TARGET/api/transfer \
-  -H "X-Signature: " \
-  -d '{"from": "user1", "to": "attacker", "amount": 1000}'
-# Testuj bez podpisu:
-curl -v -X POST TARGET/api/transfer \
-  -d '{"from": "user1", "to": "attacker", "amount": 1000}'
-
-```
-
-### Testowanie manipulacji checksum
-
-```bash
-curl -v -X POST TARGET/api/upload \
-  -F "file=@test.txt" -F "checksum=0000000000000000"
-
-```
-
-### Testowanie modyfikacji JWT payload
-
-```bash
-# Dekoduj JWT:
-echo "JWT_PAYLOAD_PART" | base64 -d
-# Zmien dane (np. role: admin), zakoduj ponownie, wyslij z oryginalnym podpisem:
-curl -v TARGET/api/admin -H "Authorization: Bearer MODIFIED_JWT"
-
-```
-
-### Testowanie modyfikacji kolejnosci parametrow
-
-```bash
-curl -v -X POST TARGET/api/order -d "step=3&item=1&verified=true"
-curl -v -X POST TARGET/api/order -d "item=1&verified=true&step=3"
-
-```
-
-### Testowanie modyfikacji ViewState (ASP.NET)
-
-```bash
-# Jezeli ViewState nie jest podpisany/zaszyfrowany:
-curl -v -X POST TARGET/page -d "__VIEWSTATE=MODIFIED_VALUE&__EVENTVALIDATION=ORIGINAL"
-
-```
-
-### Testowanie modyfikacji cookies integralnosci
-
-```bash
-curl -v TARGET/dashboard -H "Cookie: user=admin; role=superadmin; verified=true"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na logice i kryptografii
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Suite -> Proxy: przechwytuj requesty i modyfikuj dane (ceny, ilosci, ID)
-2. Sprawdz czy aplikacja weryfikuje integralnosc danych po stronie serwera
-3. Szukaj HMAC/signature w requestach - testuj ich usuniecie lub modyfikacje
-4. Testuj modyfikacje zaszyfrowanych/zakodowanych parametrow
-5. Sprawdz czy ViewState jest podpisany (ASP.NET MAC validation)
-6. Testuj replay attack - wyslij stary request ponownie
-7. Sprawdz czy checksumy plikow sa weryfikowane po stronie serwera
-8. Testuj modyfikacje danych miedzy krokami workflow (np. zmiana ceny miedzy koszykiem a platnoscia)
-
-
----
+- [ ] HMAC sygnatura validated server-side
+- [ ] HMAC constant-time comparison (timing attack defense)
+- [ ] JWT signature validated (cross WSTG-SESS-10)
+- [ ] ViewState MAC validation (ASP.NET)
+- [ ] Server-side price recalculation
+- [ ] Replay protection (nonce/timestamp)
+- [ ] Idempotency keys
+- [ ] Order_id integrity (cannot be tampered)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Cryptographic_Storage_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-### Kontrola integralnosci — mechanizmy
+### Kontrola integralności — mechanizmy
 
 - **HMAC** (Hash-based Message Authentication Code): podpis danych kluczem serwera
-- **Podpisy cyfrowe**: RSA/ECDSA — silniejsze niz HMAC, asymetryczne
+- **Podpisy cyfrowe**: RSA/ECDSA — silniejsze niż HMAC, asymetryczne
 - **Checksums**: SHA-256 hash danych — wykrywa modyfikacje (ale nie chroni bez klucza)
-- **JWT z podpisem**: RS256/ES256 — integralnosc payload potwierdzona podpisem
+- **JWT z podpisem**: RS256/ES256 — integralność payload potwierdzona podpisem
 
-### Co chronić integralnoscią
+### Co chronić integralnością
 
-- **Ceny i kwoty**: serwer musi przeliczac ceny — nie ufac wartosciom od klienta
-- **Dane sesji**: ViewState (ASP.NET), cookie-based sessions — musza byc podpisane
+- **Ceny i kwoty**: serwer musi przeliczać ceny — nie ufać wartościom od klienta
+- **Dane sesji**: ViewState (ASP.NET), cookie-based sessions — muszą być podpisane
 - **Tokeny**: JWT, reset tokens, invite tokens — podpisane i weryfikowane
 - **Parametry workflow**: step number, status, verified flags — server-side state machine
-- **Pliki**: checksumy przy upload/download — weryfikuj integralnosc
+- **Pliki**: checksumy przy upload/download — weryfikuj integralność
 
-### Typowe ataki na integralnosc
+### Typowe ataki na integralność
 
-- **Modyfikacja ceny w tranzycie**: zmien `amount: 100` na `amount: 0.01` w Burp
-- **JWT manipulation**: zmien payload (role: admin) bez znajomosci klucza (alg:none attack)
-- **ViewState tampering**: jesli MAC validation wylaczony — modyfikuj dane
-- **Replay attack**: ponowne wyslanie prawidlowego requestu (np. podwojna platnosc)
-- **Parameter pollution**: `price=100&price=0.01` — ktora wartosc uzyje backend?
+- **Modyfikacja ceny w tranzycie**: zmień `amount: 100` na `amount: 0.01` w Burp
+- **JWT manipulation**: zmień payload (role: admin) bez znajomości klucza (alg:none attack)
+- **ViewState tampering**: jeśli MAC validation wyłączony — modyfikuj dane
+- **Replay attack**: ponowne wysłanie prawidłowego requestu (np. podwójna płatność)
+- **Hash collision**: dla MD5/SHA-1 - znajdź 2 inputs z tym samym hash
 
-### Obrona
+### Defense
 
-- Podpisuj HMAC-em wszystkie dane ktorych integralnosc jest krytyczna
-- Weryfikuj podpis server-side PRZED przetworzeniem danych
-- Uzyj **idempotency tokens** — zapobiegaj replay attacks
-- Implementuj **server-side state machine** — nie polegaj na parametrach kroku od klienta
-- Loguj i alertuj na nieudane weryfikacje integralnosci — moze wskazywac na atak
+- **HMAC** z silnym secret (≥256 bit entropy)
+- **Constant-time comparison**: `hmac.compare_digest()` (Python), `MessageDigest.isEqual()` (Java)
+- **Strong hash algorithm**: SHA-256+, NIE MD5/SHA-1
+- **Server-side state**: nie ufaj danym z client cookies/JWT for state
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Length extension attack**: jeśli aplikacja używa `MD5(secret + data)` zamiast HMAC → atakujący extends data without knowing secret.
+- **Hash collision**: MD5 collisions możliwe (Flame malware exploited this).
+- **Timing attack na HMAC compare**: jeśli `==` zamiast constant-time, atakujący leaks expected HMAC byte-by-byte.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **HMAC validated ale nie integralność wszystkich pól**: tylko part of body covered.
+- **Stale signature ważne forever**: brak timestamp w signature payload.
 
-### L2 (Standardowy)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.3 | Business Logic Security | Verify that transactions are being used at the business logic level such that either a business logic operation succeeds in its entirety or it is rolled back to the previous correct state. |
-| V11.3.3 | Encryption Algorithms | Verify that encrypted data is protected against unauthorized modification preferably by using an approved authenticated encryption method or by combining an approved encryption method with an approved MAC algorithm. |
+- **PortSwigger Insecure Deserialization Lab**: https://portswigger.net/web-security/deserialization
+- **HackTricks Length Extension**: https://book.hacktricks.xyz/cryptography/hash-length-extension-attack
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis |
+|---|---|
+| Hackvertor | HMAC manipulation |
+| HashID | Hash type identification |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/03-Test_Integrity_Checks
+- OWASP Cryptographic Storage CS: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V6.4.1 | Integrity protection on critical operations. |
+| V6.2.5 | Authenticated encryption (GCM). |

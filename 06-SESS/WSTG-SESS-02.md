@@ -1,122 +1,50 @@
 # WSTG-SESS-02 — Testing for Cookies Attributes
 
-## Cele
+## Cel
 
-- Sprawdzenie poprawnej konfiguracji atrybutow bezpieczenstwa cookies
-- Weryfikacja flag: Secure, HttpOnly, SameSite, Path, Domain, Expires
+Audyt cookies attributes: Secure (HTTPS only), HttpOnly (no JS), SameSite (CSRF), Domain/Path scope, `__Host-`/`__Secure-` prefixes, Max-Age/Expires.
 
-## KOMENDY
-
-### Sprawdzenie wszystkich atrybutow cookies w odpowiedzi
+## Automatyzacja Nuclei
 
 ```bash
-curl -s -I TARGET | grep -i "set-cookie"
-
+nuclei -l burp-export.xml -im burp -t templates/wstg-sess-02-cookie-attributes.yaml
 ```
 
-### Szczegolowa analiza atrybutow cookies
+Wykrywa session/auth cookies bez Secure/HttpOnly/SameSite, SameSite=None bez Secure, broad Domain wildcard, brak __Secure-/__Host- prefixu.
 
-```bash
-curl -s -I TARGET/login -d "user=test&pass=test" 2>&1 | grep -i "set-cookie"
+## Coverage Matrix
 
-```
+| Wymiar | Pokryte |
+|---|---|
+| Secure flag | ✓ |
+| HttpOnly flag | ✓ |
+| SameSite attribute | ✓ |
+| SameSite=None bez Secure | ✓ |
+| Domain wildcard | ✓ |
+| __Secure-/__Host- prefix | ✓ |
+| Max-Age/Expires audit | manual |
 
-### Sprawdzenie flagi Secure
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "secure"
+### Metodologia (4 kroki)
 
-```
+1. **Cookie inventory**: per page, list wszystkich Set-Cookie headers.
+2. **Per cookie audit**: każda flaga obecna i poprawnie ustawiona?
+3. **Per cookie type**: session/auth/csrf - różne wymagania (np. CSRF token cookie czasem bez HttpOnly dla JS read).
+4. **Cross-domain test**: czy cookie wysyłane z innego origin (CORS+credentials)?
 
-### Sprawdzenie flagi HttpOnly
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "httponly"
-
-```
-
-### Sprawdzenie flagi SameSite
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "samesite"
-
-```
-
-### Sprawdzenie atrybutu Path
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "path"
-
-```
-
-### Sprawdzenie atrybutu Domain
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "domain"
-
-```
-
-### Sprawdzenie atrybutu Expires/Max-Age
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -iE "expires|max-age"
-
-```
-
-### Pelna analiza cookies z logowaniem
-
-```bash
-curl -v -c cookies.txt TARGET/login -d "user=test&pass=test" 2>&1 | grep -i "set-cookie"
-
-```
-
-### Sprawdzenie czy sesyjne cookie nie jest persistentne
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -iE "expires|max-age"
-# Cookie sesyjne NIE powinno miec atrybutu Expires/Max-Age
-
-```
-
-### Sprawdzenie cookie przez HTTP (bez SSL) - test flagi Secure
-
-```bash
-curl -s -I http://TARGET | grep -i "set-cookie"
-
-```
-
-### Testowanie cookie prefixow (__Secure- i __Host-)
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -E "__Secure-|__Host-"
-
-```
-
-### Nmap skrypt do sprawdzenia cookies
-
-```bash
-nmap -p 443 --script http-cookie-flags TARGET
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak specyficznych wordlist dla tego testu.
-# Test opiera sie na inspekcji atrybutow cookies w odpowiedziach HTTP.
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Otworz DevTools (F12) -> Application -> Cookies - sprawdz atrybuty kazdego cookie
-2. Sprawdz czy cookie sesyjne ma flage Secure (tylko HTTPS)
-3. Sprawdz czy cookie sesyjne ma flage HttpOnly (niedostepne z JS)
-4. Sprawdz atrybut SameSite (powinien byc Strict lub Lax)
-5. Sprawdz czy Path jest ograniczony do wymaganego katalogu
-6. Sprawdz czy Domain nie jest zbyt szeroki (np. .example.com zamiast app.example.com)
-7. Sprawdz czy cookie sesyjne nie ma atrybutu Expires (powinno wygasac z sesja przegladarki)
-8. W konsoli przegladarki wykonaj document.cookie - cookie z HttpOnly nie powinno byc widoczne
-
-
----
+- [ ] Session cookie: Secure + HttpOnly + SameSite=Strict/Lax
+- [ ] Auth cookie: same as session
+- [ ] CSRF token cookie: Secure + SameSite (HttpOnly opcjonalne jeśli JS reads)
+- [ ] SameSite=None ZAWSZE z Secure
+- [ ] `__Host-` prefix dla session cookies (bezpieczne wymuszanie Path=/)
+- [ ] Domain nie wildcard (.com, .net) - too broad
+- [ ] Max-Age rozsądne (session: brak/krótki, persistent: 7-30 dni)
+- [ ] Cookie nie zawiera sensitive data plaintext
+- [ ] Session cookie regenerated po login
+- [ ] Cookie cleared po logout
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -124,116 +52,67 @@ nmap -p 443 --script http-cookie-flags TARGET
 
 ### Secure flag
 
-- Cookie wysylane TYLKO przez HTTPS — przegladarka nigdy nie wysle go przez HTTP
-- **KRYTYCZNE** nawet jesli serwer nie slucha na porcie 80 — atakujacy MitM moze sproofowac HTTP serwer
-- Cookie bez Secure flag moze byc przechwycone w otwartej sieci Wi-Fi
+- Cookie wysyłane TYLKO przez HTTPS — przeglądarka nigdy nie wyśle go przez HTTP
+- **KRYTYCZNE** nawet jeśli serwer nie słucha na porcie 80 — atakujący MitM może sproofować HTTP serwer
+- Cookie bez Secure flag może być przechwycone w otwartej sieci Wi-Fi
 
 ### HttpOnly flag
 
-- Cookie niedostepne dla JavaScript (`document.cookie` nie zwroci go)
-- **Ochrona przed XSS** — nawet jesli atakujacy wstrzyknie JS, nie moze wykrasc session cookie
+- Cookie niedostępne dla JavaScript (`document.cookie` nie zwróci go)
+- **Ochrona przed XSS** — nawet jeśli atakujący wstrzyknie JS, nie może wykraść session cookie
 - UWAGA: NIE chroni przed CSRF, session fixation ani innymi atakami
 
 ### SameSite attribute
 
-- `SameSite=Strict` — cookie NIE wysylane w cross-site requests (najsilniejsza ochrona CSRF)
-  - Moze powodowac problemy UX (np. link z emaila nie zaloguje uzytkownika)
-- `SameSite=Lax` — cookie wysylane tylko w top-level navigations (GET) — dobry kompromis
-- `SameSite=None; Secure` — cookie wysylane w cross-site (wymagane do third-party cookies)
-- Domyslna wartosc w nowoczesnych przegladarkach: `Lax` (jesli nie ustawiono)
-
-### Domain attribute
-
-- **Nie ustawiaj Domain** jesli cookie ma byc dostepne tylko z dokladnej domeny
-- `Domain=.example.com` — cookie dostepne ze WSZYSTKICH subdomen (ryzyko: subdomain takeover)
-- Im wezszy zakres Domain — tym bezpieczniej
-
-### Path attribute
-
-- Ogranicz Path do minimum wymaganego zakresu (np. `/app/` zamiast `/`)
-- UWAGA: Path NIE jest mechanizmem bezpieczenstwa — JavaScript z innej sciezki moze odczytac cookie
-- Traktuj jako dodatkowa warstwe, nie primary defense
-
-### Expires / Max-Age
-
-- Cookie sesyjne: **NIE ustawiaj** Expires/Max-Age — cookie wygasa z zamknieciem przegladarki
-- Persistent cookies: ustaw najkrotszy mozliwy czas wygasniecia
-- Dlugie sesje (Remember Me) = wieksze ryzyko — wymagaj re-autentykacji dla krytycznych akcji
+- `SameSite=Strict` — cookie NIE wysyłane w cross-site requests (najsilniejsza ochrona CSRF)
+  - Może powodować problemy UX (np. link z emaila nie zaloguje użytkownika)
+- `SameSite=Lax` — cookie wysyłane w top-level navigations (GET) ale nie w cross-site POST/iframe (rekomendowany default)
+- `SameSite=None` — cookie wysyłane zawsze, WYMAGA Secure flag (Chrome blokuje bez Secure)
 
 ### Cookie Prefixes
 
-- `__Secure-` prefix: cookie MUSI miec flage `Secure` — przegladarka odrzuci je bez Secure
-- `__Host-` prefix: cookie MUSI miec `Secure`, `Path=/`, i NIE moze miec `Domain` — najsilniejsza izolacja
-- `__Host-` zapobiega subdomain fixation i ogranicza scope do dokladnej domeny
+- **`__Secure-`**: wymusza Secure + ustawione tylko z HTTPS
+- **`__Host-`**: wymusza Secure + brak Domain attr + Path=/ — najsilniejsza izolacja
+- Przykład: `Set-Cookie: __Host-Session=abc; Secure; HttpOnly; SameSite=Strict; Path=/`
 
-### Dodatkowe praktyki
+### Domain i Path scope
 
-- Ustaw WSZYSTKIE atrybuty bezpieczenstwa jednoczesnie — brak jednego moze zniweczyc ochrone
-- Testuj w roznych przegladarkach — implementacja SameSite moze sie roznic
-- Monitoruj Set-Cookie headery w odpowiedziach — reverse proxy/CDN moze je modyfikowac
+- **Domain** zbyt szeroki = cookie wysyłane na subdomeny: `.target.com` → wszystkie subdomeny dostają cookie
+- Brak Domain = host-only cookie (bezpieczne)
+- **Path** ogranicza scope cookie do określonych ścieżek
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| burp-samesite-reporter | Raportowanie flag SameSite w cookies | [GitHub](https://github.com/ldionmarcil/burp-samesite-reporter) |
-| Headers Analyzer | Analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+### Mniej znane techniki
 
----
+- **Cookie injection via subdomain takeover**: atakujący na `staging.target.com` ustawia cookie z `Domain=.target.com` → leak do main app.
+- **CRLF injection w Set-Cookie**: jeśli aplikacja reflectuje user input do Set-Cookie header → atakujący ustawia własne cookies (cross WSTG-INPV-15).
+- **Cookie tossing**: w shared subdomain context, atakujący sets cookie that overrides legitimate session.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **`SameSite=Lax` default w Chrome ale nie w Safari/Firefox**: cross-browser inconsistency.
+- **HttpOnly cookie ale token w localStorage**: aplikacja używa zarówno cookie (HttpOnly) jak localStorage (no protection) - mixed approach.
 
-### L1 (Podstawowy)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.3.1 | Cookie Setup | Verify that cookies have the 'Secure' attribute set, and if the '\__Host-' prefix is not used for the cookie name, the '__Secure-' prefix must be used for the cookie name. |
+- **OWASP Session Management CS**: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+- **MDN Cookies**: https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies
 
-### L2 (Standardowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.3.2 | Cookie Setup | Verify that each cookie's 'SameSite' attribute value is set according to the purpose of the cookie, to limit exposure to user interface redress attacks and browser-based request forgery attacks, commonly known as cross-site request forgery (CSRF). |
-| V3.3.3 | Cookie Setup | Verify that cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed to be shared with other hosts. |
-| V3.3.4 | Cookie Setup | Verify that if the value of a cookie is not meant to be accessible to client-side scripts (such as a session token), the cookie must have the 'HttpOnly' attribute set and the same value (e. g. session token) must only be transferred to the client via the 'Set-Cookie' header field. |
+| Rozszerzenie | Opis |
+|---|---|
+| Cookie Editor | Per-cookie audit |
 
-### L3 (Zaawansowany)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.3.5 | Cookie Setup | Verify that when the application writes a cookie, the cookie name and value length combined are not over 4096 bytes. Overly large cookies will not be stored by the browser and therefore not sent with requests, preventing the user from using application functionality which relies on that cookie. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/02-Testing_for_Cookies_Attributes
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 
+### Wskazówki ASVS
 
----
-
-## HackTricks Tips
-
-### HttpOnly Bypass
-
-- **PHPInfo page** reflects cookies w HTML → XSS fetch + regex-extract session ID
-- **Cookie Jar Overflow**: flood ~700 cookies → evict HttpOnly cookie → reset z malicious value
-- **Cookie Sandwich**: `$Version=1` + quoted-string → trap HttpOnly cookie w reflected response
-
-### Cookie Tossing
-
-- **Z controlled subdomain**: `document.cookie = "session=attacker_val; Domain=.example.com; Path=/app/login;"`
-- **Session fixation**: set known cookie value before victim login → hijack jeśli session nie rotuje
-- **CSRF token fixation** via tossing: set known CSRF cookie → forge requests
-- **Path-specific tossing**: bardziej specyficzny path cookie ma priorytet
-
-### `__Host-` / `__Secure-` Bypass
-
-- **Unicode whitespace prefix** (U+2000, U+0085, U+00A0) → browser allows, backend normalizes
-- **Java `$Version=1`**: trigger RFC2109 parsing → forge prefixed cookies
-- **PHP**: some character prefixes normalized to underscores
-
-### Cookie Bomb (DoS)
-
-Ustaw wiele dużych cookies na domenie → ofiara wysyła oversized requests → 413 → user-targeted DoS
-
-### Cryptographic Weaknesses
-
-- **Padding Oracle**: `padbuster` jeśli cookie używa CBC
-- **ECB mode**: identyczne dane → powtórzne bloki → block-swapping attacks
+| ID | Wymaganie |
+|---|---|
+| V3.4.1 | Cookie attributes: Secure, HttpOnly, SameSite. |
+| V3.4.2 | Session cookies use __Host- prefix. |

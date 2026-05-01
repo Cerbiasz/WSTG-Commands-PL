@@ -1,128 +1,70 @@
 # WSTG-CRYP-03 — Testing for Sensitive Information Sent via Unencrypted Channels
 
-## Cele
+## Cel
 
-- Zidentyfikowac wrazliwe informacje przesylane przez niezaszyfrowane kanaly
+Weryfikacja że wrażliwe dane (credentials, payment, PII, session tokens) NIE są przesyłane przez HTTP. Atakujący w MitM (Wi-Fi public, ARP poison, malicious ISP) może sniffować plaintext credentials.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### Sprawdzenie czy strona logowania jest dostepna przez HTTP
-
-```bash
-curl -v http://TARGET/login
-curl -v http://TARGET/signin
-curl -v http://TARGET/account
-
-```
-
-### Sprawdzenie przekierowania HTTP -> HTTPS
+### Nasz dedykowany szablon
 
 ```bash
-curl -sI http://TARGET | grep -i location
-curl -sI http://TARGET/login | grep -i location
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-cryp-03-unencrypted-channels.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-cryp-03.jsonl
 ```
 
-### Sprawdzenie formularzy na stronach HTTP
+Szablon w jednym requeście z 7 matcherami: login form action HTTP, password field na HTTP page, credit card field na HTTP, HTTP API z sensitive data, Authorization Basic na HTTP, session cookie bez Secure flag, HTTP→HTTPS redirect missing.
+
+### Cross-reference
 
 ```bash
-curl -s http://TARGET | grep -iE "action=\"http://"
-curl -s http://TARGET/login | grep -iE "<form" | head -10
+# WSTG-CRYP-01 (TLS config) - mixed content overlap
+nuclei -l burp-export.xml -im burp -t templates/wstg-cryp-01-tls-config.yaml
 
+# WSTG-CONF-07 (HSTS) - HTTPS enforcement
+nuclei -l burp-export.xml -im burp -t templates/wstg-conf-07-hsts.yaml
+
+# WSTG-SESS-02 (Cookie attributes)
+nuclei -l burp-export.xml -im burp -t templates/wstg-sess-02-cookie-attributes.yaml
 ```
 
-### Sprawdzenie mixed content na stronach HTTPS
+## Coverage Matrix
 
-```bash
-curl -s https://TARGET | grep -oP 'http://[^"'"'"' >]+' | sort -u | head -30
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Login form action HTTP | ✓ | — |
+| Password/CC field na HTTP page | ✓ | — |
+| HTTP API z sensitive data w response | ✓ | — |
+| Basic auth challenge na HTTP | ✓ | — |
+| Session cookie bez Secure flag | ✓ | (cross WSTG-SESS-02) |
+| HTTP→HTTPS redirect missing | ✓ | — |
+| WebSocket cleartext (ws://) | — | manual / osobny test |
+| Email/SMTP cleartext | — | poza zakresem WSTG-web |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Sprawdzenie cookies bez flagi Secure
+### Metodologia (5 kroków)
 
-```bash
-curl -vI https://TARGET 2>&1 | grep -i set-cookie
-curl -vI http://TARGET 2>&1 | grep -i set-cookie
+1. **Test obu portów**: HTTP (80) i HTTPS (443) per host. Niektóre target serwują równolegle.
+2. **Form action audit**: każdy `<form action="...">` — czy zawsze HTTPS lub relative na HTTPS page.
+3. **Cookie audit**: każdy Set-Cookie z session/auth/token w nazwie → musi mieć Secure + HttpOnly + SameSite.
+4. **API endpoint test**: każdy `/api/*` na HTTP — czy akceptuje requests czy odrzuca z 426 Upgrade Required.
+5. **Mixed content audit**: na HTTPS page — szukać `src="http://"`, `href="http://"` (cross-ref CRYP-01).
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### Wireshark/tshark - przechwytywanie ruchu niezaszyfrowanego
-
-```bash
-# Przechwytywanie ruchu HTTP na interfejsie eth0:
-sudo tshark -i eth0 -f "tcp port 80" -Y "http" -w /tmp/http_capture.pcap
-
-```
-
-### tshark - analiza przechwyconych danych
-
-```bash
-sudo tshark -r /tmp/http_capture.pcap -Y "http.request.method == POST" -T fields -e http.host -e http.request.uri -e http.file_data
-
-```
-
-### Sprawdzenie API HTTP vs HTTPS
-
-```bash
-curl -v http://TARGET/api/
-curl -v https://TARGET/api/
-
-```
-
-### Sprawdzenie naglowkow bezpieczenstwa
-
-```bash
-curl -sI https://TARGET | grep -iE "strict-transport-security|content-security-policy"
-
-```
-
-### Testowanie HSTS bypass
-
-```bash
-curl -sI https://TARGET | grep -i "strict-transport-security"
-# Sprawdz max-age (powinien byc >= 31536000)
-# Sprawdz includeSubDomains
-# Sprawdz preload
-
-```
-
-### Sprawdzenie czy API akceptuje HTTP
-
-```bash
-curl -v http://TARGET/api/users
-curl -v http://TARGET/api/login -X POST -d "user=test&pass=test"
-
-```
-
-### SSLstrip test koncepcyjny
-
-```bash
-# Jezeli brak HSTS, atakujacy moze uzyc sslstrip do downgrade HTTPS->HTTP
-# Sprawdz: curl -sI https://TARGET | grep -c "Strict-Transport-Security"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test konfiguracji sieciowej
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Otworz strone przez http:// - sprawdz czy nastepuje redirect na https://
-2. W DevTools -> Console: sprawdz ostrzezenia o mixed content
-3. W DevTools -> Network: sprawdz czy jakiekolwiek zasoby ladowane sa przez HTTP
-4. W DevTools -> Application -> Cookies: sprawdz flage Secure na kazdym cookie
-5. W Burp Suite -> Proxy: przechwytuj ruch i szukaj wrazliwych danych w HTTP
-6. Sprawdz czy formularze logowania/rejestracji wysylaja dane przez HTTPS
-7. Sprawdz czy tokeny sesji/API sa przesylane wylacznie przez HTTPS
-8. Sprawdz czy linki do zasobow zewnetrznych uzywaja HTTPS
-
-
----
+- [ ] Login page serwowany przez HTTPS (cert valid)
+- [ ] Login form action używa HTTPS (nie HTTP, nie relative na HTTP page)
+- [ ] Password fields tylko na HTTPS page
+- [ ] Payment fields tylko na HTTPS page
+- [ ] PII fields (SSN, PESEL) tylko na HTTPS
+- [ ] Session cookie z Secure flag
+- [ ] HTTP wszystkie endpointy redirectują 301 do HTTPS
+- [ ] HTTPS-only API (HTTP zwraca 426 lub redirect)
+- [ ] Basic auth tylko przez HTTPS (nigdy plaintext na HTTP)
+- [ ] Brak mixed content na HTTPS (cross CRYP-01)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -130,65 +72,83 @@ curl -v http://TARGET/api/login -X POST -d "user=test&pass=test"
 
 ### TLS na wszystkich stronach
 
-- **HTTPS wszedzie** — nie tylko na login/checkout; strony HTTP moga ujawnic session cookies
-- Strony HTTP daja atakujacemu mozliwosc: sniffowania tokenow sesji, wstrzykiwania JavaScript (MitM)
-- **API endpoints**: wylacz HTTP calkowicie — failuj requesty zamiast redirectowac
+- **HTTPS wszędzie** — nie tylko na login/checkout; strony HTTP mogą ujawnić session cookies
+- Strony HTTP dają atakującemu możliwość: sniffowania tokenów sesji, wstrzykiwania JavaScript (MitM)
+- **API endpoints**: wyłącz HTTP całkowicie — failuj requesty zamiast redirectować
 
 ### Redirect HTTP → HTTPS
 
 - HTTP 301 (permanent redirect) na poziomie serwera
-- UWAGA: sam redirect NIE chroni — pierwszy request idzie przez HTTP (mozliwy MitM)
-- Dlatego HSTS jest NIEZBEDNY jako uzupelnienie redirectu
+- UWAGA: sam redirect NIE chroni — pierwszy request idzie przez HTTP (możliwy MitM)
+- Dlatego HSTS jest NIEZBĘDNY jako uzupełnienie redirectu
 
 ### HSTS (HTTP Strict Transport Security)
 
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-- `max-age` — czas w sekundach (31536000 = 1 rok) — przegladarka pamięta ze strona uzywa HTTPS
-- `includeSubDomains` — HSTS dotyczy tez wszystkich subdomen
-- `preload` — dodanie do preload list w przegladarkach (permanentne, trudne do cofniecia)
-- Bez HSTS: atakujacy moze uzyc **sslstrip** do downgrade HTTPS→HTTP w sieci lokalnej
+- `max-age` — czas w sekundach (31536000 = 1 rok) — przeglądarka pamięta że strona używa HTTPS
+- `includeSubDomains` — HSTS dotyczy też wszystkich subdomen
+- `preload` — dodanie do preload list w przeglądarkach (permanentne, trudne do cofnięcia)
+- Bez HSTS: atakujący może użyć **sslstrip** do downgrade HTTPS→HTTP w sieci lokalnej
 
 ### Mixed Content
 
-- NIE laduj zasobow (JS, CSS, obrazki) przez HTTP na stronie HTTPS
-- Nowoczesne przegladarki blokuja active mixed content (JS, CSS) — ale passive (obrazki) moga byc ladowane
-- Sprawdz konsole przegladarki — ostrzezenia o mixed content
+- NIE ładuj zasobów (JS, CSS, obrazki) przez HTTP na stronie HTTPS
+- Nowoczesne przeglądarki blokują active mixed content (JS, CSS) — ale passive (obrazki) mogą być ładowane
+- Sprawdź konsolę przeglądarki — ostrzeżenia o mixed content
 
 ### Cookie Security
 
-- **Secure flag** na WSZYSTKICH cookies — przegladarka nie wysle ich przez HTTP
-- Wazne nawet jesli serwer nie slucha na porcie 80 — atakujacy MitM moze sproofowac serwer HTTP
-- Cookie bez Secure flag moze byc przechwycone w otwartej sieci Wi-Fi
+- **Secure flag** na WSZYSTKICH cookies — przeglądarka nie wyśle ich przez HTTP
+- Ważne nawet jeśli serwer nie słucha na porcie 80 — atakujący MitM może sproofować serwer HTTP
+- Cookie bez Secure flag może być przechwycone w otwartej sieci Wi-Fi
 
-### Cachowanie danych wrazliwych
+### Cachowanie danych wrażliwych
 
-- Ustaw na odpowiedziach z wrazliwymi danymi:
+- Ustaw na odpowiedziach z wrażliwymi danymi:
   - `Cache-Control: no-cache, no-store, must-revalidate`
   - `Pragma: no-cache`
   - `Expires: 0`
-- TLS chroni dane w transporcie, ALE nie chroni po dotarciu do klienta — dane moga byc w cache przegladarki
+- TLS chroni dane w transporcie, ALE nie chroni po dotarciu do klienta — dane mogą być w cache przeglądarki
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **sslstrip2 / sslstrip+**: nowsza wersja sslstrip która handluje też HSTS przez Mapping zaufanych subdomen na atakera (nie blokuje wszystkich, tylko subset). Wciąż effective gdy HSTS preload missing.
+- **HTTP-only intranet leaks credentials globally**: gdy klient deklaruje "intranet HTTP only", a użytkownicy logują się przez VPN z podzielnym tunelem → credentials sent po VPN, ale browser może auto-fill na external HTTP page też.
+- **Mixed content via 3rd party plugin**: aplikacja sama HTTPS, ale 3rd party widget (chat, analytics) ładowany z HTTP → HTTPS page się zhackuje.
+- **Wi-Fi captive portal HTTP**: nawet HTTPS-aware aplikacje mogą być przekierowane do HTTP captive portal — atakujący z fake captive portal przechwytuje credentials.
+- **HTTP/2 mixed content edge cases**: HTTP/2 wymaga TLS, więc nie może być "HTTP/2 cleartext" w przeglądarce — ale niektóre legacy backendy używają h2c (HTTP/2 cleartext) za reverse proxy.
+
+### Common pitfalls
+
+- **Self-signed cert na staging → habit**: developers przyzwyczajają się do akceptowania self-signed → real MitM passed.
+- **HSTS bez preload na new domain**: pierwszy request idzie przez HTTP (TOFU window) — vulnerable do sslstrip.
+- **Cookie domain `.target.com` na subdomain z HTTP**: jeśli `cookies set on https://target.com` z domain `.target.com`, są wysyłane też do `http://staging.target.com` jeśli takie istnieje (without Secure flag).
+
+### Świeżynki z research
+
+- **HTTPS-only Mode w przeglądarkach** (Firefox, Chrome): nowy default — wszystkie requests upgradowane do HTTPS, fallback na HTTP wymaga user interaction.
+- **HSTS supercookies attack** (legacy ale nadal istotne) — using HSTS state to track users.
+- **Mozilla SSL Configuration Generator**: https://ssl-config.mozilla.org/
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Headers Analyzer | Weryfikacja naglowkow HSTS i bezpieczenstwa transportu | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+| Software Version Reporter | Detekcja insecure versions w transport | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/09-Testing_for_Weak_Cryptography/03-Testing_for_Sensitive_Information_Sent_via_Unencrypted_Channels
+- OWASP TLS Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html
+- OWASP HSTS Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html
+- HSTS Preload List: https://hstspreload.org/
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V12.2.1 | HTTPS Communication with External Facing Services | Verify that TLS is used for all connectivity between a client and external facing, HTTP-based services, and does not fall back to insecure or unencrypted communications. |
-| V14.2.1 | General Data Protection | Verify that sensitive data is only sent to the server in the HTTP message body or header fields, and that the URL and query string do not contain sensitive information, such as an API key or session token. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V14.2.3 | General Data Protection | Verify that defined sensitive data is not sent to untrusted parties (e.g., user trackers) to prevent unwanted collection of data outside of the application's control. |
+| V9.1.1 | Communications (L1) | TLS for all client connectivity. |
+| V8.2.2 | Sensitive Data (L1) | No sensitive data in browser localStorage/sessionStorage. |
+| V13.4.7 | Information Leakage (L3) | Web tier serves only specific file extensions. |

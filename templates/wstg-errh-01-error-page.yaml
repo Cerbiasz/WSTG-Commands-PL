@@ -1,0 +1,203 @@
+# ============================================================================
+# WSTG-ERRH-01: Testing for Improper Error Handling (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-ERRH-01 (existing repo):
+#   ✓ Default error pages (Apache/Nginx/IIS/Tomcat)
+#   ✓ Stack trace disclosure (cross-ref ERRH-02)
+#   ✓ SQL error messages
+#   ✓ Path disclosure (file system paths)
+#   ✓ Detailed error in 4xx/5xx responses
+#
+# Z research:
+#   ✓ ASP.NET YSD (Yellow Screen of Death)
+#   ✓ Django DEBUG=True yellow page
+#   ✓ Werkzeug debugger fallback
+#   ✓ Laravel Whoops error page
+#   ✓ Symfony WebProfiler error
+#
+# Performance budget: low (~10 forced error requests)
+# ============================================================================
+
+id: wstg-errh-01-error-page
+
+info:
+  name: "WSTG-ERRH-01: Improper Error Handling (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa niewłaściwe error handling: szczegółowe error pages na 4xx/5xx
+    ujawniające server type, framework, paths, SQL queries. Wymusza błędy
+    przez malformed query, invalid path, special chars, oversized request.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_for_Improper_Error_Handling
+    - https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-209,CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-errh-01,error-handling,info-disclosure,burp-history
+
+variables:
+  canary: "wstg-{{rand_text_alpha(8)}}"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Forced 404 + analysis of error page
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/wstg-{{canary}}-nonexistent-{{rand_text_alpha(6)}}"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        name: server-banner-in-error
+        regex:
+          - "(?i)<address>Apache/[\\d.]+"
+          - "(?i)<center>nginx/[\\d.]+</center>"
+          - "(?i)<title>IIS Windows( Server)?</title>"
+          - "(?i)<h3>Apache Tomcat/[\\d.]+"
+          - "(?i)<address>lighttpd/[\\d.]+"
+
+      - type: regex
+        part: body
+        name: filesystem-path-in-error
+        regex:
+          - "\\b/(?:home|var|usr|opt|tmp)/[a-z0-9_-]{2,}/[\\w/.-]{5,}\\.(?:php|py|rb|js|java|jsp|aspx?)"
+          - "\\b[A-Z]:\\\\(?:Users|inetpub|wwwroot|Program Files)[\\\\\\w.-]+"
+
+  # =========================================================================
+  # Forced 500 via malformed query
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/?wstg-error-{{canary}}=%00%3C%3E%22%5C"
+      - "{{BaseURL}}/?id[]=invalid&id[]=array"
+      - "{{BaseURL}}/?id={{canary}}'\""
+    stop-at-first-match: false
+
+    matchers-condition: or
+    matchers:
+      # Yellow page Django
+      - type: regex
+        part: body
+        name: django-debug-yellow-page
+        regex:
+          - "(?i)<title>(?:[A-Za-z]+Error|TypeError|ValueError|AttributeError) at "
+          - "(?i)Request Method:[\\s\\S]*?Django Version:"
+
+      # ASP.NET YSD
+      - type: regex
+        part: body
+        name: aspnet-yellow-screen
+        regex:
+          - "(?i)Server Error in '/' Application"
+          - "(?i)<title>Runtime Error</title>"
+          - "(?i)Stack Trace:[\\r\\n]+\\["
+
+      # PHP warnings/errors
+      - type: regex
+        part: body
+        name: php-error-disclosure
+        regex:
+          - "(?i)Warning:.*?in /[^\\s]+\\.php on line \\d+"
+          - "(?i)Fatal error:.*?in /[^\\s]+\\.php on line \\d+"
+          - "(?i)Parse error:.*?in /[^\\s]+\\.php on line \\d+"
+          - "(?i)Notice:.*?in /[^\\s]+\\.php on line \\d+"
+
+      # Laravel Whoops
+      - type: regex
+        part: body
+        name: laravel-whoops-error
+        regex:
+          - "(?i)<title>Whoops"
+          - "(?i)class=\"exception-message\""
+          - "(?i)data-line=\"\\d+\""
+
+      # Rails dev page
+      - type: regex
+        part: body
+        name: rails-dev-error-page
+        regex:
+          - "(?i)<title>Action Controller: Exception"
+          - "(?i)Showing.*\\.erb where line"
+          - "(?i)Application Trace.*Framework Trace"
+
+      # Symfony WebProfiler error
+      - type: regex
+        part: body
+        name: symfony-error-page
+        regex:
+          - "(?i)<title>Error.*?Symfony"
+          - "(?i)class=\"trace[-_]"
+
+      # Java/Spring stack trace
+      - type: regex
+        part: body
+        name: java-stack-trace-in-body
+        regex:
+          - "(?i)at\\s+[\\w.]+\\([\\w.]+:\\d+\\)"
+          - "(?i)Caused by:\\s+[\\w.]+Exception:"
+          - "(?i)org\\.springframework\\.\\w+Exception"
+
+      # Werkzeug fallback (Flask debug off but unhandled)
+      - type: regex
+        part: body
+        name: werkzeug-debug-page
+        regex:
+          - "(?i)Werkzeug Debugger"
+          - "(?i)<title>.*?Error.*?Werkzeug"
+
+      # Generic SQL error in body (cross-ref INPV-05)
+      - type: regex
+        part: body
+        name: sql-error-in-error-page
+        regex:
+          - "(?i)SQL syntax.{0,500}?MySQL"
+          - "(?i)PostgreSQL.{0,500}?ERROR"
+          - "(?i)Microsoft.*ODBC.*SQL Server"
+          - "(?i)\\bORA-\\d{5}"
+          - "(?i)SQLITE_ERROR"
+
+    extractors:
+      - type: regex
+        name: error-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,80}(Warning:|Fatal error:|Exception:|Error:|at \\w+\\.\\w+|Stack Trace:).{0,200}"
+
+  # =========================================================================
+  # 405 Method Not Allowed - forced by uncommon method
+  # =========================================================================
+  - method: PROPFIND
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: regex
+        part: body
+        name: method-not-allowed-with-server-info
+        regex:
+          - "(?i)Apache/[\\d.]+.*Server at"
+          - "(?i)nginx/[\\d.]+"
+          - "(?i)Microsoft-IIS/[\\d.]+"
+
+# ============================================================================
+# Known limitations:
+# - Custom error pages (well-hardened) skutecznie ukrywają wszystkie markery
+# - SPA z catch-all 200 dla każdego path → ten szablon nie ma sygnałów
+# - Aplikacje za WAF mogą zwracać generic 403 zamiast forwardować błąd
+# - Stack trace specifically → patrz WSTG-ERRH-02
+# ============================================================================

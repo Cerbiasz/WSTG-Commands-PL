@@ -1,0 +1,95 @@
+# ============================================================================
+# WSTG-ATHN-06: Testing for Browser Cache Weaknesses (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-05-01
+#
+# Coverage: detekcja sensitive responses (login, password reset, account
+# settings) bez proper Cache-Control headers. Cached sensitive data w shared
+# environment (kawiarnia internet) = leak credentials.
+# ============================================================================
+
+id: wstg-athn-06-browser-cache
+
+info:
+  name: "WSTG-ATHN-06: Browser Cache on Sensitive Pages (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa sensitive endpoints (login, password reset, account settings)
+    bez properr Cache-Control: no-store. Cached responses w przeglądarce
+    użytkownika = leak credentials w shared environment.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/06-Testing_for_Browser_Cache_Weaknesses
+    - https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-525,CWE-524
+    cvss-metrics: CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N
+    cvss-score: 5.7
+  tags: dast,wstg,wstg-v42-athn-06,cache,authentication,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      # Sensitive endpoint detected (login/account/password page)
+      - type: regex
+        part: body
+        name: sensitive-page-marker
+        regex:
+          - "(?i)<input[^>]*type=[\"']password[\"']"
+          - "(?i)<title>[^<]*(?:login|sign[\\s-]?in|account|profile|password|settings|dashboard)"
+          - "(?i)(?:authentication|authorization|csrf[_-]?token)"
+        condition: or
+
+      # Brak Cache-Control: no-store (lub similar)
+      - type: dsl
+        name: cache-control-allows-storage
+        dsl:
+          - "!regex(\"(?i)cache-control:[^\\\\r\\\\n]*no-store\", header)"
+          - "!regex(\"(?i)cache-control:[^\\\\r\\\\n]*private\", header)"
+        condition: and
+
+      # No Pragma: no-cache backup
+      - type: dsl
+        name: no-pragma-no-cache
+        dsl:
+          - "!regex(\"(?i)pragma:\\\\s*no-cache\", header)"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/login"
+      - "{{BaseURL}}/account"
+      - "{{BaseURL}}/profile"
+      - "{{BaseURL}}/settings"
+      - "{{BaseURL}}/dashboard"
+      - "{{BaseURL}}/password/reset"
+      - "{{BaseURL}}/forgot-password"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: dsl
+        name: sensitive-cached-response
+        dsl:
+          - "!regex(\"(?i)cache-control:[^\\\\r\\\\n]*no-store\", header)"
+
+# ============================================================================
+# Known limitations:
+# - False positives na public pages które wyglądają jak sensitive (np. blog
+#   post o "password" topic).
+# - Cross-ref WSTG-CONF-14 dla ogólnych Cache-Control checks.
+# ============================================================================

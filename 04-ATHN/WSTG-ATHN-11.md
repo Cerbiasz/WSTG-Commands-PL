@@ -1,222 +1,121 @@
 # WSTG-ATHN-11 — Testing Multi-Factor Authentication (MFA)
 
-## Cele
+## Cel
 
-- Identify the type of MFA used by the application
-- Determine whether the MFA implementation is robust and secure
-- Attempt to bypass the MFA
+Audyt MFA: enrollment process, MFA challenge bypass (skip step), backup codes, rate limiting na OTP, recovery flow, czy MFA wymagana na wszystkich kanałach (cross WSTG-ATHN-10), czy SMS-based MFA (słabsze) vs TOTP/WebAuthn.
 
-## KOMENDY
+> **Test mostly manual**: wymaga zaenrollowanego konta MFA + analizy challenge flow.
 
-### Bypass MFA - pominiec krok
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-# Po logowaniu przejdz bezposrednio do chronionej strony
-curl -s "https://TARGET/dashboard" -H "Cookie: session=SESSION_AFTER_PASSWORD_ONLY"
+### Metodologia (6 kroków)
 
-```
+1. **Enrollment audit**: czy MFA enrollment wymaga current password? Czy pozwala na slabe factors (SMS/email tylko)?
+2. **MFA bypass attempts**: skip MFA step (direct call to post-MFA endpoint), session token replay, response manipulation.
+3. **Brute-force OTP**: rate limit na OTP entry endpoint? Bez limit = 6-digit OTP brute-forceable in 10s.
+4. **Backup codes**: jednorazowe? Krótki TTL? Stored hashed?
+5. **Recovery flow**: czy bypass MFA via "I lost my device" flow daje atakującemu pełny dostęp?
+6. **Per channel**: cross WSTG-ATHN-10 - mobile/API/SSO też wymagają MFA?
 
-### Brute force OTP (4-6 cyfr)
+### Co MUSI być sprawdzone (15 punktów)
 
-```bash
-ffuf -u "https://TARGET/verify-otp" -X POST -d "otp=FUZZ" -H "Cookie: session=TOKEN" -w Desktop/WSTG/SecLists-master/Fuzzing/4-digits-0000-9999.txt -mc 200,302 -o output_ffuf_otp4.json
-
-ffuf -u "https://TARGET/verify-otp" -X POST -d "otp=FUZZ" -H "Cookie: session=TOKEN" -w Desktop/WSTG/SecLists-master/Fuzzing/6-digits-000000-999999.txt -mc 200,302 -rate 10 -o output_ffuf_otp6.json
-
-```
-
-### Test reuse OTP
-
-```bash
-# Uzyj tego samego kodu ponownie
-curl -X POST "https://TARGET/verify-otp" -d "otp=VALID_OTP" -H "Cookie: session=TOKEN"
-
-```
-
-### Test wygasniecia OTP
-
-```bash
-# Poczekaj > czasu waznosci i uzyj kodu
-
-```
-
-### Response manipulation
-
-```bash
-# Sprawdz czy zmiana odpowiedzi z "false" na "true" pomija MFA
-
-```
-
-### Backup codes
-
-```bash
-curl -s "https://TARGET/settings/mfa/backup-codes" -H "Cookie: session=TOKEN"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists 4/6 digit OTP
-
-```bash
-# Desktop/WSTG/SecLists-master/Fuzzing/4-digits-0000-9999.txt
-# Desktop/WSTG/SecLists-master/Fuzzing/6-digits-000000-999999.txt
-# Desktop/WSTG/SecLists-master/Fuzzing/3-digits-000-999.txt
-
-```
-
-### Bug-Bounty-Wordlists 6 digits
-
-```bash
-# Desktop/WSTG/Bug-Bounty-Wordlists-main/6-digits-000000-999999.txt
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj typ MFA (TOTP, SMS, email, push, hardware key)
-2. Testuj pominicie kroku MFA (bezposredni dostep do dashboardu)
-3. Testuj brute force kodu OTP (sprawdz rate limiting)
-4. Sprawdz czy kod mozna uzyc ponownie
-5. Testuj response manipulation w Burp
-6. Sprawdz backup/recovery codes
-7. Testuj dezaktywacje MFA bez weryfikacji
-8. Sprawdz czy MFA jest wymagane na wszystkich kanalach
-
-
----
+- [ ] MFA wymagana na login (po username/password)
+- [ ] MFA wymagana przy zmianie hasła
+- [ ] MFA wymagana przy zmianie email/MFA settings
+- [ ] MFA enrollment wymaga current password
+- [ ] OTP rate limiting (max 5 attempts)
+- [ ] OTP TTL (30s standard TOTP, 5 min email)
+- [ ] OTP nie reflectowane w response
+- [ ] Backup codes: jednorazowe, hashed
+- [ ] Recovery flow not bypass-able
+- [ ] WebAuthn/FIDO2 preferred
+- [ ] SMS only nie jest mandatory MFA (ze względu na SIM swap)
+- [ ] Per channel consistency (cross WSTG-ATHN-10)
+- [ ] Push notification anti-fatigue (limit pushes per minute)
+- [ ] Number matching dla push (Microsoft style)
+- [ ] MFA settings change wymagają re-auth
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Multifactor_Authentication_Cheat_Sheet.md
 
-### Hierarchia czynnikow MFA (od najsilniejszego)
+### Hierarchia czynników MFA (od najsilniejszego)
 
 | Czynnik | Typ | Phishing-resistant? | Uwagi |
 |---------|-----|---------------------|-------|
-| FIDO2/WebAuthn/Passkeys | Something You Have + Are/Know | **TAK** | Najlepsza opcja — kryptograficzne wiazanie z domena |
-| Hardware OTP (YubiKey) | Something You Have | Nie (ale krotki czas zycia) | Drogie, ale bardzo bezpieczne |
+| FIDO2/WebAuthn/Passkeys | Something You Have + Are/Know | **TAK** | Najlepsza opcja — kryptograficzne wiązanie z domeną |
+| Hardware OTP (YubiKey) | Something You Have | Nie (ale krótki czas życia) | Drogie, ale bardzo bezpieczne |
 | Software TOTP | Something You Have | Nie | Dobre — Google Authenticator, Authy |
-| Push notification | Something You Have | Nie | Ryzyko "push fatigue" — atakujacy spamuje powiadomieniami |
-| SMS/telefon | Something You Have | Nie | **SLABE** — SIM swap, SS7, przechwytywanie |
-| Email | Something You Have/Know | Nie | **Najslabsze** — czesto to samo haslo |
-| Pytania bezpieczenstwa | Something You Know | Nie | **NIST odradza** — nie stanowi MFA z haslem |
+| Push notification | Something You Have | Nie | Ryzyko "push fatigue" — atakujący spamuje powiadomieniami |
+| SMS/telefon | Something You Have | Nie | **SŁABE** — SIM swap, SS7, przechwytywanie |
+| Email | Something You Have/Know | Nie | **Najsłabsze** — często to samo hasło |
+| Pytania bezpieczeństwa | Something You Know | Nie | **NIST odradza** — nie stanowi MFA z hasłem |
 
-### Kiedy wymagac MFA
+### Kiedy wymagać MFA
 
-- **Logowanie** — glowny punkt wymagania MFA
-- **Zmiana hasla** lub adresu email
-- **Wylaczanie MFA** — wymaga re-autentykacji istniejacym czynnikiem
-- **Operacje wrażliwe**: transakcje finansowe, eksport danych, zmiana uprawnien
-- **Eskalacja sesji**: przejscie z user → admin
-- **Wszystkie kanaly**: webowe UI, API, mobile app — kazdy musi wymagac MFA
+- **Logowanie** — główny punkt wymagania MFA
+- **Zmiana hasła** lub adresu email
+- **Wyłączanie MFA** — wymaga re-autentykacji istniejącym czynnikiem
+- **Operacje wrażliwe**: transakcje finansowe, eksport danych, zmiana uprawnień
+- **Eskalacja sesji**: przejście z user → admin
+- **Wszystkie kanały**: webowe UI, API, mobile app — każdy musi wymagać MFA
 
-### OTP — bezpieczna implementacja
+### MFA bypass — typowe wektory
 
-- Generuj OTP uzywajac **CSPRNG** (kryptograficznie bezpieczny generator)
-- Czas zycia OTP: **krotki TTL** (np. 5-10 minut)
-- OTP musi byc **jednorazowy** — po uzyciu natychmiast uniewaznij
-- **Limit prob**: max 3-5 blednych prob, potem nowy OTP lub lockout
-- Hashuj OTP w bazie — nie przechowuj w plaintext
-- Przy "Wyslij ponownie": generuj **nowy** OTP i nadpisz stary
-- Preferuj **8-cyfrowe** kody zamiast 6-cyfrowych (1M vs 100M mozliwosci)
-- NIE loguj wartosci OTP
+- **Skip MFA step**: aplikacja generuje session token PRZED MFA challenge → atakujący direct call do post-MFA endpoints
+- **Response manipulation**: zamień `{"mfa_required": true}` na `{"mfa_required": false}` w response
+- **OTP brute-force**: 6-digit OTP = 1M kombinacji, bez rate limit = brute force in seconds
+- **Session token replay**: pre-MFA session token nadal valid post-MFA
+- **Backup codes reuse**: aplikacja nie invaliduje backup code po użyciu
+- **Recovery flow**: "I lost my device" → email link bez MFA = bypass
 
-### Reset/odzyskiwanie MFA
+### Push fatigue / MFA spam
 
-- Zapewnij **kody zapasowe** (recovery codes) — jednorazowe, generowane przy setup
-- Wymagaj **wielu typow MFA** (TOTP + SMS) — mniejsze ryzyko utraty wszystkich
-- Proces resetu musi byc **rownie bezpieczny** jak MFA — nie moze byc slabszym ogniwem
-- Weryfikacja tozsamosci przy resecie: email link + pytania + weryfikacja manualna
-- Notyfikuj uzytkownika o zmianach MFA przez out-of-band kanal (email, push)
-- Zmiana czynnikow MFA = **operacja wysokiego ryzyka** — wymagaj re-autentykacji istniejacym czynnikiem
+- Atakujący wysyła wiele push notifications oczekując że user zatwierdzi (irritation)
+- **Obrona**: number matching (Microsoft style) — user musi wpisać 2-digit code z screen
+- Rate limit: max 1-2 pushes per minute
 
-### Typowe ataki na MFA — co testowac
+## Pentesterskie deep dive
 
-- **Pominicie kroku**: po hasle przejdz bezposrednio do chronionej strony (skip OTP)
-- **Brute force OTP**: 4-cyfrowy = 10000 prob, 6-cyfrowy = 1M — sprawdz rate limiting
-- **Reuse OTP**: uzyj tego samego kodu ponownie
-- **Response manipulation**: zmien odpowiedz serwera z "false" na "true" w Burp
-- **Race condition**: wyslij wiele requestow z roznym OTP jednoczesnie
-- **Fallback bypass**: czy mozna przejsc na slabszy czynnik (SMS zamiast TOTP)?
-- **Push fatigue**: wielokrotne wysylanie push → uzytkownik akceptuje przez zmeczenie
-- **SIM swap**: czy SMS OTP jest jedynym czynnikiem?
-- **Backup codes**: czy sa odpowiednio chronione? Czy mozna je wylistowac?
+### Mniej znane techniki
 
-### Risk-Based Authentication (adaptacyjne MFA)
+- **MFA bypass via session token replay**: pre-MFA session ID == post-MFA session ID → atakujący dostaje token przed MFA, używa po MFA bypass.
+- **OTP via response manipulation**: modify `{"mfa_required": true}` to `false` in response → frontend skips MFA challenge.
+- **TOTP secret leak via QR code**: enrollment QR code logged in proxy → atakujący zna secret → może wygenerować dowolny OTP.
+- **SIM swap attack**: SMS OTP → atakujący port number → otrzymuje OTP. Banking SMS często vulnerable.
+- **WebAuthn challenge replay**: niektóre weak implementations re-use challenge → replay attack.
+- **Push fatigue (MFA bombing)**: notification spam, eventually user clicks "Approve" by mistake.
 
-- Nie wymagaj MFA za kazdym razem — uwzglednij kontekst: IP, lokalizacja, urzadzenie
-- Nowe urzadzenie/lokalizacja → wymagaj MFA
-- Znane urzadzenie + znana lokalizacja → moze pominac MFA
-- Sygnaly ryzyka: Tor, VPN, nowy kraj, godziny nocne, znane skompromitowane credentials
-- Uwaga: sygnaly ryzyka moga byc spoofowane — nie polegaj na nich jako jedynej obronie
+### Common pitfalls
 
-### Passkeys/FIDO2 — najlepsza opcja
+- **MFA opcjonalna**: "We support MFA" ale nie wymagana → most users bez MFA = credential stuffing wciąż działa.
+- **MFA tylko na web, nie na API**: mobile app token bypass MFA na web (cross WSTG-ATHN-10).
+- **Backup codes "for convenience"**: 10 backup codes ważnych forever → secrets equivalent of permanent password.
 
-- Kryptograficzne wiazanie z domena — **phishing-resistant**
-- Nie wymagaja zapamietywania kodu — biometria lub PIN na urzadzeniu
-- Klucz prywatny nigdy nie opuszcza urzadzenia
-- Mozna synchronizowac miedzy urzadzeniami (iCloud Keychain, Google Password Manager)
+### Świeżynki z research
 
-## ROZSZERZENIA BURP SUITE
+- **MFA Bombing research (Microsoft)**: https://www.microsoft.com/en-us/security/blog/2022/09/22/mfa-fatigue/
+- **Sam Curry MFA bypass research**: https://samcurry.net/
+- **PortSwigger MFA labs**: https://portswigger.net/web-security/authentication
+- **HackTricks 2FA Bypass**: https://book.hacktricks.xyz/pentesting-web/2fa-bypass
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+## Rozszerzenia Burp Suite
 
----
+| Rozszerzenie | Opis |
+|---|---|
+| Turbo Intruder | High-performance OTP brute-force testing |
 
-## Wskazówki ASVS
+## Źródła
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/11-Testing_Multi-Factor_Authentication
+- OWASP MFA CS: https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html
+- HackTricks 2FA Bypass: https://book.hacktricks.xyz/pentesting-web/2fa-bypass
+- PortSwigger Authentication: https://portswigger.net/web-security/authentication
 
-### L2 (Standardowy)
+### Wskazówki ASVS
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.3.3 | General Authentication Security | Verify that either a multi-factor authentication mechanism or a combination of single-factor authentication mechanisms, must be used in order to access the application. For L3, one of the factors must be a hardware-based authentication mechanism which provides compromise and impersonation resistance against phishing attacks while verifying the intent to authenticate by requiring a user-initiated action (such as a button press on a FIDO hardware key or a mobile phone). Relaxing any of the considerations in this requirement requires a fully documented rationale and a comprehensive set of mitigating controls. |
-| V6.5.1 | General Multi-factor authentication requirements | Verify that lookup secrets, out-of-band authentication requests or codes, and time-based one-time passwords (TOTPs) are only successfully usable once. |
-| V6.5.2 | General Multi-factor authentication requirements | Verify that, when being stored in the application's backend, lookup secrets with less than 112 bits of entropy (19 random alphanumeric characters or 34 random digits) are hashed with an approved password storage hashing algorithm that incorporates a 32-bit random salt. A standard hash function can be used if the secret has 112 bits of entropy or more. |
-| V6.5.3 | General Multi-factor authentication requirements | Verify that lookup secrets, out-of-band authentication code, and time-based one-time password seeds, are generated using a Cryptographically Secure Pseudorandom Number Generator (CSPRNG) to avoid predictable values. |
-| V6.5.4 | General Multi-factor authentication requirements | Verify that lookup secrets and out-of-band authentication codes have a minimum of 20 bits of entropy (typically 4 random alphanumeric characters or 6 random digits is sufficient). |
-| V6.5.5 | General Multi-factor authentication requirements | Verify that out-of-band authentication requests, codes, or tokens, as well as time-based one-time passwords (TOTPs) have a defined lifetime. Out of band requests must have a maximum lifetime of 10 minutes and for TOTP a maximum lifetime of 30 seconds. |
-| V6.6.1 | Out-of-Band authentication mechanisms | Verify that authentication mechanisms using the Public Switched Telephone Network (PSTN) to deliver One-time Passwords (OTPs) via phone or SMS are offered only when the phone number has previously been validated, alternate stronger methods (such as Time based One-time Passwords) are also offered, and the service provides information on their security risks to users. For L3 applications, phone and SMS must not be available as options. |
-| V6.6.2 | Out-of-Band authentication mechanisms | Verify that out-of-band authentication requests, codes, or tokens are bound to the original authentication request for which they were generated and are not usable for a previous or subsequent one. |
-| V6.6.3 | Out-of-Band authentication mechanisms | Verify that a code based out-of-band authentication mechanism is protected against brute force attacks by using rate limiting. Consider also using a code with at least 64 bits of entropy. |
-
-### L3 (Zaawansowany)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.5.6 | General Multi-factor authentication requirements | Verify that any authentication factor (including physical devices) can be revoked in case of theft or other loss. |
-| V6.5.7 | General Multi-factor authentication requirements | Verify that biometric authentication mechanisms are only used as secondary factors together with either something you have or something you know. |
-| V6.5.8 | General Multi-factor authentication requirements | Verify that time-based one-time passwords (TOTPs) are checked based on a time source from a trusted service and not from an untrusted or client provided time. |
-| V6.6.4 | Out-of-Band authentication mechanisms | Verify that, where push notifications are used for multi-factor authentication, rate limiting is used to prevent push bombing attacks. Number matching may also mitigate this risk. |
-
-
----
-
-## HackTricks Tips
-
-### 2FA Bypass — Logic/Flow
-
-- **Direct navigation** do post-2FA endpoint; spoof `Referer` z 2FA page
-- **Cross-account OTP**: użyj własnego valid OTP na koncie ofiary (tokens nie bound do session)
-- **Response leak**: sprawdź response body na OTP token
-- **Email verification link** → może grants access i skip 2FA
-- **Password reset** → jeśli loguje bez 2FA
-- **OAuth compromise**: kompromituj linked OAuth provider → skip 2FA
-- **Reset disables 2FA**: create account → enable 2FA → reset password → login without 2FA
-
-### 2FA Bypass — Brute Force
-
-- **Brak rate limit**: brute force all OTPs; nawet po lockout wyślij valid OTP (serwer może zwrócić 200)
-- **Resend code resets counter** → kontynuuj brute po lockout
-- **Race condition**: parallel OTP attempts
-- **OTP regeneration loop**: generuj krótkie OTP (4-digit), brute force small set
-
-### Inne
-
-- **Starsze API** (`/v1/`, `/v2/`) mogą nie mieć 2FA
-- **Subdomeny** mogą biec bez 2FA
-- **`X-Forwarded-For` spoofing** → bypass IP-based "remember me"
-- **CSRF/Clickjacking do disable 2FA**
-- **Backup codes**: sprawdź czy retrievable via CORS misconfiguration/XSS
+| ID | Wymaganie |
+|---|---|
+| V2.7.1 | Multi-factor authentication for sensitive operations. |
+| V2.8.1 | TOTP/HOTP implementation per RFC 6238. |
+| V2.9.1 | Hardware-based factor support (FIDO2). |

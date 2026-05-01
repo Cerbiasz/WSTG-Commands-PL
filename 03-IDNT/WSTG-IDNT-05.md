@@ -1,192 +1,116 @@
 # WSTG-IDNT-05 — Testing for Weak or Unenforced Username Policy
 
-## Cele
+## Cel
 
-- Okreslenie czy konsekwentna struktura nazw kont czyni aplikacje podatna
-- Sprawdzenie polityki nazw uzytkownikow (dlugosc, znaki, format)
-- Testowanie wymuszania regul nazewnictwa
+Audyt polityki nazw użytkowników: case-insensitivity, denylist zarezerwowanych nazw (admin, root), Unicode confusables (cyrylica `а` vs łaciński `a`), zero-width characters, sequential user IDs (`user001`, `user002`).
 
-## KOMENDY
+> **Test mostly manual**: wymaga próbnych rejestracji + analyzy. Częściowo automatyzowalne (rejestracja zarezerwowanych nazw), ale destruktywne.
 
-### Rejestracja z bardzo krotka nazwa
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"a","password":"Test@1234","email":"short@test.com"}' -v
+### Metodologia (5 kroków)
 
-```
+1. **Reserved names test**: spróbować zarejestrować `admin`, `root`, `null`, `undefined` — czy aplikacja blokuje?
+2. **Case-insensitivity**: zarejestruj `Admin`, czy `admin` traktowane jako duplicate?
+3. **Unicode confusables**: zarejestruj `аdmin` (Cyrillic а U+0430), czy aplikacja normalizuje (NFC)?
+4. **Whitespace handling**: ` admin`, `admin ` — czy traktowane jako `admin`?
+5. **Sequential ID enumeration**: `/api/users/1`, `/api/users/2` — czy IDs są sekwencyjne (przewidywalne)?
 
-### Rejestracja z nazwa numeryczna
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"12345","password":"Test@1234","email":"num@test.com"}' -v
-
-```
-
-### Rejestracja ze znakami specjalnymi
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"user@#$%","password":"Test@1234","email":"special@test.com"}' -v
-
-```
-
-### Rejestracja ze spacjami
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"user name","password":"Test@1234","email":"space@test.com"}' -v
-
-```
-
-### Rejestracja z Unicode/emoji
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"\u0410\u0434\u043c\u0438\u043d","password":"Test@1234","email":"unicode@test.com"}' -v
-
-```
-
-### Rejestracja z nazwami systemowymi
-
-```bash
-for name in root admin administrator system null undefined NaN true false; do echo "--- $name ---"; curl -s -o /dev/null -w "%{http_code}" -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d "{\"username\":\"$name\",\"password\":\"Test@1234\",\"email\":\"$name@test.com\"}"; echo; done
-
-```
-
-### Testowanie case sensitivity
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"TestUser","password":"Test@1234","email":"case1@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser","password":"Test@1234","email":"case2@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"TESTUSER","password":"Test@1234","email":"case3@test.com"}' -v
-
-```
-
-### Rejestracja z bialymi znakami na poczatku/koncu
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":" admin","password":"Test@1234","email":"lead@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"admin ","password":"Test@1234","email":"trail@test.com"}' -v
-
-```
-
-### Testowanie maksymalnej dlugosci nazwy
-
-```bash
-python3 -c "print('A'*256)" | xargs -I{} curl -s -o /dev/null -w "%{http_code}" -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"{}","password":"Test@1234","email":"long@test.com"}'
-
-```
-
-### Testowanie formatu email jako username
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"user@domain.com","password":"Test@1234","email":"email@test.com"}' -v
-
-```
-
-### Testowanie null bytes
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"admin%00","password":"Test@1234","email":"null@test.com"}' -v
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Testowanie przewidywalnych wzorcow nazw uzytkownikow
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fs BASELINE_SIZE
-
-```
-
-### Testowanie z lista domyslnych nazw uzytkownikow
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/cirt-default-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fs BASELINE_SIZE
-
-```
-
-### Testowanie z lista popularnych imion
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/Names/names.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fs BASELINE_SIZE
-
-```
-
-### Testowanie z lista SAP default
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/sap-default-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fs BASELINE_SIZE
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Przetestuj formularz rejestracji z roznymi formatami nazw uzytkownikow
-2. Sprawdz czy aplikacja wymusza minimalna/maksymalna dlugosc nazwy
-3. Zweryfikuj czy znaki specjalne sa prawidlowo filtrowane
-4. Sprawdz czy istnieje blacklista zarezerwowanych nazw (admin, root, system)
-5. W Burp Repeater przetestuj rozne warianty nazw (ze spacjami, null bytes, Unicode)
-6. Sprawdz czy polityka nazw jest spowjna miedzy GUI a API
-7. Przeanalizuj komunikaty bledow pod katem ujawniania polityki nazewnictwa
-8. Sprawdz czy mozna odgadnac schemat nadawania nazw wewnetrznych kont (np. user001, user002)
-
-
----
+- [ ] Reserved names blocked (admin, root, system, postmaster)
+- [ ] Case-insensitive uniqueness (Admin == admin)
+- [ ] Trim whitespace before save
+- [ ] Unicode normalization (NFC) before compare
+- [ ] Cyrillic confusables blocked
+- [ ] Zero-width chars blocked
+- [ ] RTL override chars blocked
+- [ ] Min/max length enforced
+- [ ] Allowlist of characters (alphanumeric + `.`, `-`, `_`)
+- [ ] User IDs are random UUIDs (nie sequential)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md
 
-### Polityka nazw uzytkownikow
+### Polityka nazw użytkowników
 
-- **Case-insensitive**: `Admin`, `admin`, `ADMIN` musza byc traktowane jako to samo konto
-- Uzyj **allowlist znakow**: alfanumeryczne + ograniczone znaki specjalne (`.`, `-`, `_`)
-- **Min/max dlugosc**: np. 3-64 znaki — zapobiegaj krotkim i bardzo dlugim nazwom
-- Trimuj biale znaki na poczatku i koncu — `" admin"` != `"admin"` to blad
-- User ID powinno byc **losowe** (UUID) — nie sekwencyjne (user001, user002)
+- **Case-insensitive**: `Admin`, `admin`, `ADMIN` muszą być traktowane jako to samo konto
+- Użyj **allowlist znaków**: alfanumeryczne + ograniczone znaki specjalne (`.`, `-`, `_`)
+- **Min/max długość**: np. 3-64 znaki — zapobiegaj krótkim i bardzo długim nazwom
+- Trimuj białe znaki na początku i końcu — `" admin"` != `"admin"` to błąd
+- User ID powinno być **losowe** (UUID) — nie sekwencyjne (user001, user002)
 
 ### Zarezerwowane nazwy — denylist
 
 - Blokuj nazwy systemowe: `root`, `admin`, `administrator`, `system`, `null`, `undefined`, `NaN`
 - Blokuj nazwy serwisowe: `postmaster`, `webmaster`, `hostmaster`, `abuse`, `noreply`
-- Blokuj slowa kluczowe: `true`, `false`, `login`, `register`, `api`, `graphql`
-- Uwzglednij warianty case i Unicode confusables
+- Blokuj słowa kluczowe: `true`, `false`, `login`, `register`, `api`, `graphql`
+- Uwzględnij warianty case i Unicode confusables
 
 ### Email jako identyfikator
 
-- Pozwol uzytkownikom uzywac email jako username, ale **weryfikuj email**
-- Umozliw zmiane adresu email **bez zmiany konta** — oddziel identyfikator od emaila
+- Pozwól użytkownikom używać email jako username, ale **weryfikuj email**
+- Umożliw zmianę adresu email **bez zmiany konta** — oddziel identyfikator od emaila
 - Waliduj format email: nie akceptuj `test@test@test.com`, `user@.com`
-- Uwzglednij aliasy email: `user+tag@gmail.com` — czy to ten sam uzytkownik?
+- Uwzględnij aliasy email: `user+tag@gmail.com` — czy to ten sam użytkownik?
 
 ### Unicode i znaki specjalne — zagrożenia
 
-- **Unicode confusables**: cyrylica `А` (U+0410) wyglada jak lacinskie `A` (U+0041)
-- **Null bytes**: `admin%00` moze byc traktowane jako `admin` po obcieciu
-- **Right-to-left override**: U+202E moze zmienic wyswietlanie nazwy
+- **Unicode confusables**: cyrylica `А` (U+0410) wygląda jak łacińskie `A` (U+0041)
+- **Null bytes**: `admin%00` może być traktowane jako `admin` po obcięciu
+- **Right-to-left override**: U+202E może zmienić wyświetlanie nazwy
 - **Zero-width characters**: U+200B (zero-width space) — niewidoczny ale zmienia unikatowość
-- Normalizuj Unicode (NFC) przed porownaniem i zapisem
+- Normalizuj Unicode (NFC) przed porównaniem i zapisem
 
 ### Testowanie
 
-- Czy mozna zarejestrowac konto z nazwa istniejacego uzytkownika (case variant, Unicode)?
-- Czy nazwy systemowe sa zablokowane?
-- Czy komunikaty bledow ujawniaja politykę nazewnictwa?
-- Czy schemat nazw wewnetrznych kont jest przewidywalny (sekwencyjne ID)?
-- Czy mozna wstawic znaki specjalne (spacje, null bytes, Unicode) w username?
+- Czy można zarejestrować konto z nazwą istniejącego użytkownika (case variant, Unicode)?
+- Czy nazwy systemowe są zablokowane?
+- Czy komunikaty błędów ujawniają politykę nazewnictwa?
+- Czy schemat nazw wewnętrznych kont jest przewidywalny (sekwencyjne ID)?
+- Czy można wstawić znaki specjalne (spacje, null bytes, Unicode) w username?
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Homograph account hijack**: rejestracja `paypaӏ.com` (where `ӏ` is Cyrillic U+04CF, looks like `l`) - phishing pivot.
+- **Email punycode confusion**: `user@xn--paypl-pjk.com` (punycode) renders as similar domain.
+- **Username case insensitivity bypass**: aplikacja traktuje `Admin` ≠ `admin` w DB ale auth filter robi case-insensitive lookup → możliwy collision.
+- **NFKC vs NFC normalization**: aplikacja może używać NFC (default) ale baza danych NFKC → ścieżka do collision.
+- **Zero-width injection**: `adm​in` (with zero-width space U+200B between m and i) - looks like `admin` but unique entry.
+- **Sequential user ID enumeration**: `/api/users/1` accessible → loop attacker iterates through all accounts.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Trim only leading whitespace**: aplikacje trim leading spaces ale nie trailing → `admin` and `admin ` different accounts.
+- **Email aliases not normalized**: `User@Gmail.Com` vs `user@gmail.com` - Gmail treats same but app may not.
+- **Unicode reserved names**: `àdmin` (with à) is not blocked even though "admin" is.
 
-### L1 (Podstawowy)
+### Świeżynki z research
+
+- **Unicode security**: https://www.unicode.org/reports/tr36/
+- **HackTricks Username**: https://book.hacktricks.xyz/pentesting-web/username-related-attacks
+- **PayloadsAllTheThings Unicode**: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Unicode%20Injection
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Hackvertor | Unicode normalization testing | [GitHub](https://github.com/PortSwigger/hackvertor) |
+| Param Miner | Hidden parameter discovery | [GitHub](https://github.com/PortSwigger/param-miner) |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/03-Identity_Management_Testing/05-Testing_for_Weak_or_Unenforced_Username_Policy
+- OWASP Authentication CS: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- HackTricks Username Attacks: https://book.hacktricks.xyz/pentesting-web/username-related-attacks
+- Unicode Security TR36: https://www.unicode.org/reports/tr36/
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V6.2.5 | Password Security | Verify that passwords of any composition can be used, without rules limiting the type of characters permitted. There must be no requirement for a minimum number of upper or lower case characters, numbers, or special characters. |
-| V6.2.1 | Password Security | Verify that user set passwords are at least 8 characters in length although a minimum of 15 characters is strongly recommended. |
+| V2.1.9 | Password Security (L1) | Username/email truncated, normalized. |
+| V3.2.3 | Session (L1) | Session token entropy ≥ 64 bits. |

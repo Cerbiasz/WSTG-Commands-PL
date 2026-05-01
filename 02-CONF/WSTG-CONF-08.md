@@ -1,87 +1,58 @@
 # WSTG-CONF-08 — Test RIA Cross Domain Policy
 
-## Cele
+## Cel
 
-- Review cross-domain policy files (crossdomain.xml, clientaccesspolicy.xml)
-- Identify overly permissive cross-domain policies
-- Assess CORS configuration
+Sprawdzenie polityki cross-domain dla legacy RIA (Rich Internet Applications) — Flash (`crossdomain.xml`), Silverlight (`clientaccesspolicy.xml`). Mimo że Flash jest EOL od 2020, te pliki nadal istnieją na produkcji i z `domain="*"` umożliwiają pełny cross-origin read.
 
-## KOMENDY
+> Test częściowo automatyzowany — `crossdomain.xml` jest sprawdzany w **WSTG-INFO-03 metafiles**. Tu MD koncentruje się na analizie polityki + nowoczesnym CORS (cross-ref WSTG-CONF-14).
 
-### Sprawdzenie crossdomain.xml (Flash/Adobe)
+## Automatyzacja Nuclei
 
 ```bash
-curl -s https://TARGET/crossdomain.xml | tee output_crossdomain.xml
-curl -s http://TARGET/crossdomain.xml | tee output_crossdomain_http.xml
+# WSTG-INFO-03 zawiera test crossdomain.xml + clientaccesspolicy.xml
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-info-03-metafiles.yaml
 
+# CORS misconfiguration (modern equivalent)
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/cors-misconfiguration/
+
+# Manual CORS testing per endpoint
+nuclei -l burp-export.xml -im burp \
+       -tags cors,misconfig
 ```
 
-### Sprawdzenie clientaccesspolicy.xml (Silverlight)
+## Coverage Matrix
 
-```bash
-curl -s https://TARGET/clientaccesspolicy.xml | tee output_clientaccesspolicy.xml
+| Wymiar | Pokryte przez | Notka |
+|---|---|---|
+| crossdomain.xml exists + content | WSTG-INFO-03 | nasz szablon |
+| clientaccesspolicy.xml | WSTG-INFO-03 | nasz szablon |
+| `domain="*"` wildcard | WSTG-INFO-03 (extractor) | + manual analysis |
+| CORS Access-Control-Allow-Origin reflection | http/misconfiguration/cors-* | manual + scanner |
+| `Allow-Credentials: true` z luźnym ACAO | manual | klasyczna luka |
+| Origin: null bypass | manual | iframe sandbox technique |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Sprawdzenie CORS headers
+### Metodologia (5 kroków)
 
-```bash
-curl -sI https://TARGET -H "Origin: https://evil.com" | grep -iE "^Access-Control" | tee output_cors.txt
-curl -sI https://TARGET -H "Origin: https://evil.com" -H "Access-Control-Request-Method: POST" | grep -iE "^Access-Control" | tee output_cors_preflight.txt
+1. **Pull crossdomain.xml + clientaccesspolicy.xml**: WSTG-INFO-03 robot.
+2. **Analyze content**: każdy `<allow-access-from domain>` → ocena czy domena zaufana.
+3. **CORS test per endpoint**: dla każdego `/api/*` wysłać `Origin: https://evil.com` i sprawdzić `Access-Control-Allow-Origin`.
+4. **Origin reflection test**: `Origin: https://attacker.target.com.evil.com` — czy backend whitelistuje suffix lub prefix.
+5. **Credentials misuse**: `Allow-Credentials: true` z reflected origin = data exfil.
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-### Testowanie roznych origin w CORS
-
-```bash
-curl -sI https://TARGET -H "Origin: null" | grep -iE "^Access-Control"
-curl -sI https://TARGET -H "Origin: https://TARGET.evil.com" | grep -iE "^Access-Control"
-curl -sI https://TARGET -H "Origin: https://eviltarget.com" | grep -iE "^Access-Control"
-curl -sI https://TARGET -H "Origin: https://subdomain.TARGET" | grep -iE "^Access-Control"
-
-```
-
-### Sprawdzenie Access-Control-Allow-Credentials
-
-```bash
-curl -sI https://TARGET -H "Origin: https://evil.com" | grep -i "Access-Control-Allow-Credentials"
-# NIEBEZPIECZNE: Allow-Credentials: true + Allow-Origin: https://evil.com
-
-```
-
-### Sprawdzenie wildcard CORS
-
-```bash
-curl -sI https://TARGET -H "Origin: https://anything.com" | grep -i "Access-Control-Allow-Origin"
-# NIEBEZPIECZNE: Access-Control-Allow-Origin: *
-
-```
-
-### Sprawdzenie na roznych endpointach
-
-```bash
-curl -sI https://TARGET/api/ -H "Origin: https://evil.com" | grep -iE "^Access-Control"
-curl -sI https://TARGET/api/v1/ -H "Origin: https://evil.com" | grep -iE "^Access-Control"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak dedykowanych wordlist - test polega na analizie plikow polityk cross-domain
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz https://TARGET/crossdomain.xml - szukaj allow-access-from domain="*"
-2. Sprawdz https://TARGET/clientaccesspolicy.xml
-3. W Burp Suite: dodaj naglowek Origin: https://evil.com i sprawdz odpowiedz CORS
-4. Sprawdz czy Access-Control-Allow-Origin odbija dowolny Origin
-5. Zweryfikuj czy Access-Control-Allow-Credentials: true nie jest polaczone z wildcard
-6. Sprawdz CORS na endpointach API
-7. Przetestuj CORS bypass: subdomena, null origin, regex bypass
-8. W DevTools > Console: sprobuj fetch() z innej domeny do TARGET
-
-
----
+- [ ] `/crossdomain.xml` content
+- [ ] `/clientaccesspolicy.xml` content
+- [ ] Wildcard `domain="*"` w polityce
+- [ ] Wszystkie wpisy `<allow-access-from>` — sprawdź zaufanie
+- [ ] CORS `Access-Control-Allow-Origin` reflection per endpoint
+- [ ] `Access-Control-Allow-Credentials: true` w połączeniu z luźnym ACAO
+- [ ] `Origin: null` bypass test
+- [ ] Subdomain bypass (`evil.target.com`, `target.com.evil.com`)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -91,39 +62,39 @@ curl -sI https://TARGET/api/v1/ -H "Origin: https://evil.com" | grep -iE "^Acces
 
 | Konfiguracja | Ryzyko | Poprawna wersja |
 |-------------|--------|-----------------|
-| `allow-access-from domain="*"` | Dowolna domena moze czytac dane | Ogranicz do konkretnych domen |
-| `<allow-http-request-headers-from domain="*">` | Dowolne naglowki z dowolnej domeny | Tylko zaufane domeny |
-| `Access-Control-Allow-Origin: *` + credentials | Nie dziala w przegladarce, ale swiadczy o zlej konfiguracji | Konkretna domena, nie wildcard |
-| Reflected Origin w ACAO | Atakujacy moze czytac dane ofiary | Whitelist dozwolonych origin |
+| `allow-access-from domain="*"` | Dowolna domena może czytać dane | Ogranicz do konkretnych domen |
+| `<allow-http-request-headers-from domain="*">` | Dowolne nagłówki z dowolnej domeny | Tylko zaufane domeny |
+| `Access-Control-Allow-Origin: *` + credentials | Nie działa w przeglądarce, ale świadczy o złej konfiguracji | Konkretna domena, nie wildcard |
+| Reflected Origin w ACAO | Atakujący może czytać dane ofiary | Whitelist dozwolonych origin |
 | `Access-Control-Allow-Origin: null` | Bypass przez iframe sandbox | Nie akceptuj null origin |
 
 ### CORS — poprawna konfiguracja
 
-- **Whitelist origin**: sprawdzaj Origin z lista dozwolonych domen — nie odbijaj dynamicznie
+- **Whitelist origin**: sprawdzaj Origin z listą dozwolonych domen — nie odbijaj dynamicznie
 - **Credentials**: `Access-Control-Allow-Credentials: true` wymaga konkretnego origin (nie `*`)
 - **Metody**: ogranicz `Access-Control-Allow-Methods` do potrzebnych (GET, POST)
-- **Naglowki**: ogranicz `Access-Control-Allow-Headers` do minimum
-- **Max-Age**: ustaw `Access-Control-Max-Age` aby zmniejszyc preflight requests
-- **Expose-Headers**: nie ujawniaj wrazliwych naglowkow
+- **Nagłówki**: ogranicz `Access-Control-Allow-Headers` do minimum
+- **Max-Age**: ustaw `Access-Control-Max-Age` aby zmniejszyć preflight requests
+- **Expose-Headers**: nie ujawniaj wrażliwych nagłówków
 
 ### crossdomain.xml (Flash) — status
 
-- Flash Player oficjalnie wycofany (EOL grudzien 2020)
-- Pliki `crossdomain.xml` nadal moga istniec na serwerach — usun je
-- Jesli konieczny dla legacy: `allow-access-from domain="specific.domain.com"`, **nigdy** `domain="*"`
+- Flash Player oficjalnie wycofany (EOL grudzień 2020)
+- Pliki `crossdomain.xml` nadal mogą istnieć na serwerach — usuń je
+- Jeśli konieczny dla legacy: `allow-access-from domain="specific.domain.com"`, **nigdy** `domain="*"`
 
 ### clientaccesspolicy.xml (Silverlight) — status
 
-- Silverlight oficjalnie wycofany (EOL pazdziernik 2021)
-- Usun pliki `clientaccesspolicy.xml` z serwerow produkcyjnych
-- Legacy Silverlight apps powinny byc zmigrowane
+- Silverlight oficjalnie wycofany (EOL październik 2021)
+- Usuń pliki `clientaccesspolicy.xml` z serwerów produkcyjnych
+- Legacy Silverlight apps powinny być zmigrowane
 
 ### Testowanie CORS — payloady
 
 ```
 Origin: https://evil.com                    # Podstawowy test
 Origin: null                                # Iframe sandbox bypass
-Origin: https://target.com.evil.com         # Subdomena atakujacego
+Origin: https://target.com.evil.com         # Subdomena atakującego
 Origin: https://eviltarget.com              # Suffix match bypass
 Origin: https://target.com%60.evil.com      # Backtick bypass
 Origin: https://sub.target.com              # Subdomena target
@@ -131,33 +102,52 @@ Origin: https://sub.target.com              # Subdomena target
 
 ### Obrona
 
-- Usun `crossdomain.xml` i `clientaccesspolicy.xml` jesli nie sa potrzebne
+- Usuń `crossdomain.xml` i `clientaccesspolicy.xml` jeśli nie są potrzebne
 - Implementuj CORS whitelist na serwerze — nie odbijaj Origin dynamicznie
-- Nie laczkuj `Allow-Credentials: true` z luznymi origin rules
-- Testuj CORS na kazdym endpoincie API osobno — konfiguracja moze sie roznic
-- Uzyj CSP `connect-src` jako dodatkowa warstwe ochrony
+- Nie łącz `Allow-Credentials: true` z luźnymi origin rules
+- Testuj CORS na każdym endpoincie API osobno — konfiguracja może się różnić
+- Użyj CSP `connect-src` jako dodatkowa warstwę ochrony
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **CORS Origin parser confusion**: backend może parsować Origin jako `target.com.evil.com` → suffix match daje `target.com`. Frans Rosén research.
+- **`Origin: null` via sandboxed iframe**: data: URI iframe ma `Origin: null`. Aplikacje akceptujące null = pełny CSRF z dowolnego sandboxed contextu.
+- **Wildcard subdomain takeover + CORS**: `target.com` whitelistuje `*.target.com`, ale `staging.target.com` nie żyje (subdomain takeover), atakujący przejmuje → CORS umożliwia data exfil.
+- **CORS via 3xx redirect**: redirect z origin-A na origin-B z CORS pre-flight może być wykorzystany do bypassu (community pattern).
+- **PostMessage misuse + CORS**: aplikacje używające `postMessage` cross-origin często nie weryfikują origin w handler — JavaScript-side bypass.
+
+### Common pitfalls
+
+- **`Access-Control-Allow-Origin: *` z `Allow-Credentials: true` jest IGNOROWANY przez przeglądarkę**: błąd konfiguracji ale nie real-world exploit (chyba że wykorzystany przez non-browser HTTP client).
+- **Pre-flight cache**: `Access-Control-Max-Age: 86400` cache'uje CORS decision — testy muszą używać unique origins.
+- **Vary: Origin missing**: cache shared między różnymi origin → poison cache z atak origin → victim dostaje cached response.
+
+### Świeżynki z research
+
+- **CORS misconfiguration enumeration via HTTP/2** (community) — niektóre warianty bypass z HTTP/2.
+- **Frans Rosén CORS research**: classic patterns: https://hackerone.com/reports/235200
+- **PortSwigger Academy — CORS**: https://portswigger.net/web-security/cors
+- **HackTricks CORS Bypass**: https://book.hacktricks.xyz/pentesting-web/cors-bypass
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| CSP Auditor | Analiza naglowkow Content-Security-Policy | [GitHub](https://github.com/GoSecure/csp-auditor) |
-| Headers Analyzer | Analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+| CORS* | Active CORS testing | [GitHub](https://github.com/PortSwigger/cors-additional-checks) |
+| Param Miner | Hidden header discovery | [GitHub](https://github.com/PortSwigger/param-miner) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/08-Test_RIA_Cross_Domain_Policy
+- OWASP REST Security Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+- PortSwigger CORS Lab: https://portswigger.net/web-security/cors
+- HackTricks CORS Bypass: https://book.hacktricks.xyz/pentesting-web/cors-bypass
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.4.2 | Browser Security Mechanism Headers | Verify that the Cross-Origin Resource Sharing (CORS) Access-Control-Allow-Origin header field is a fixed value by the application, or if the Origin HTTP request header field value is used, it is validated against an allowlist of trusted origins. When 'Access-Control-Allow-Origin: *' needs to be used, verify that the response does not include any sensitive information. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.5.4 | Browser Origin Separation | Verify that separate applications are hosted on different hostnames to leverage the restrictions provided by same-origin policy, including how documents or scripts loaded by one origin can interact with resources from another origin and hostname-based restrictions on cookies. |
+| V14.5.3 | Configuration (L1) | CORS Access-Control-Allow-Origin uses explicit list, no wildcards. |
+| V14.5.4 | Configuration (L2) | HTTP request methods authenticated and authorized. |

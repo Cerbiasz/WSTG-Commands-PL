@@ -1,148 +1,87 @@
 # WSTG-CONF-06 — Test HTTP Methods
 
-## Cele
+## Cel
 
-- Enumerate HTTP methods supported by the web server
-- Test access control bypass via HTTP method overriding
-- Identify dangerous methods (PUT, DELETE, TRACE, CONNECT)
+Sprawdzenie czy serwer akceptuje nadmiarowe metody HTTP zwiększające powierzchnię ataku: TRACE/TRACK (Cross-Site Tracing), PUT/DELETE (file ops), CONNECT (proxy), WebDAV (PROPFIND/MKCOL/MOVE). Test również Method Override przez X-HTTP-Method-Override.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### cURL - sprawdzenie OPTIONS
+### Nasz dedykowany szablon
 
 ```bash
-curl -sI -X OPTIONS https://TARGET | tee output_options.txt
-curl -sI -X OPTIONS https://TARGET -H "Access-Control-Request-Method: PUT" | tee output_options_put.txt
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-06-http-methods.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-06.jsonl
 ```
 
-### Nmap - skrypty HTTP methods
+Szablon w 6 grupach: OPTIONS (lista dozwolonych metod + DAV header + MS-Author-Via), TRACE (XST verification z echo header), PUT (test obecności na nieistniejący path), DELETE (test na nieistniejący), X-HTTP-Method-Override (POST → DELETE override), WebDAV PROPFIND.
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
-nmap --script http-methods -p 80,443 TARGET -oN output_nmap_methods.txt
-nmap --script http-methods --script-args http-methods.url-path='/admin/' -p 80,443 TARGET -oN output_nmap_methods_admin.txt
-nmap --script http-trace -p 80,443 TARGET -oN output_nmap_trace.txt
+# Method-related misconfigurations
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/http-trace.yaml \
+       -t resources/nuclei-templates/http/misconfiguration/options-method.yaml
 
+# WebDAV detection
+nuclei -l burp-export.xml -im burp \
+       -tags webdav
 ```
 
-### Testowanie roznych metod HTTP
+## Coverage Matrix
 
-```bash
-curl -sI -X GET https://TARGET | head -1
-curl -sI -X POST https://TARGET | head -1
-curl -sI -X PUT https://TARGET | head -1
-curl -sI -X DELETE https://TARGET | head -1
-curl -sI -X PATCH https://TARGET | head -1
-curl -sI -X HEAD https://TARGET | head -1
-curl -sI -X OPTIONS https://TARGET | head -1
-curl -sI -X TRACE https://TARGET | head -1
-curl -sI -X CONNECT https://TARGET | head -1
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| OPTIONS allowed methods | ✓ | — |
+| TRACE/TRACK (XST) | ✓ | — |
+| PUT (presence test, nie destrukcyjny) | ✓ | — |
+| DELETE (presence test, nieistniejący path) | ✓ | — |
+| WebDAV (PROPFIND, DAV header) | ✓ | full WebDAV chain (MKCOL/COPY) → manual |
+| X-HTTP-Method-Override | ✓ | — |
+| `_method=` body parameter override | częściowe | manual (Rails/Laravel) |
+| CONNECT (proxy method) | częściowo | przez OPTIONS, brak active test |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### TRACE method - Cross-Site Tracing test
+### Metodologia (5 kroków)
 
-```bash
-curl -sI -X TRACE https://TARGET | tee output_trace.txt
-curl -s -X TRACE https://TARGET -H "Cookie: test=xst_test" | tee output_trace_xst.txt
+1. **OPTIONS sweep**: `OPTIONS /` na każdym endpoincie — pełna lista metod + DAV markers.
+2. **TRACE verification**: aktywny TRACE z custom header → echo confirmation = XST possible.
+3. **PUT/DELETE testing**: na nieistniejący path (bezpieczne); 200/201/204 = możliwy upload.
+4. **Method Override**: POST z `X-HTTP-Method-Override: DELETE` na endpoincie który normalnie odrzuca DELETE → response 200/204 = override honored.
+5. **WebDAV chain**: jeśli PROPFIND zwraca 207 Multi-Status, próbować MKCOL (create collection), PUT, MOVE — pełen takeover potential.
 
-```
+### Co MUSI być sprawdzone (10 punktów)
 
-### PUT method test
-
-```bash
-curl -sI -X PUT https://TARGET/test_put_file.txt -d "test content" | tee output_put_test.txt
-
-```
-
-### DELETE method test
-
-```bash
-curl -sI -X DELETE https://TARGET/test_put_file.txt | tee output_delete_test.txt
-
-```
-
-### HTTP Method Override headers
-
-```bash
-curl -sI https://TARGET -H "X-HTTP-Method-Override: PUT" | head -5
-curl -sI https://TARGET -H "X-HTTP-Method: PUT" | head -5
-curl -sI https://TARGET -H "X-Method-Override: PUT" | head -5
-
-```
-
-### Access control bypass via method change
-
-```bash
-# Jesli GET na /admin daje 403, sprobuj inne metody
-curl -sI -X POST https://TARGET/admin | head -1
-curl -sI -X PUT https://TARGET/admin | head -1
-curl -sI -X PATCH https://TARGET/admin | head -1
-curl -sI -X HEAD https://TARGET/admin | head -1
-
-```
-
-### Testowanie niestandardowych metod
-
-```bash
-curl -sI -X PROPFIND https://TARGET | head -5
-curl -sI -X MOVE https://TARGET | head -5
-curl -sI -X COPY https://TARGET | head -5
-curl -sI -X MKCOL https://TARGET | head -5
-curl -sI -X LOCK https://TARGET | head -5
-
-```
-
-### WebDAV detection
-
-```bash
-curl -sI -X PROPFIND https://TARGET -H "Depth: 0" | tee output_webdav.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### fuzzdb common methods
-
-```bash
-# Uzyj listy metod z fuzzdb
-ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-methods/common-methods.txt -mc all -o output_ffuf_methods.json
-
-# Brak dodatkowych wordlist - test polega na sprawdzeniu konkretnych metod HTTP
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Repeater: wyslij zapytanie OPTIONS i sprawdz naglowek Allow
-2. Zmien metode HTTP w Burp Repeater na PUT, DELETE, TRACE i obserwuj odpowiedz
-3. Testuj HTTP Method Override: dodaj naglowek X-HTTP-Method-Override
-4. Sprawdz czy TRACE jest wlaczony - ryzyko Cross-Site Tracing (XST)
-5. Sprawdz czy PUT pozwala na upload plikow na serwer
-6. Testuj access control bypass: jesli GET daje 403, sprobuj POST/PUT/PATCH
-7. Sprawdz WebDAV methods (PROPFIND, MKCOL, MOVE, COPY)
-8. Porownaj odpowiedzi na rozne metody dla roznych endpointow
-9. Sprawdz czy metoda HEAD ujawnia informacje bez zwracania body
-
-
----
+- [ ] OPTIONS na `/` — wszystkie zwrócone metody
+- [ ] TRACE na `/` — aktywne XST (echo custom header)
+- [ ] PUT na nieistniejący path
+- [ ] DELETE na nieistniejący path
+- [ ] X-HTTP-Method-Override: DELETE (przez POST)
+- [ ] X-HTTP-Method-Override: PUT
+- [ ] `_method=DELETE` jako form/JSON parameter
+- [ ] PROPFIND z DAV: header
+- [ ] MKCOL (jeśli WebDAV aktywny)
+- [ ] CONNECT method (proxy abuse)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — REST_Security_Cheat_Sheet.md
 
-### Metody HTTP — bezpieczenstwo
+### Metody HTTP — bezpieczeństwo
 
 - Zezwalaj TYLKO na potrzebne metody — typowo GET i POST, opcjonalnie PUT/PATCH/DELETE dla REST API
-- **TRACE**: wylacz — umozliwia Cross-Site Tracing (XST), ujawnia cookies i auth headers
+- **TRACE**: wyłącz — umożliwia Cross-Site Tracing (XST), ujawnia cookies i auth headers
 - **PUT/DELETE**: zezwalaj TYLKO na autoryzowanych endpointach API — nie na statycznych zasobach
-- **OPTIONS**: moze ujawniac dozwolone metody — rozważ ograniczenie (ale potrzebne dla CORS preflight)
-- **CONNECT**: wylacz — moze byc uzyty do tunelowania
-- Niestandardowe metody (FOO, JEFF): serwer powinien zwracac 405 — nie akceptowac jako GET
+- **OPTIONS**: może ujawniać dozwolone metody — rozważ ograniczenie (ale potrzebne dla CORS preflight)
+- **CONNECT**: wyłącz — może być użyty do tunelowania
+- Niestandardowe metody (FOO, JEFF): serwer powinien zwracać 405 — nie akceptować jako GET
 
 ### Konfiguracja per serwer
 
-| Serwer | Jak ograniczyc metody |
+| Serwer | Jak ograniczyć metody |
 |--------|---------------------|
 | Apache | `<LimitExcept GET POST>Require all denied</LimitExcept>` |
 | Nginx | `if ($request_method !~ ^(GET\|POST)$) { return 405; }` |
@@ -153,36 +92,48 @@ ffuf -u https://TARGET -X FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/common-me
 
 - Headery: `X-HTTP-Method-Override`, `X-Method-Override`, `X-HTTP-Method`
 - Parametr: `_method=PUT` w body (Rails, Laravel, Django)
-- Atakujacy moze uzyc POST z override header aby wykonac PUT/DELETE
-- Obrona: nie akceptuj method override headers z niezaufanych zrodel
+- Atakujący może użyć POST z override header aby wykonać PUT/DELETE
+- Obrona: nie akceptuj method override headers z niezaufanych źródeł
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **JBoss HEAD bypass auth**: niektóre wersje JBoss z `<auth-constraint>` na GET ale BEZ na HEAD — atakujący sprawdza zawartość przez HEAD bez auth.
+- **Tomcat method override via servlet mapping**: jeśli servlet używa `doGet()` ale framework akceptuje POST jako `_method=GET` → bypass auth na GET-only routes.
+- **WebDAV MOVE for code execution**: jeśli WebDAV PUT pozwala upload `.jsp` na statyczny dir, MOVE może przenieść do `/WEB-INF/` lub innej executable lokalizacji.
+- **CONNECT method abuse**: jeśli serwer jako proxy akceptuje CONNECT, atakujący może użyć go jako proxy do internal services (rzadkie ale istnieje).
+- **HTTP method case sensitivity**: `get` vs `GET` — niektóre frameworki traktują różnie. Bypass auth filtra który tylko sprawdza uppercase.
+
+### Common pitfalls
+
+- **TRACE blokowany przez WAF, ale TRACK przepuszczany**: TRACK to Microsoft IIS odpowiednik TRACE — często pominięty w blocklistach.
+- **PUT 200 nie zawsze oznacza upload**: niektóre serwery zwracają 200 z error message. Verify przez GET na uploaded path.
+- **Method Override silent ignored**: header X-HTTP-Method-Override może być przyjęty ale wewnętrznie ignorowany — różne odpowiedzi to nie zawsze sukces.
+
+### Świeżynki z research
+
+- **HTTP/2 method smuggling** (PortSwigger Research) — różne metody w HTTP/2 frame vs HTTP/1 conversion = backend confusion.
+- **HackTricks PUT method WebDAV**: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/put-method-webdav
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Identity Crisis | Testowanie roznych odpowiedzi serwera na rozne User-Agenty i metody | [GitHub](https://github.com/EnableSecurity/Identity-Crisis) |
-| Bypass WAF | Obchodzenie regul Web Application Firewall | [GitHub](https://github.com/codewatchorg/bypasswaf) |
+| HTTP Request Smuggler | Detekcja smugglingu i method-related issues | [GitHub](https://github.com/PortSwigger/http-request-smuggler) |
+| Authz | Testowanie authorization na różnych metodach | community ext |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/06-Test_HTTP_Methods
+- HackTricks PUT WebDAV: https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/put-method-webdav
+- RFC 9110 (HTTP semantics): https://datatracker.ietf.org/doc/html/rfc9110
+- RFC 4918 (WebDAV): https://datatracker.ietf.org/doc/html/rfc4918
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.5.3 | Browser Origin Separation | Verify that HTTP requests to sensitive functionality use appropriate HTTP methods such as POST, PUT, PATCH, or DELETE, and not methods defined by the HTTP specification as "safe" such as HEAD, OPTIONS, or GET. Alternatively, strict validation of the Sec-Fetch-* request header fields can be used to ensure that the request did not originate from an inappropriate cross-origin call, a navigation request, or a resource load (such as an image source) where this is not expected. |
-
-### L2 (Standardowy)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V13.4.4 | Unintended Information Leakage | Verify that using the HTTP TRACE method is not supported in production environments, to avoid potential information leakage. |
-
-### L3 (Zaawansowany)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V4.1.4 | Generic Web Service Security | Verify that only HTTP methods that are explicitly supported by the application or its API (including OPTIONS during preflight requests) can be used and that unused methods are blocked. |
+| V13.2.1 | RESTful (L1) | Enabled HTTP methods documented and appropriate. |
+| V13.2.2 | RESTful (L2) | JSON requests verify Content-Type as application/json. |
+| V14.4.1 | Configuration (L1) | Disabled directory browsing, banner disclosure. |

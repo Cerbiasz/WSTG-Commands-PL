@@ -1,0 +1,73 @@
+# ============================================================================
+# WSTG-SESS-09: Session Hijacking (Universal)
+# ============================================================================
+# Review status: NOWY | Reviewer: Claude Code (Opus 4.7) | 2026-05-01
+#
+# Coverage: detekcja session ID w URL (logged everywhere), session token
+# w GET parameters, sensitive data w URL.
+# ============================================================================
+
+id: wstg-sess-09-session-hijacking
+
+info:
+  name: "WSTG-SESS-09: Session Hijacking Markers (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa session ID/token w URL (logged in proxy/Referer), session
+    persistence przez URL rewriting (jsessionid w path), brak Secure/HttpOnly
+    flagów (cross WSTG-SESS-02).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/09-Testing_for_Session_Hijacking
+  classification:
+    cwe-id: CWE-384,CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N
+    cvss-score: 7.4
+  tags: dast,wstg,wstg-v42-sess-09,session-hijacking,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # Session ID in URL path (jsessionid pattern)
+      - type: regex
+        part: body
+        name: session-id-in-url
+        regex:
+          - "(?i)\\bjsessionid=[a-z0-9]+"
+          - "(?i)\\bphpsessid=[a-z0-9]+"
+          - "(?i)[?&](?:session|sid|token|auth)=[A-Za-z0-9_-]{16,}"
+
+      # Forms with session in URL action
+      - type: regex
+        part: body
+        name: form-action-with-session-token
+        regex:
+          - "(?i)<form[^>]*action=[\"'][^\"']*[?&](?:session|token|auth)=[^\"']+[\"']"
+
+      # Authorization token in URL (anti-pattern)
+      - type: regex
+        part: body
+        name: auth-token-in-url
+        regex:
+          - "(?i)href=[\"'][^\"']*[?&](?:access_token|api_key|bearer)=[^\"']+[\"']"
+
+      # JWT in URL
+      - type: regex
+        part: body
+        name: jwt-in-url
+        regex:
+          - "(?i)[?&]\\w*=eyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\."
+
+# ============================================================================
+# Known limitations:
+# - Tylko URL-based session ID detection. Cookie security cross-ref SESS-02.
+# - Session fixation (active test) wymaga manual.
+# ============================================================================

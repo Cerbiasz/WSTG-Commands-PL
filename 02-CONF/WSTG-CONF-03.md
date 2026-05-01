@@ -1,197 +1,154 @@
 # WSTG-CONF-03 — Test File Extensions Handling for Sensitive Information
 
-## Cele
+## Cel
 
-- Enumerate sensitive file extensions that may reveal source code or config
-- Identify server behavior for different file extensions
-- Find files with backup/temporary extensions (.bak, .old, .swp, etc.)
+Wykrycie błędów obsługi rozszerzeń plików: backupy (`.bak`/`.old`/`~`), źródła (`.phps`/`.inc`), config (`.env`/`.yml`), DB dumps (`.sql`), logi, IDE artifacts (`.git/`, `.DS_Store`). Najczęstszy single-finding krytyczny w pentestingu — `.env` z hasłami DB to typowy initial access.
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### ffuf - fuzzowanie rozszerzen plikow
+### Nasz dedykowany szablon
 
 ```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/web-extensions.txt -mc 200,301,302 -o output_ffuf_extensions.json
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-03-file-extensions.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-03.jsonl
 ```
 
-### gobuster z rozszerzeniami
+Szablon w 5 grupach: backup files (index.php.bak, wp-config.bak, database.sql, backup.zip), source disclosure (.phps/.inc), config files (.env warianty, database.yml, application.properties), IDE leftovers (.idea/, .vscode/, .DS_Store), log files (laravel.log, production.log).
+
+### Dodatkowe oficjalne szablony Nuclei + ffuf
 
 ```bash
-gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x php,asp,aspx,jsp,html,js,txt,xml,bak,old,conf,config,sql,log,zip,tar,gz -o output_gobuster_ext.txt
+# Exposed files / configs
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/exposures/files/ \
+       -t resources/nuclei-templates/http/exposures/configs/ \
+       -t resources/nuclei-templates/http/exposures/backups/
 
+# Pełna wordlista przez ffuf
+ffuf -u https://target/FUZZ \
+     -w resources/seclists/Discovery/Web-Content/raft-large-files.txt \
+     -mc 200 -fs <baseline_size>
 ```
 
-### dirsearch z rozszerzeniami
+## Coverage Matrix
 
-```bash
-dirsearch -u https://TARGET -e php,asp,aspx,jsp,html,txt,xml,bak,old,conf,sql,log,zip -o output_dirsearch.txt
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| Backup extensions (.bak/.old/~/.swp/.save) | ✓ | — |
+| Source code (.phps/.inc/.source) | ✓ | — |
+| Config files (.env/.yml/.json/.xml/.ini/.properties) | ✓ | — |
+| IDE leftovers (.idea/.vscode/.DS_Store/Thumbs.db) | ✓ | — |
+| Log files (.log/laravel.log/production.log) | ✓ | — |
+| Pełna brute-force wordlista | — | ffuf z SecLists |
+| Archive files (.zip/.tar.gz) z deep content | częściowe | manual investigation |
+| Encoding bypass (`%2e`, `%00`) | — | manual / ffuf |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### Testowanie interpretacji rozszerzen
+### Metodologia (5 kroków)
 
-```bash
-curl -sI https://TARGET/index.php | head -5
-curl -sI https://TARGET/index.php.bak | head -5
-curl -sI https://TARGET/index.php.old | head -5
-curl -sI https://TARGET/index.php~ | head -5
-curl -sI https://TARGET/index.php.swp | head -5
-curl -sI https://TARGET/index.php.save | head -5
-curl -sI https://TARGET/index.php.orig | head -5
-curl -sI https://TARGET/index.php.dist | head -5
-curl -sI https://TARGET/.index.php.swp | head -5
+1. **Sample test**: nasz Nuclei szablon (~30 typowych paths) jako quick win.
+2. **Deep brute-force**: ffuf z `Discovery/Web-Content/raft-large-files.txt` (~50k entries).
+3. **Per stack focus**: dla WordPress dodać wp-content/* paths; dla Laravel sprawdzić storage/logs/laravel.log; dla Rails — log/production.log.
+4. **Encoding bypass**: jeśli WAF blokuje `.env`, próbować `%2e%65%6e%76`, `.env%00`, `.env/`, `.env?cb=1`.
+5. **Content verification**: dla każdego found = pobrać + grep credentials/keys (cross-ref WSTG-INFO-05 hardcoded secrets).
 
-```
+### Co MUSI być sprawdzone (12 punktów)
 
-### Testowanie podwojnych rozszerzen
+- [ ] `.env`, `.env.bak`, `.env.local`, `.env.production`
+- [ ] `wp-config.php.bak`, `wp-config.php~`, `wp-config.old`
+- [ ] `web.config.bak`, `application.properties`, `application.yml`
+- [ ] `composer.json`, `composer.lock`, `package.json`, `package-lock.json` (cross WSTG-INFO-09)
+- [ ] `database.sql`, `dump.sql`, `backup.sql`
+- [ ] `backup.zip`, `site.zip`, `<hostname>.zip`
+- [ ] `index.php.bak`, `config.php.bak`
+- [ ] `.git/HEAD`, `.git/config`, `.svn/entries`
+- [ ] `.DS_Store`, `Thumbs.db`, `.idea/workspace.xml`
+- [ ] Log files w typowych lokalizacjach
+- [ ] phpinfo.php / info.php (cross WSTG-CONF-02)
+- [ ] Server config: `httpd.conf`, `nginx.conf` (rzadkie ale możliwe)
 
-```bash
-curl -sI https://TARGET/test.php.jpg | head -5
-curl -sI https://TARGET/test.asp;.jpg | head -5
-curl -sI https://TARGET/test.php%00.jpg | head -5
+### Per stack — typowe wycieki
 
-```
-
-### Wfuzz - testowanie rozszerzen
-
-```bash
-wfuzz -c -z file,Desktop/WSTG/SecLists-master/Discovery/Web-Content/web-extensions.txt --hc 404 https://TARGET/index.FUZZ
-
-```
-
-### Sprawdzenie source code disclosure
-
-```bash
-curl -s https://TARGET/index.phps | head -30
-curl -s "https://TARGET/index.php::$DATA" | head -30
-curl -s https://TARGET/index.inc | head -30
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### SecLists web extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/web-extensions.txt -mc 200 -o output_ffuf_webext.json
-
-```
-
-### SecLists web extensions big
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/web-extensions-big.txt -mc 200 -o output_ffuf_webext_big.json
-
-```
-
-### Raft extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-large-extensions.txt -mc 200 -o output_ffuf_raft_ext.json
-
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-medium-extensions.txt -mc 200 -o output_ffuf_raft_ext_med.json
-
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/raft-small-extensions.txt -mc 200 -o output_ffuf_raft_ext_small.json
-
-```
-
-### fuzzdb common extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Common.txt -mc 200 -o output_ffuf_fuzzdb_ext_common.json
-
-```
-
-### fuzzdb backup extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Backup.txt -mc 200 -o output_ffuf_fuzzdb_ext_backup.json
-
-```
-
-### fuzzdb most common extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Mostcommon.txt -mc 200 -o output_ffuf_fuzzdb_ext_mostcommon.json
-
-```
-
-### fuzzdb compressed extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/fuzzdb-master/discovery/predictable-filepaths/filename-dirname-bruteforce/Extensions.Compressed.txt -mc 200 -o output_ffuf_fuzzdb_ext_compressed.json
-
-```
-
-### Bug-Bounty-Wordlists extensions
-
-```bash
-ffuf -u https://TARGET/index.FUZZ -w Desktop/WSTG/Bug-Bounty-Wordlists-main/extensions.txt -mc 200 -o output_ffuf_bbw_ext.json
-
-```
-
-### Content discovery z rozszerzeniami
-
-```bash
-gobuster dir -u https://TARGET -w Desktop/WSTG/SecLists-master/Discovery/Web-Content/common.txt -x bak,old,swp,save,orig,dist,tmp,conf,config,sql,zip,tar.gz,7z -o output_gobuster_backup_ext.txt
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zmien rozszerzenie znanych plikow na .bak, .old, .swp, .orig i sprawdz odpowiedz
-2. W Burp Intruder: ustaw payload na rozszerzenia i testuj na znanych sciezkach
-3. Sprawdz czy serwer interpretuje pliki z podwojnym rozszerzeniem (file.php.jpg)
-4. Testuj null byte injection w rozszerzeniach (file.php%00.jpg)
-5. Sprawdz czy pliki .inc, .phps, .bkp sa serwowane jako tekst
-6. Przetestuj case sensitivity rozszerzen (.PHP, .Php, .pHP)
-7. Sprawdz czy serwer IIS obsluguje ::$DATA trick
-8. Szukaj edytor backup files (.swp, .swo, ~, .save)
-
-
----
+| Stack | Charakterystyczny path |
+|---|---|
+| Laravel | `/.env`, `/storage/logs/laravel.log`, `/composer.lock` |
+| WordPress | `/wp-config.php.bak`, `/wp-content/uploads/dump.sql`, `/readme.html` |
+| Drupal | `/sites/default/files/dump.sql`, `/sites/default/private/` |
+| Symfony | `/.env`, `/config/parameters.yml.bak` |
+| Rails | `/config/database.yml`, `/log/production.log`, `/Gemfile.lock` |
+| Spring Boot | `/application.properties`, `/application.yml`, `/META-INF/` |
+| Django | `/settings.py`, `/local_settings.py`, `/db.sqlite3` |
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Attack_Surface_Analysis_Cheat_Sheet.md
 
-### Niebezpieczne rozszerzenia plikow
+### Niebezpieczne rozszerzenia plików
 
 | Rozszerzenie | Ryzyko |
 |-------------|--------|
-| `.bak`, `.old`, `.orig`, `.save` | Kopia zapasowa — moze zawierac kod zrodlowy |
+| `.bak`, `.old`, `.orig`, `.save` | Kopia zapasowa — może zawierać kod źródłowy |
 | `.swp`, `.swo`, `.tmp` | Pliki tymczasowe edytora (vim swap) |
 | `.config`, `.env`, `.ini`, `.yml` | Pliki konfiguracyjne z credentials |
 | `.sql`, `.db`, `.sqlite` | Bazy danych z danymi |
-| `.log` | Logi — moga zawierac tokeny, hasla, dane uzytkownikow |
-| `.git/`, `.svn/` | Repozytorium kodu zrodlowego |
-| `.DS_Store`, `Thumbs.db` | Metadane systemu plikow — ujawniaja strukture katalogow |
-| `.php~`, `.php.bak` | Backup PHP — serwer moze zwrocic kod zrodlowy zamiast wykonac |
+| `.log` | Logi — mogą zawierać tokeny, hasła, dane użytkowników |
+| `.git/`, `.svn/` | Repozytorium kodu źródłowego |
+| `.DS_Store`, `Thumbs.db` | Metadane systemu plików — ujawniają strukturę katalogów |
+| `.php~`, `.php.bak` | Backup PHP — serwer może zwrócić kod źródłowy zamiast wykonać |
 
 ### Obrona
 
-- **Blokuj dostep** do plikow z niebezpiecznymi rozszerzeniami na serwerze webowym
+- **Blokuj dostęp** do plików z niebezpiecznymi rozszerzeniami na serwerze webowym
 - Apache: `<FilesMatch "\.(bak|old|swp|env|log|sql|git)$"> Require all denied </FilesMatch>`
 - Nginx: `location ~* \.(bak|old|swp|env|log|sql)$ { deny all; }`
-- Nie pozostawiaj plikow backup/tymczasowych w katalogu webowym
+- Nie pozostawiaj plików backup/tymczasowych w katalogu webowym
 - Skanuj regularnie: `find /var/www -name "*.bak" -o -name "*.old" -o -name "*.swp"`
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **`.git/` directory recovery**: nawet jeśli `.git/HEAD` zwraca 200, można rekonstruować pełen repo przez `git-dumper` (https://github.com/arthaud/git-dumper) — daje dostęp do całej historii kodu.
+- **`.DS_Store` parsing**: `.DS_Store` (macOS metadata) zawiera nazwy plików w katalogu. `python ds_store_exp.py` wyciąga listę → discovery hidden paths.
+- **PHP source disclosure via `.phps`**: Apache z mod_php konfigurowanym `AddType application/x-httpd-php-source .phps` serwuje highlighted source. Często leftover po debug.
+- **Filename guessing per backup convention**: `<file>.<ext>.<date>` (np. `index.php.20230815`), `<file>.<ext>.bk1`, `<file>.<editor>.swp`, `~$<filename>.docx` (Office temp).
+- **CDN cache replicating wrong content**: `.env` może być cached przez CDN nawet jeśli backend potem dodał regułę block. Cache-buster `?cb=1` jako bypass.
+
+### Common pitfalls
+
+- **WAF blocking common paths**: Cloudflare/AWS WAF mają reguły dla `.env`, `.git/`. Bypass: case (`/.ENV`), trailing chars (`/.env/`), encoding (`%2e%65%6e%76`).
+- **SPA catch-all 200**: aplikacje SPA mogą zwracać index.html z kodem 200 dla każdego path → wymaga matcher na body content.
+- **Compressed responses**: `.bak.gz` lub `.zip` mogą być serwowane z `Content-Encoding: gzip` — Nuclei radzi sobie ale ręczne pobranie wymaga `--compressed` w curl.
+- **Symlink tricks**: w niektórych konfiguracjach `.env` to symlink do `/dev/null` — 200 z empty body, false negative.
+
+### Świeżynki z research
+
+- **Mass `.env` exposure** — community research (cyberresearch reports) — dziesiątki tysięcy publicly exposed Laravel `.env` ze stripe/aws keys.
+- **`.git/` exploitation chain** — git-dumper → reconstruct → grep secrets → pivot. https://github.com/arthaud/git-dumper
+- **`.DS_Store` enumeration** — https://github.com/lijiejie/ds_store_exp
+- **PortSwigger File Upload + extension confusion**: https://portswigger.net/web-security/file-upload
+- **HackTricks File Inclusion + sources**: https://book.hacktricks.xyz/pentesting-web/file-inclusion
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Upload Scanner | Testy bezpieczenstwa uploadu plikow HTTP | [GitHub](https://github.com/modzero/mod0BurpUploadScanner) |
-| Backup Finder | Wyszukiwanie plikow kopii zapasowych na serwerze | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| Backup Finder | Wyszukiwanie plików kopii zapasowych | [GitHub](https://github.com/moeinfatehi/Backup-Finder) |
+| Param Miner | Hidden parameter discovery + cache poisoning | [GitHub](https://github.com/PortSwigger/param-miner) |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/03-Test_File_Extensions_Handling_for_Sensitive_Information
+- git-dumper: https://github.com/arthaud/git-dumper
+- ds_store_exp: https://github.com/lijiejie/ds_store_exp
+- SecLists Discovery: https://github.com/danielmiessler/SecLists/tree/master/Discovery/Web-Content
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V13.4.7 | Unintended Information Leakage | Verify that the web tier is configured to only serve files with specific file extensions to prevent unintentional information, configuration, and source code leakage. |
+| V13.4.7 | Information Leakage (L3) | Web tier configured to only serve files with specific file extensions. |
+| V13.4.1 | Information Leakage (L1) | No source control metadata (.git/.svn) deployed. |

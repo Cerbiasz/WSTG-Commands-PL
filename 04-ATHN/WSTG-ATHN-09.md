@@ -1,77 +1,35 @@
 # WSTG-ATHN-09 — Testing for Weak Password Change or Reset Functionalities
 
-## Cele
+## Cel
 
-- Determine whether the password change and reset functionality allows accounts to be compromised
+Audyt password change (authenticated) i password reset (forgot password): czy reset wymaga aktualnego hasła, token reset jest CSPRNG random + jednorazowy + krótki TTL, czy odpowiedź forgot-password ujawnia istnienie konta, czy Host Header injection możliwy w reset link.
 
-## KOMENDY
+> **Test mostly manual**: wymaga interakcji z reset flow.
 
-### Test reset hasla
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com"
+### Metodologia (6 kroków)
 
-```
+1. **Password change**: czy wymagane current password? (defense vs XSS/CSRF takeover).
+2. **Forgot password response**: czy generic ("Reset link sent if account exists")?
+3. **Reset token analysis**: random, jednorazowy, TTL <= 1h?
+4. **Host Header injection**: zmień Host w forgot-password request → czy reset link w email zawiera attacker hostname?
+5. **Token reuse**: użyj same token 2 razy → czy działa?
 
-### Sprawdzenie tokenu reset
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-# Czy token jest przewidywalny? Czy wygasa? Czy jest jednorazowy?
-curl -s "https://TARGET/reset-password?token=TOKEN_VALUE"
-
-```
-
-### Test zmiany hasla bez starego hasla
-
-```bash
-curl -X POST "https://TARGET/change-password" -H "Cookie: session=TOKEN" -d "new_password=newpass&confirm_password=newpass"
-
-```
-
-### CSRF na zmiane hasla
-
-```bash
-curl -X POST "https://TARGET/change-password" -H "Cookie: session=TOKEN" -d "old_password=old&new_password=new&confirm_password=new"
-# Sprawdz czy jest CSRF token
-
-```
-
-### Test predictability tokenu
-
-```bash
-# Wygeneruj wiele tokenow i porownaj wzorce
-for i in $(seq 1 5); do curl -s -X POST "https://TARGET/forgot-password" -d "email=test${i}@test.com" -v 2>&1 | grep "token\|Location"; done
-
-```
-
-### Host header poisoning na reset
-
-```bash
-curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com" -H "Host: evil.com"
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test logiczny
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Sprawdz caly flow resetu hasla (request -> email -> token -> zmiana)
-2. Testuj czy token wygasa po uzyciu
-3. Testuj czy token wygasa po czasie
-4. Sprawdz czy mozna zmienic haslo innego uzytkownika
-5. Testuj Host header injection na endpoint resetu
-6. Sprawdz czy stare haslo jest wymagane przy zmianie
-7. Testuj CSRF na formularzu zmiany hasla
-8. Sprawdz politykę nowego hasła (dlugosc, zlozonosc)
-
-
----
+- [ ] Password change wymaga current password
+- [ ] Reset request response generic (no enumeration)
+- [ ] Reset request response time consistent (no timing leak)
+- [ ] Reset token: CSPRNG, ≥128 bits entropy
+- [ ] Reset token jednorazowy
+- [ ] Reset token TTL: 15-60 min
+- [ ] Reset token hashed w DB (jak hasło)
+- [ ] Reset link sent przez email (nie w response)
+- [ ] Host Header injection blocked
+- [ ] Po reset: invalidate all sessions
+- [ ] Po reset: invalidate remember-me tokens
+- [ ] Email notification po password change
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -79,100 +37,81 @@ curl -X POST "https://TARGET/forgot-password" -d "email=victim@target.com" -H "H
 
 ### Forgot Password — bezpieczny flow
 
-1. Uzytkownik podaje email/username
-2. Serwer zwraca **identyczny komunikat** niezaleznie czy konto istnieje ("If an account exists, a reset link has been sent")
+1. Użytkownik podaje email/username
+2. Serwer zwraca **identyczny komunikat** niezależnie czy konto istnieje ("If an account exists, a reset link has been sent")
 3. **Identyczny czas odpowiedzi** — nie ujawniaj istnienia konta przez timing
-4. Token wysylany emailem/SMS (side-channel) — NIGDY w odpowiedzi HTTP
-5. Uzytkownik klika link z tokenem → formularz zmiany hasla
+4. Token wysyłany emailem/SMS (side-channel) — NIGDY w odpowiedzi HTTP
+5. Użytkownik klika link z tokenem → formularz zmiany hasła
 6. Po zmianie: redirect na login (NIE automatyczny login) + powiadomienie email
 
-### Tokeny resetowania — wymagania bezpieczenstwa
+### Tokeny resetowania — wymagania bezpieczeństwa
 
 - Generowane przez **CSPRNG** (SecureRandom, secrets, crypto.randomBytes) — min 128 bit entropii
-- **Jednorazowe** — uniewazni po uzyciu
-- **Krotki czas waznosci**: 15-60 minut
-- **Powiazane z konkretnym uzytkownikiem** w bazie danych
-- **Hashowane w bazie** (SHA-256) — nie przechowuj raw token (jak hasla)
+- **Jednorazowe** — unieważnione po użyciu
+- **Krótki czas ważności**: 15-60 minut
+- **Powiązane z konkretnym użytkownikiem** w bazie danych
+- **Hashowane w bazie** (SHA-256) — nie przechowuj raw token (jak hasła)
 - **Rate limiting** na endpoincie — zapobiegaj flood tokenami (email/SMS spam)
 
 ### Host Header Injection
 
-- NIE uzywaj `Host` header do budowania URL resetowania — atakujacy moze podmienić
-- URL resetowania powinien byc **hardcoded** lub zwalidowany przeciw liście zaufanych domen
-- Atak: `Host: evil.com` → email z linkiem `https://evil.com/reset?token=xxx` → atakujacy kradnie token
+- NIE używaj `Host` header do budowania URL resetowania — atakujący może podmienić
+- Atakujący wysyła forgot-password z `Host: evil.com` → email zawiera link `https://evil.com/reset?token=xxx`
+- Użytkownik klika → token wysyłany do atakującego
+- **Obrona**: hardcode domain w aplikacji, walidacja Host header przeciw allowlist
 
-### Zmiana hasla vs Reset hasla
+### Po resetowaniu hasła
 
-- **Zmiana hasla**: wymaga aktywnej sesji + podania AKTUALNEGO hasla
-- **Reset hasla**: NIE wymaga aktualnego hasla (uzytkownik go nie pamieta) — token jako dowod tozsamosci
-- Po resecie: uniewazni WSZYSTKIE aktywne sesje uzytkownika
+- **Unieważnij wszystkie sesje** użytkownika — atakujący mógł mieć aktywne sesje
+- **Unieważnij remember-me tokens**
+- **Powiadom email** — informuj o zmianie hasła
+- **Wymagaj re-autentykacji MFA** jeśli ustawione
 
-### Referrer Leakage
+### Zmiana hasła (authenticated)
 
-- Strona resetowania: ustaw `Referrer-Policy: noreferrer` — token z URL nie wycieknie do stron zewnetrznych
-- Nie umieszczaj linkow zewnetrznych na stronie resetowania hasla
+- Wymagaj podania **bieżącego hasła** — chroni przed XSS/CSRF takeover
+- Po zmianie: opcjonalnie wyloguj inne sesje
+- Powiadom email
 
-### Dodatkowe metody odzyskiwania
+## Pentesterskie deep dive
 
-- **PIN przez SMS** (6-12 cyfr): OTP wysylany SMS-em + ograniczona sesja tylko do zmiany hasla
-- **Security questions**: TYLKO jako dodatkowy czynnik, NIE jako jedyny mechanizm
-- **Offline methods**: pre-generated recovery codes (np. 10 jednorazowych kodow przy setup MFA)
-- Uzytkownik MUSI miec sposob na odzyskanie konta nawet jesli straci dostep do MFA
+### Mniej znane techniki
 
-## ROZSZERZENIA BURP SUITE
+- **Host Header Injection**: aplikacja używa `Host` header do generation reset link → atakujący wysyła `Host: evil.com` → email contains attacker URL.
+- **Reset token w referrer**: jeśli reset page ma external link (np. CDN tracking), token może wyciec w Referer header.
+- **Race condition na reset**: send 2 simultaneous reset requests → 2 valid tokens, jeden w 30 min later.
+- **OAuth reset bypass**: aplikacja allows password reset via OAuth provider link without confirming current password = full takeover via stolen OAuth token.
+- **Reset token w URL → browser history → shared device**: token persistent w history.
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Common pitfalls
 
----
+- **Email "Click here to reset your password" - link nie expires**: token without TTL.
+- **Reset token reuse**: aplikacja nie invaliduje token po success → atakujący może replay.
+- **Forgot password ujawnia istnienie konta przez timing**: 200ms vs 50ms diff.
 
-## Wskazówki ASVS
+### Świeżynki z research
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **PortSwigger Forgot Password Lab**: https://portswigger.net/web-security/authentication
+- **OWASP Forgot Password CS**: https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html
+- **Sam Curry Account Takeover research**: https://samcurry.net/
 
-### L1 (Podstawowy)
+## Rozszerzenia Burp Suite
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.2.2 | Password Security | Verify that users can change their password. |
-| V6.2.3 | Password Security | Verify that password change functionality requires the user's current and new password. |
-| V6.2.8 | Password Security | Verify that the application verifies the user's password exactly as received from the user, without any modifications such as truncation or case transformation. |
+| Rozszerzenie | Opis |
+|---|---|
+| Param Miner | Hidden parameter discovery |
 
-### L2 (Standardowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V6.4.3 | Authentication Factor Lifecycle and Recovery | Verify that a secure process for resetting a forgotten password is implemented, that does not bypass any enabled multi-factor authentication mechanisms. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/04-Authentication_Testing/09-Testing_for_Weak_Password_Change_or_Reset_Functionalities
+- OWASP Forgot Password CS: https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html
+- HackTricks Account Takeover: https://book.hacktricks.xyz/pentesting-web/account-takeover
 
+### Wskazówki ASVS
 
----
-
-## HackTricks Tips
-
-### Token Leakage
-
-- **Referer**: po kliknięciu reset link → nawiguj do third-party → token w `Referer` header
-- **API response**: sprawdź JSON body na `resetToken`
-- **Wayback/gau**: szukaj wcześniej wydanych reset links
-
-### Host Header Poisoning
-
-Inject `Host: attacker.com` lub `X-Forwarded-Host: attacker.com` → ofiara dostaje reset link na domenę atakującego
-
-### Email Parameter Manipulation
-
-```
-email=victim@mail.com&email=attacker@mail.com
-email=victim@mail.com%0ACc:attacker@mail.com
-{"email":["victim@mail.com","attacker@mail.com"]}
-```
-
-### Token Weaknesses
-
-- Analizuj entropię z **Burp Sequencer**; szukaj tokenów opartych na timestamp/userID/email
-- **UUID v1**: `guidtool` do prediction/generation
-- Test czy expired tokens nadal działają
-- Test czy twój token działa dla emaila ofiary (not session-bound)
-
-### Username Collision
-
-Register `"admin "` (ze spacją) → reset → token idzie na twój email → reset konta "admin"
+| ID | Wymaganie |
+|---|---|
+| V2.5.1 | Initial password generation. |
+| V2.5.6 | Password reset tokens have lifetime. |
+| V2.5.7 | One-time password reset tokens. |
+| V3.3.1 | Logout invalidates session. |

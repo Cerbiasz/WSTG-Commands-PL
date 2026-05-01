@@ -1,0 +1,132 @@
+# ============================================================================
+# WSTG-APIT (GraphQL specific): GraphQL Recon + Introspection (Universal)
+# ============================================================================
+# Review status: NOWY | Reviewer: Claude Code (Opus 4.7) | 2026-05-01
+#
+# Coverage: detekcja GraphQL endpoints, introspection enabled, GraphiQL/
+# Playground exposed, batch query support (DoS vector).
+# ============================================================================
+
+id: wstg-apit-graphql
+
+info:
+  name: "WSTG-APIT: GraphQL API Recon (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa GraphQL endpoints (/graphql, /api/graphql, /v2/graphql),
+    introspection enabled (mapping całego schema), GraphiQL/Playground
+    exposed (interactive UI), batch query support (potential DoS).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/12-API_Testing/01-Testing_GraphQL
+    - https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/graphql
+  classification:
+    cwe-id: CWE-200,CWE-285
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-apit,graphql,api,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Discovery - typowe GraphQL paths
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/graphiql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/api/v1/graphql"
+      - "{{BaseURL}}/api/v2/graphql"
+      - "{{BaseURL}}/v1/graphql"
+      - "{{BaseURL}}/playground"
+      - "{{BaseURL}}/altair"
+      - "{{BaseURL}}/explorer"
+      - "{{BaseURL}}/console"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: graphql-ui-detected
+        regex:
+          - "(?i)<title>[^<]*GraphiQL"
+          - "(?i)<title>[^<]*GraphQL Playground"
+          - "(?i)<title>[^<]*Apollo"
+          - "(?i)<title>[^<]*Altair"
+          - "(?i)react-apollo"
+          - "(?i)graphql-playground"
+          - "(?i)graphiql"
+        condition: or
+
+  # =========================================================================
+  # Introspection query - sprawdź czy enabled
+  # =========================================================================
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+
+    headers:
+      Content-Type: "application/json"
+
+    body: '{"query":"query{__schema{types{name,kind,fields{name,type{name,kind}}}}}"}'
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: introspection-enabled
+        regex:
+          - '"__schema"\s*:\s*\{'
+          - '"types"\s*:\s*\[\s*\{[^}]*"name"\s*:\s*"\w+"'
+
+    extractors:
+      - type: regex
+        name: schema-types
+        part: body
+        group: 1
+        regex:
+          - '"name"\s*:\s*"(\w+)"\s*,\s*"kind"\s*:\s*"OBJECT"'
+
+  # =========================================================================
+  # Field suggestions (nawet z disabled introspection)
+  # =========================================================================
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+
+    headers:
+      Content-Type: "application/json"
+
+    body: '{"query":"query{nonExistentField}"}'
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        part: body
+        name: field-suggestion-enabled
+        regex:
+          - '(?i)did you mean'
+          - '(?i)Cannot query field "[^"]+" on type "[^"]+"\\.\\s+Did you mean'
+
+# ============================================================================
+# Known limitations:
+# - Introspection blocked nadal może mieć field suggestions enabled.
+# - Batch query test (DoS via repeated query) - manual via Burp Repeater.
+# - Authorization per field - manual review schema z access control.
+# ============================================================================

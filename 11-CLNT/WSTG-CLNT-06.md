@@ -1,46 +1,41 @@
 # WSTG-CLNT-06 — Testing for Client-side Resource Manipulation
 
-## Cele
+## Cel
 
-- Identify sinks with weak input validation
-- Assess the impact of the resource manipulation
+Wykrycie miejsc gdzie atakujący kontroluje URL zasobu ładowanego przez stronę (`<script src=X>`, `<link href=X>`, `<form action=X>`, `<iframe src=X>`). Pivot do XSS (controlled JS), data exfil (controlled CSS), phishing (controlled form action).
 
-## KOMENDY
+> **Test mostly manual**: cross-ref WSTG-CLNT-01 (DOM XSS markers), WSTG-CLNT-04 (URL redirect).
 
-### Manipulacja src/href
-
-```bash
-curl -s "https://TARGET/page?img=http://evil.com/fake.png"
-curl -s "https://TARGET/page?script=http://evil.com/evil.js"
-curl -s "https://TARGET/page?link=http://evil.com/style.css"
-
-```
-
-### Testowanie window.postMessage
+## Automatyzacja Nuclei
 
 ```bash
-# Uzyj DevTools console:
-# window.addEventListener('message', function(e){console.log(e)})
+# DOM XSS markers - obejmuje resource manipulation patterns
+nuclei -l burp-export.xml -im burp -t templates/wstg-clnt-01-dom-xss.yaml
 
+# URL redirect - obejmuje user-controlled URLs
+nuclei -l burp-export.xml -im burp -t templates/wstg-clnt-04-url-redirect.yaml
 ```
 
-## KOMENDY Z WORDLISTAMI
+## Standard pentesterski — jak to robi się wzorowo
 
-### Brak dedykowanych wordlist - test manualny
+### Metodologia (5 kroków)
 
-```bash
+1. **Source enumeration**: szukać `script.src = userInput`, `link.href = ...`, `iframe.src = ...` w JS bundle.
+2. **Server-side reflection**: `<script src="/api/dynamic.js?lang={{userLang}}">` — czy `lang` controlled?
+3. **CSP audit**: jeśli CSP `script-src *.target.com` + atakujący kontroluje subdomain → bypass.
+4. **SRI verification**: zewnętrzne `<script src="cdn">` powinny mieć `integrity=` attribute.
+5. **PoC**: stworzyć attacker URL serwujący JS → submit input → check JS execution.
 
-```
+### Co MUSI być sprawdzone (8 punktów)
 
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Szukaj parametrow kontrolujacych zasoby (src=, href=, action=, data=)
-2. Testuj podmiane zrodel skryptow, obrazow, arkuszy CSS
-3. Monitoruj postMessage w DevTools console
-4. Sprawdz czy event handlery postMessage waliduja origin
-
-
----
+- [ ] `<script src="...">` z user-controlled URL?
+- [ ] `<link href="...">` (CSS)
+- [ ] `<iframe src="...">`
+- [ ] `<form action="...">`
+- [ ] `<object data="...">`, `<embed src="...">`
+- [ ] `<img src="...">` (mniej krytyczne ale tracking)
+- [ ] SRI (integrity attribute) na zewnętrznych zasobach
+- [ ] CSP `script-src` / `style-src` rules
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
@@ -48,41 +43,62 @@ curl -s "https://TARGET/page?link=http://evil.com/style.css"
 
 ### Client-side Resource Manipulation — mechanizm
 
-- Atakujacy kontroluje **URL zasobu** ladowanego przez strone (src, href, action, data)
-- Skutek: ladowanie zlosliwego skryptu, CSS, obrazka, formularza z kontrolowanego serwera
-- Roznica vs XSS: nie wstrzykuje kodu, ale **zmienia zrodlo** zasobu
+- Atakujący kontroluje **URL zasobu** ładowanego przez stronę (src, href, action, data)
+- Skutek: ładowanie złośliwego skryptu, CSS, obrazka, formularza z kontrolowanego serwera
+- Różnica vs XSS: nie wstrzykuje kodu, ale **zmienia źródło** zasobu
 
 ### Niebezpieczne atrybuty/sinki
 
 | Atrybut/Sink | Ryzyko |
 |-------------|--------|
-| `<script src=X>` | Ladowanie zlosliwego JS — pelne RCE w kontekscie strony |
-| `<link href=X>` | Ladowanie zlosliwego CSS — exfiltracja danych, UI redress |
-| `<img src=X>` | Tracking pixel, SSRF (jesli server-side fetch) |
-| `<iframe src=X>` | Ladowanie strony atakujacego — phishing |
-| `<form action=X>` | Przekierowanie formularza na serwer atakujacego — credential theft |
-| `<object data=X>` | Ladowanie zlosliwego contentu |
+| `<script src=X>` | Ładowanie złośliwego JS — pełne RCE w kontekście strony |
+| `<link href=X>` | Ładowanie złośliwego CSS — exfiltracja danych, UI redress |
+| `<img src=X>` | Tracking pixel, SSRF (jeśli server-side fetch) |
+| `<iframe src=X>` | Ładowanie strony atakującego — phishing |
+| `<form action=X>` | Przekierowanie formularza na serwer atakującego — credential theft |
+| `<object data=X>` | Ładowanie złośliwego contentu |
 
 ### Obrona
 
-- **Nigdy** nie uzywaj danych uzytkownika bezposrednio w atrybutach src/href/action
-- Waliduj URL-e: allowlist dozwolonych domen, sprawdz schemat (https://)
-- Uzyj **CSP**: `script-src 'self'`, `style-src 'self'` — blokuj zewnetrzne zasoby
+- **Nigdy** nie używaj danych użytkownika bezpośrednio w atrybutach src/href/action
+- Waliduj URL-e: allowlist dozwolonych domen, sprawdź schemat (https://)
+- Użyj **CSP**: `script-src 'self'`, `style-src 'self'` — blokuj zewnętrzne zasoby
 - **Subresource Integrity (SRI)**: `integrity="sha384-..."` na `<script>` i `<link>` — weryfikuj hash zasobu
 - Sanityzuj URL-e: odrzucaj `javascript:`, `data:`, `blob:` schematy
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **CDN takeover via SRI mismatch**: jeśli CDN serwuje plik bez expected integrity hash, plik się nie ładuje. Ale aplikacje często aktualizują CDN bez updating SRI — broken site OR drop SRI = security regression.
+- **Service Worker resource manipulation**: SW może intercept fetch i zwracać attacker content. XSS → register malicious SW for persistence.
+- **HTTP/2 server push z attacker-controlled resource**: rzadkie, ale push może override expected resource z attacker-controlled.
+- **DNS prefetch + speculative loading**: `<link rel="dns-prefetch">` z user input → DNS leak, czasami fetch.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **`integrity=` not on dynamic resources**: aplikacje mają SRI na main bundle ale nie na dynamic chunks → race condition exploit.
+- **CSP `script-src *.target.com` + subdomain takeover**: pełen bypass.
 
-### L3 (Zaawansowany)
+### Świeżynki z research
+
+- **HackTricks Resource Manipulation**: https://book.hacktricks.xyz/pentesting-web
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Reflector | User input reflection w resource attributes | [GitHub](https://github.com/elkokc/reflector) |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/06-Testing_for_Client-side_Resource_Manipulation
+- OWASP DOM XSS Prevention CS: https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html
+- W3C Subresource Integrity: https://www.w3.org/TR/SRI/
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V3.6.1 | External Resource Integrity | Verify that client-side assets, such as JavaScript libraries, CSS, or web fonts, are only hosted externally (e.g., on a Content Delivery Network) if the resource is static and versioned and Subresource Integrity (SRI) is used to validate the integrity of the asset. If this is not possible, there should be a documented security decision to justify this for each resource. |
+| V14.2.4 | Dependency (L2) | Subresource Integrity (SRI) used for third-party JS. |
+| V14.4.3 | Configuration (L1) | CSP set deny by default. |

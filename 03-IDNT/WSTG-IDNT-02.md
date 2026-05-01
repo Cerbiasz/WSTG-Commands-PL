@@ -1,229 +1,126 @@
 # WSTG-IDNT-02 — Test User Registration Process
 
-## Cele
+## Cel
 
-- Zweryfikowac wymagania tozsamosci przy rejestracji
-- Sprawdzic walidacje procesu rejestracji
-- Przetestowac odpornosc na duplikaty i zlosliwe dane wejsciowe
+Audyt procesu rejestracji: weryfikacja email, walidacja danych, mass assignment (privilege escalation w request body), enumeracja userów przez "Username already taken", rate limiting (mass account creation), CAPTCHA.
 
-## KOMENDY
+> **Test mostly manual**: registration flow wymaga interakcji + analyzy responses. Cross-ref WSTG-IDNT-04 (account enumeration markers).
 
-### Rejestracja nowego uzytkownika - standardowy test
+## Automatyzacja Nuclei
 
 ```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser1","password":"Test@1234","email":"test1@example.com"}' -v
-
+# Account enumeration markers (registration "username taken" pattern)
+nuclei -l burp-export.xml -im burp -t templates/wstg-idnt-04-account-enumeration.yaml
 ```
 
-### Proba rejestracji z duplikatem nazwy uzytkownika
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"admin","password":"Test@1234","email":"test2@example.com"}' -v
+### Metodologia (6 kroków)
 
-```
+1. **Mass assignment test**: dodać `"role":"admin"`, `"isAdmin":true`, `"is_staff":true`, `"permissions":[...]` do body rejestracji.
+2. **Email verification**: czy wymagana? Jeśli nie - dummy email = active account = spam/abuse vector.
+3. **Rate limiting**: spróbować 100 rejestracji z tego samego IP w 1 minutę.
+4. **Username enumeration**: rejestracja existing user → "Username already taken" (cross-ref IDNT-04).
+5. **Password policy**: minimum length, complexity, breached password check (HIBP API).
+6. **Injection testing**: SQLi/XSS/SSTI w polach username/email/firstName/lastName.
 
-### Proba rejestracji z duplikatem emaila
+### Co MUSI być sprawdzone (12 punktów)
 
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"testuser2","password":"Test@1234","email":"admin@TARGET"}' -v
-
-```
-
-### SQL Injection w polu rejestracji
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"test'\'' OR 1=1--","password":"Test@1234","email":"sqli@test.com"}' -v
-
-```
-
-### XSS w polu nazwy uzytkownika
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"<script>alert(1)</script>","password":"Test@1234","email":"xss@test.com"}' -v
-
-```
-
-### Rejestracja z bardzo dluga nazwa uzytkownika (buffer overflow test)
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","password":"Test@1234","email":"overflow@test.com"}' -v
-
-```
-
-### Rejestracja z pustymi polami
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"","password":"","email":""}' -v
-
-```
-
-### Rejestracja ze slabym haslem
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"weakuser","password":"123","email":"weak@test.com"}' -v
-
-```
-
-### Rejestracja bez wymaganego pola
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"nopass"}' -v
-
-```
-
-### Rejestracja z dodatkowym polem role
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"roletest","password":"Test@1234","email":"role@test.com","role":"admin"}' -v
-
-```
-
-### Proba masowej rejestracji (rate limiting test)
-
-```bash
-for i in $(seq 1 20); do curl -s -o /dev/null -w "Attempt $i: %{http_code}\n" -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d "{\"username\":\"massuser$i\",\"password\":\"Test@1234\",\"email\":\"mass$i@test.com\"}"; done
-
-```
-
-### Testowanie case sensitivity nazwy uzytkownika
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"Admin","password":"Test@1234","email":"case@test.com"}' -v
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"ADMIN","password":"Test@1234","email":"case2@test.com"}' -v
-
-```
-
-### Rejestracja ze znakami specjalnymi w emailu
-
-```bash
-curl -s -X POST "https://TARGET/api/register" -H "Content-Type: application/json" -d '{"username":"specialemail","password":"Test@1234","email":"test+admin@test.com"}' -v
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Enumeracja istniejacych uzytkownikow przez rejestracje (ffuf)
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/top-usernames-shortlist.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
-
-```
-
-### Enumeracja uzytkownikow - pelna lista
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/xato-net-10-million-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200 -t 10
-
-```
-
-### Enumeracja uzytkownikow - lista cirt default
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/cirt-default-usernames.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
-
-```
-
-### Enumeracja z lista imion
-
-```bash
-ffuf -w Desktop/WSTG/SecLists-master/Usernames/Names/names.txt:USER -u "https://TARGET/api/register" -X POST -H "Content-Type: application/json" -d '{"username":"USER","password":"Test@1234","email":"USER@test.com"}' -mc all -fc 200
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zarejestruj nowe konto i przeanalizuj caly przeplyw w Burp Suite (requesty/response)
-2. Sprawdz czy formularz rejestracji posiada ochrone CAPTCHA lub rate limiting
-3. W Burp Repeater przetestuj manipulacje parametrow rejestracji (dodanie pola isAdmin, role)
-4. Sprawdz czy wiadomosc bledu przy duplikacie ujawnia informacje o istniejacych uzytkownikach
-5. Przetestuj rejestracje z tymczasowymi adresami email (mailinator, guerrillamail)
-6. Sprawdz czy weryfikacja email jest wymagana do aktywacji konta
-7. Przeanalizuj token weryfikacyjny pod katem przewidywalnosci
-8. Sprawdz w DevTools czy formularz nie wysyla ukrytych pol
-
-
----
+- [ ] Email verification required pre-activation
+- [ ] Token verification: CSPRNG, jednorazowy, krótki TTL
+- [ ] Mass assignment: `role`, `isAdmin`, `is_staff`, `permissions`, `verified`, `email_verified`
+- [ ] Rate limiting (X requests/min from same IP)
+- [ ] CAPTCHA on registration
+- [ ] Tymporarne email blocked (mailinator)
+- [ ] Password policy enforcement (min length, breached check)
+- [ ] Username enumeration ("already taken" message)
+- [ ] Timing attack na rejestracji
+- [ ] Injection testing każde pole
+- [ ] Unicode confusables w username
+- [ ] Verification email contains: token only (nie full account state)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Authentication_Cheat_Sheet.md, Input_Validation_Cheat_Sheet.md
 
-### Proces rejestracji — bezpieczenstwo
+### Proces rejestracji — bezpieczeństwo
 
-- **Weryfikacja email**: wymagaj potwierdzenia adresu email przed aktywacja konta
-- Token weryfikacyjny: CSPRNG, jednorazowy, krotki TTL (24h max), hashowany w DB
+- **Weryfikacja email**: wymagaj potwierdzenia adresu email przed aktywacją konta
+- Token weryfikacyjny: CSPRNG, jednorazowy, krótki TTL (24h max), hashowany w DB
 - **CAPTCHA/rate limiting**: zapobiegaj masowemu tworzeniu kont (bot registration)
-- Blokuj tymczasowe adresy email (mailinator, guerrillamail) jesli to wymagane biznesowo
-- Ogranicz ilosc rejestracji z jednego IP/sesji
+- Blokuj tymczasowe adresy email (mailinator, guerrillamail) jeśli to wymagane biznesowo
+- Ogranicz ilość rejestracji z jednego IP/sesji
 
 ### Walidacja danych rejestracyjnych
 
-- **Username**: case-insensitive, unikalne, allowlist znakow, min/max dlugosc
-- **Email**: waliduj format, sprawdz duplikaty (case-insensitive), zweryfikuj MX record
-- **Haslo**: min. 8 znakow (z MFA) lub 15 (bez MFA), max 64+, brak ograniczen na typ znakow
-- Sprawdzaj haslo na liscie skompromitowanych (HaveIBeenPwned, SecLists)
-- **Nie ujawniaj** czy email/username juz istnieje — generyczne komunikaty
+- **Username**: case-insensitive, unikalne, allowlist znaków, min/max długość
+- **Email**: waliduj format, sprawdź duplikaty (case-insensitive), zweryfikuj MX record
+- **Hasło**: min. 8 znaków (z MFA) lub 15 (bez MFA), max 64+, brak ograniczeń na typ znaków
+- Sprawdzaj hasło na liście skompromitowanych (HaveIBeenPwned, SecLists)
+- **Nie ujawniaj** czy email/username już istnieje — generyczne komunikaty
 
 ### Mass Assignment / Privilege Escalation
 
-- NIE akceptuj pol `role`, `isAdmin`, `is_staff`, `permissions` z danych uzytkownika
-- Uzyj allowlist pol akceptowanych przy rejestracji (strong parameters)
+- NIE akceptuj pól `role`, `isAdmin`, `is_staff`, `permissions` z danych użytkownika
+- Użyj allowlist pól akceptowanych przy rejestracji (strong parameters)
 - Testuj: dodaj `"role":"admin"`, `"isAdmin":true` do request body
-- Sprawdz czy ukryte pola formularza moga byc manipulowane
+- Sprawdź czy ukryte pola formularza mogą być manipulowane
 
-### Enumeracja uzytkownikow przez rejestracje
+### Enumeracja użytkowników przez rejestrację
 
-- Komunikat "Username already taken" ujawnia istniejacych uzytkownikow
-- Uzyj **generycznych komunikatow**: "Jesli email jest dostepny, zostanie wyslany link weryfikacyjny"
-- **Timing attack**: porownaj czas odpowiedzi przy istniejacym vs nowym username
-- Testuj enumeracje na: rejestracji, logowaniu, forgot password — WSZYSTKIE musza byc spojne
+- Komunikat "Username already taken" ujawnia istniejących użytkowników
+- Użyj **generycznych komunikatów**: "Jeśli email jest dostępny, zostanie wysłany link weryfikacyjny"
+- **Timing attack**: porównaj czas odpowiedzi przy istniejącym vs nowym username
+- Testuj enumerację na: rejestracji, logowaniu, forgot password — WSZYSTKIE muszą być spójne
 
 ### Injection w polach rejestracji
 
-- Testuj SQLi, XSS, SSTI w polach: username, email, imie, nazwisko
-- Sprawdz czy dane sa sanityzowane i walidowane server-side
-- Testuj Unicode confusables: `Аdmin` (cyrylica A) vs `Admin` (lacinskie A)
-- Null bytes, biale znaki na poczatku/koncu, podwojne spacje
+- Testuj SQLi, XSS, SSTI w polach: username, email, imię, nazwisko
+- Sprawdź czy dane są sanityzowane i walidowane server-side
+- Testuj Unicode confusables: `Аdmin` (cyrylica A) vs `Admin` (łacińskie A)
+- Null bytes, białe znaki na początku/końcu, podwójne spacje
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-Brak dedykowanych rozszerzen Burp dla tego testu.
+### Mniej znane techniki
 
----
+- **Email verification bypass via timing**: aplikacja często wysyła verify email asynchronicznie - atakujący może wykorzystać window before email sent (race condition).
+- **Email confirmation token reuse**: niektóre aplikacje pozwalają na reuse tokenu - registered → revoke → re-register z tym samym tokenem.
+- **Username homograph attack**: rejestracja `аdmin` (cyrylica а U+0430) - vizualnie identyczna z `admin` ale unique w DB → phishing pivot.
+- **Email aliasing exploitation**: `user+alias@gmail.com` aliases do `user@gmail.com` w Gmail. Aplikacja może traktować jako różne accounts → bypass verification.
+- **Mass assignment via different parsers**: aplikacja waliduje JSON ale akceptuje też form-encoded, gdzie strict parameter binding nie istnieje.
+- **Race condition na "first admin"**: niektóre aplikacje mają special "first registration = admin" logic. Race między dwoma simultaneous registrations może skończyć z dwoma admins.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Email verification w GET endpoint**: `/verify?token=X` activates account. Atakujący włącza link w `<img src>` na stronie z XSS - automatic account activation.
+- **OAuth registration bez email verification**: jeśli OAuth provider zwraca `email_verified: false`, aplikacja często ignoruje i tworzy active account.
 
-### L1 (Podstawowy)
+### Świeżynki z research
+
+- **HaveIBeenPwned API**: https://haveibeenpwned.com/API/v3 - integration dla password breach check
+- **Sam Curry registration research**: account takeover via OAuth bypass
+- **PortSwigger Authentication Lab**: https://portswigger.net/web-security/authentication
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis | Link |
+|---|---|---|
+| Param Miner | Hidden parameter discovery (mass assignment) | [GitHub](https://github.com/PortSwigger/param-miner) |
+| Turbo Intruder | Race condition testing | [GitHub](https://github.com/PortSwigger/turbo-intruder) |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/03-Identity_Management_Testing/02-Test_User_Registration_Process
+- OWASP Authentication CS: https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+- HaveIBeenPwned API: https://haveibeenpwned.com/API/v3
+- PortSwigger Authentication: https://portswigger.net/web-security/authentication
+
+### Wskazówki ASVS
 
 | ID | Sekcja | Wymaganie |
 |---|---|---|
-| V6.4.1 | Authentication Factor Lifecycle and Recovery | Verify that system generated initial passwords or activation codes are securely randomly generated, follow the existing password policy, and expire after a short period of time or after they are initially used. These initial secrets must not be permitted to become the long term password. |
-| V2.2.1 | Input Validation | Verify that input is validated to enforce business or functional expectations for that input. This should either use positive validation against an allow list of values, patterns, and ranges, or be based on comparing the input to an expected structure and logical limits according to predefined rules. For L1, this can focus on input which is used to make specific business or security decisions. For L2 and up, this should apply to all input. |
-| V2.2.2 | Input Validation | Verify that the application is designed to enforce input validation at a trusted service layer. While client-side validation improves usability and should be encouraged, it must not be relied upon as a security control. |
-
-
----
-
-## HackTricks Tips
-
-### Account Pre-Hijacking
-
-- **Email variations**: case, dots, `+tag@`, null bytes (`%00`), trailing spaces, unicode confusables
-- **`victim@gmail.com@attacker.com`** — niektóre serwisy przetwarzają tylko pierwszy `@`
-- **Classic-Federated merge**: zarejestruj klasycznie z emailem ofiary zanim ona zarejestruje się via SSO
-- **Trojan Identifier**: dodaj secondary email/phone/IdP → ofiara resetuje hasło ale atakujący zachowuje secondary login
-- **Non-Verifying IdP**: utwórz konto IdP z `email_verified=false` → RP merguje na email
-
-### OTP/Verification
-
-- **Krótkie OTP (4-6 cyfr)** + brak rate limit → brute force z Turbo Intruder
-- **Multi-value smuggling**: `code=000000&code=123456`, `{"code":["000000","123456"]}`
-- **OTP not user-bound**: ten sam code działa dla różnych userów
-- **Race condition**: submit valid OTP w dwóch concurrent sessions
-
-### Inne
-
-- **Długie hasło (>200 chars)** → DoS
-- **`username@burpcollaborator.net`** → detect SSRF/callback z registration handlera
+| V2.1.1 | Password Security (L1) | Minimum 12 character password. |
+| V2.1.7 | Password Security (L1) | Check breached password lists. |
+| V5.1.4 | Input Validation (L1) | Mass assignment protection. |
+| V6.1.1 | Communication (L1) | Password and authentication requests via TLS. |

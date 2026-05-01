@@ -1,0 +1,294 @@
+# ============================================================================
+# WSTG-INFO-09: Fingerprint Web Application (Version Detection) (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-INFO-09 (existing repo):
+#   ✓ Meta generator z wersją (CMS)
+#   ✓ /CHANGELOG.txt, /VERSION, /readme.html (typowe pliki wersji)
+#   ✓ RSS/Atom feed <generator>
+#   ✓ Stack trace z wersją w error pages
+#
+# Z research:
+#   ✓ /package.json (Node.js apps gdy public path)
+#   ✓ /composer.json + /composer.lock (PHP)
+#   ✓ /Gemfile.lock (Ruby)
+#   ✓ /requirements.txt + /Pipfile (Python)
+#   ✓ /pom.xml + /build.gradle (Java)
+#   ✓ Per-CMS specific paths (WP /wp-links-opml.php, Joomla manifest XML,
+#     Drupal /CHANGELOG.txt z wersją, Magento /magento_version)
+#
+# Performance budget: low (~25 paths × 1 request)
+# Estimated time: ~1 min per host
+#
+# Source mapping:
+# - WSTG-INFO-09 CHEATSHEET (existing): meta generator, version files, CMS detection
+# - PayloadsAllTheThings/Insecure Source Code Management
+# - HackTricks per-CMS sections
+# - SecLists Discovery/Web-Content/CMS/*
+# ============================================================================
+
+id: wstg-info-09-app-version
+
+info:
+  name: "WSTG-INFO-09: Web Application Version Detection (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa konkretną wersję aplikacji webowej i jej zależności przez sprawdzenie
+    plików metadanych (CHANGELOG, VERSION, readme), manifestów paczkowych
+    (package.json, composer.json, Gemfile.lock), meta tagów generator i CMS-
+    specific paths. Pozwala na precyzyjne CVE matching i ocenę wieku wdrożenia.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/09-Fingerprint_Web_Application
+    - https://github.com/swisskyrepo/PayloadsAllTheThings
+  classification:
+    cwe-id: CWE-200
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+  tags: dast,wstg,wstg-v42-info-09,info-disclosure,version-detection,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Generic version files
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/CHANGELOG.txt"
+      - "{{BaseURL}}/CHANGELOG.md"
+      - "{{BaseURL}}/CHANGES"
+      - "{{BaseURL}}/CHANGES.txt"
+      - "{{BaseURL}}/HISTORY.txt"
+      - "{{BaseURL}}/VERSION"
+      - "{{BaseURL}}/version.txt"
+      - "{{BaseURL}}/VERSION.txt"
+      - "{{BaseURL}}/RELEASE_NOTES.txt"
+      - "{{BaseURL}}/readme.html"
+      - "{{BaseURL}}/README.md"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: version-file-content
+        regex:
+          - "(?i)version\\s*[:=]\\s*[\"']?\\d+\\.\\d+"
+          - "(?i)release\\s*[:=]\\s*[\"']?\\d+\\.\\d+"
+          - "(?i)^v?\\d+\\.\\d+\\.\\d+"
+          - "(?i)changelog"
+        condition: or
+
+    extractors:
+      - type: regex
+        name: detected-version
+        part: body
+        group: 1
+        regex:
+          - "(?i)version[\"'\\s]*[:=][\"'\\s]*([\\d.]+)"
+          - "(?i)\\bv?(\\d+\\.\\d+\\.\\d+)\\b"
+
+  # =========================================================================
+  # Package manifests (Node, PHP, Ruby, Python)
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/package.json"
+      - "{{BaseURL}}/package-lock.json"
+      - "{{BaseURL}}/composer.json"
+      - "{{BaseURL}}/composer.lock"
+      - "{{BaseURL}}/Gemfile"
+      - "{{BaseURL}}/Gemfile.lock"
+      - "{{BaseURL}}/requirements.txt"
+      - "{{BaseURL}}/Pipfile"
+      - "{{BaseURL}}/Pipfile.lock"
+      - "{{BaseURL}}/poetry.lock"
+      - "{{BaseURL}}/yarn.lock"
+      - "{{BaseURL}}/pom.xml"
+      - "{{BaseURL}}/build.gradle"
+      - "{{BaseURL}}/go.mod"
+      - "{{BaseURL}}/go.sum"
+      - "{{BaseURL}}/Cargo.toml"
+      - "{{BaseURL}}/Cargo.lock"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: manifest-markers
+        regex:
+          - '"name"\s*:\s*"'                  # package.json / composer.json
+          - '"version"\s*:\s*"'
+          - "^source\\s+[\"']https?://"        # Gemfile
+          - "^[a-z][\\w-]+==[\\d.]+"           # requirements.txt
+          - "<groupId>"                         # pom.xml
+          - "<artifactId>"
+          - "implementation\\s*[\"'][^:]+:[^:]+"  # build.gradle
+          - "^module\\s+\\S+"                   # go.mod
+          - "^\\[package\\][\\r\\n]+name\\s*="  # Cargo.toml
+        condition: or
+
+    extractors:
+      - type: regex
+        name: dependency-versions
+        part: body
+        group: 1
+        regex:
+          - '"([a-z0-9_.-]+)"\s*:\s*"\^?~?[\d.]+"'   # JSON-like deps
+          - "^([a-z0-9_-]+)==([\\d.]+)"               # Python requirements
+
+  # =========================================================================
+  # WordPress version detection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-links-opml.php"
+      - "{{BaseURL}}/wp-includes/version.php"
+      - "{{BaseURL}}/feed/"
+      - "{{BaseURL}}/?feed=rss2"
+      - "{{BaseURL}}/wp-admin/css/wp-admin.css"
+      - "{{BaseURL}}/wp-admin/install.php"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: wordpress-version
+        regex:
+          - "(?i)<generator>https://wordpress\\.org/\\?v=([\\d.]+)"
+          - "(?i)WordPress/([\\d.]+)"
+          - "(?i)\\$wp_version\\s*=\\s*['\"]([\\d.]+)"
+
+    extractors:
+      - type: regex
+        name: wordpress-version-value
+        part: body
+        group: 1
+        regex:
+          - "(?i)\\?v=([\\d.]+)"
+          - "(?i)WordPress/([\\d.]+)"
+
+  # =========================================================================
+  # Drupal version detection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/CHANGELOG.txt"
+      - "{{BaseURL}}/core/CHANGELOG.txt"
+      - "{{BaseURL}}/INSTALL.txt"
+      - "{{BaseURL}}/MAINTAINERS.txt"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: drupal-version
+        regex:
+          - "(?i)Drupal (\\d+\\.\\d+(?:\\.\\d+)?), \\d{4}-\\d{2}-\\d{2}"
+
+    extractors:
+      - type: regex
+        name: drupal-version-value
+        part: body
+        group: 1
+        regex:
+          - "(?i)Drupal (\\d+\\.\\d+(?:\\.\\d+)?), \\d{4}-\\d{2}-\\d{2}"
+
+  # =========================================================================
+  # Joomla version detection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/administrator/manifests/files/joomla.xml"
+      - "{{BaseURL}}/language/en-GB/en-GB.xml"
+      - "{{BaseURL}}/plugins/system/cache/cache.xml"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: joomla-manifest
+        regex:
+          - "(?i)<version>(\\d+\\.\\d+(?:\\.\\d+)?)</version>"
+          - "(?i)<name>(?:joomla|files_joomla)</name>"
+
+    extractors:
+      - type: regex
+        name: joomla-version-value
+        part: body
+        group: 1
+        regex:
+          - "(?i)<version>(\\d+\\.\\d+(?:\\.\\d+)?)</version>"
+
+  # =========================================================================
+  # Magento version detection
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/magento_version"
+      - "{{BaseURL}}/RELEASE_NOTES.txt"
+    stop-at-first-match: false
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: regex
+        part: body
+        name: magento-version
+        regex:
+          - "(?i)Magento/([\\d.]+)"
+          - "(?i)Magento\\s+(?:Open Source|Commerce)\\s+([\\d.]+)"
+
+    extractors:
+      - type: regex
+        name: magento-version-value
+        part: body
+        group: 1
+        regex:
+          - "(?i)Magento/([\\d.]+)"
+
+# ============================================================================
+# Known limitations:
+# - Manifesty paczkowe (package.json, composer.json) zwykle są POZA webroot,
+#   ale błędy konfiguracji to częste (Express static / Apache misconfig)
+# - WordPress hardening usuwa większość ścieżek - readme.html czasem zostaje
+# - Drupal 9+ przeniósł CHANGELOG.txt do core/ - oba sprawdzamy
+# - Niektóre CMS (Ghost, October, Statamic) wymagają osobnych szablonów
+#   - patrz nuclei-templates http/technologies/
+# ============================================================================

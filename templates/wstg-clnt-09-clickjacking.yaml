@@ -1,0 +1,77 @@
+# ============================================================================
+# WSTG-CLNT-09: Clickjacking (Universal)
+# ============================================================================
+#
+# Coverage:
+#   ✓ Brak X-Frame-Options
+#   ✓ X-Frame-Options: ALLOWALL (deprecated, no protection)
+#   ✓ Brak frame-ancestors w CSP (modern equivalent of X-Frame-Options)
+#   ✓ frame-ancestors * lub luźna whitelist
+# ============================================================================
+
+id: wstg-clnt-09-clickjacking
+
+info:
+  name: "WSTG-CLNT-09: Clickjacking (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa brak ochrony przed clickjacking: brak X-Frame-Options + brak
+    Content-Security-Policy frame-ancestors. Atakujący może embedować
+    target w iframe na evil.com → user click steal.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/11-Client-side_Testing/09-Testing_for_Clickjacking
+    - https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html
+  classification:
+    cwe-id: CWE-1021
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:N
+    cvss-score: 3.1
+  tags: dast,wstg,wstg-v42-clnt-09,clickjacking,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # No protection at all
+      - type: dsl
+        name: no-clickjacking-protection
+        dsl:
+          - "!regex(\"(?i)x-frame-options:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*frame-ancestors\", header)"
+        condition: and
+
+      # ALLOWALL or wildcard
+      - type: regex
+        part: header
+        name: x-frame-options-weak
+        regex:
+          - "(?i)x-frame-options:\\s*(?:ALLOWALL|\\*)"
+
+      # frame-ancestors *
+      - type: regex
+        part: header
+        name: csp-frame-ancestors-wildcard
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*frame-ancestors[^;]*\\*[^;]*[;\"']"
+
+      # ALLOW-FROM (deprecated, browsers ignore)
+      - type: regex
+        part: header
+        name: x-frame-options-allow-from-deprecated
+        regex:
+          - "(?i)x-frame-options:\\s*ALLOW-FROM\\s+"
+
+# ============================================================================
+# Known limitations:
+# - Clickjacking PoC wymaga ręcznej kreacji HTML page z iframe target.
+# - JS frame-busting (window.top != window.self) jest soft-protection - łatwo
+#   bypassować. Detekcja JS frame-busting - poza zakresem tego template.
+# - Per endpoint check: niektóre strony mają X-Frame-Options ale nie wszystkie.
+# ============================================================================

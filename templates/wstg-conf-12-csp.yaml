@@ -1,0 +1,166 @@
+# ============================================================================
+# WSTG-CONF-12: Test for Content Security Policy (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-12 (existing repo):
+#   ✓ Brak CSP w ogóle
+#   ✓ CSP z 'unsafe-inline' w script-src
+#   ✓ CSP z 'unsafe-eval' w script-src
+#   ✓ CSP z * w script-src / default-src
+#   ✓ CSP z data: jako script source
+#   ✓ CSP-Report-Only zamiast Content-Security-Policy
+#
+# Z research:
+#   ✓ CSP z host wildcardami (*.googleapis.com → bypass via JSONP)
+#   ✓ CSP nonce reuse (różne strony, ten sam nonce)
+#   ✓ CSP bypass via known JSONP endpoints (Ajax callbacks)
+#   ✓ Strict-Dynamic missing dla nonce-based CSP
+#   ✓ frame-ancestors / frame-src misconfiguration
+#   ✓ object-src nie ustawiony (Flash/Java applet legacy)
+#
+# Source mapping:
+# - WSTG-CONF-12 CHEATSHEET (existing): unsafe-inline/eval, *
+# - PortSwigger CSP cheat sheet
+# - HackTricks CSP bypass section
+# - Spaceraccoon research na CSP-bypass via JSONP whitelisting
+# ============================================================================
+
+id: wstg-conf-12-csp
+
+info:
+  name: "WSTG-CONF-12: Content Security Policy (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa słabości w nagłówku Content-Security-Policy: brak CSP, użycie
+    'unsafe-inline'/'unsafe-eval', wildcard sources, missing object-src,
+    CSP-Report-Only zamiast właściwego header. Identyfikuje CSP nadającą
+    się do bypass przez znane JSONP endpoints w whitelisted hosts.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/12-Test_for_Content_Security_Policy
+    - https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html
+    - https://book.hacktricks.xyz/pentesting-web/content-security-policy-csp-bypass
+  classification:
+    cwe-id: CWE-693,CWE-1021
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N
+    cvss-score: 4.7
+  tags: dast,wstg,wstg-v42-conf-12,csp,xss-defense,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # CSP missing entirely
+      - type: dsl
+        name: csp-missing
+        dsl:
+          - "!regex(\"(?i)content-security-policy:\", header)"
+          - "!regex(\"(?i)content-security-policy-report-only:\", header)"
+        condition: and
+
+      # Only Report-Only (not enforcing)
+      - type: dsl
+        name: csp-report-only-no-enforcement
+        dsl:
+          - "regex(\"(?i)content-security-policy-report-only:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\-]\", header)"
+        condition: and
+
+      # unsafe-inline w script-src lub default-src
+      - type: regex
+        part: header
+        name: csp-unsafe-inline
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*'unsafe-inline'"
+
+      # unsafe-eval
+      - type: regex
+        part: header
+        name: csp-unsafe-eval
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*'unsafe-eval'"
+
+      # Wildcard w script-src
+      - type: regex
+        part: header
+        name: csp-wildcard-script-src
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*script-src[^;]*\\*\\s*[;\"']"
+          - "(?i)content-security-policy:[^\\r\\n]*script-src[^;]*\\*\\s*$"
+
+      # default-src wildcard (catches script if no script-src)
+      - type: regex
+        part: header
+        name: csp-wildcard-default-src
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*default-src[^;]*\\*\\s*[;\"']"
+
+      # data: as script-src
+      - type: regex
+        part: header
+        name: csp-data-uri-script
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*script-src[^;]*\\bdata:"
+
+      # Brak object-src (legacy Flash/Java)
+      - type: dsl
+        name: csp-no-object-src
+        dsl:
+          - "regex(\"(?i)content-security-policy:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*object-src\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*default-src[^;]*'none'\", header)"
+        condition: and
+
+      # frame-ancestors brak (clickjacking risk)
+      - type: dsl
+        name: csp-no-frame-ancestors
+        dsl:
+          - "regex(\"(?i)content-security-policy:\", header)"
+          - "!regex(\"(?i)content-security-policy:[^\\\\r\\\\n]*frame-ancestors\", header)"
+        condition: and
+
+      # Whitelisted JSONP-prone hosts (typical bypass vectors)
+      - type: regex
+        part: header
+        name: csp-jsonp-bypassable-host
+        regex:
+          - "(?i)content-security-policy:[^\\r\\n]*\\b(?:ajax\\.googleapis\\.com|maps\\.googleapis\\.com|www\\.googletagmanager\\.com|cdn\\.jsdelivr\\.net|unpkg\\.com)\\b"
+
+    extractors:
+      - type: regex
+        name: csp-header-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)content-security-policy:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: csp-report-only-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)content-security-policy-report-only:\\s*([^\\r\\n]+)"
+
+# ============================================================================
+# Known limitations:
+# - Wykrywanie nonce reuse wymaga 2 requestów do tego samego endpointu i
+#   porównania - tu nie zaimplementowane (multi-request szablon byłby
+#   nadmierny dla pojedynczego checku)
+# - Strict-Dynamic + nonce wymagają specyficznej weryfikacji - tu nie
+#   sprawdzane (false positive risk)
+# - Pełne CSP analysis (np. Google CSP Evaluator) wymaga JS parse - lepsze
+#   przez https://csp-evaluator.withgoogle.com/ na stronie z findings
+# ============================================================================

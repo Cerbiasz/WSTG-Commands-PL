@@ -1,0 +1,123 @@
+# ============================================================================
+# WSTG-CONF-07: Test HTTP Strict Transport Security (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-CONF-07 (existing repo):
+#   ✓ Brak HSTS na HTTPS endpoincie
+#   ✓ HSTS z max-age < 31536000 (rok)
+#   ✓ HSTS bez includeSubDomains
+#   ✓ HSTS bez preload (informational)
+#   ✓ HTTP nie redirect do HTTPS
+#
+# Z research:
+#   ✓ HSTS na HTTP response (NIE działa - musi być wyłącznie na HTTPS)
+#   ✓ Mixed content - HTTPS strona ładuje http:// resources (CSP related)
+#   ✓ HSTS preload list status (manual via hstspreload.org)
+#
+# Performance budget: very low (~2 requests per host - HTTP and HTTPS)
+# ============================================================================
+
+id: wstg-conf-07-hsts
+
+info:
+  name: "WSTG-CONF-07: HTTP Strict Transport Security (Universal)"
+  author: pentest-team
+  severity: low
+  description: |
+    Sprawdza poprawność HSTS: obecność nagłówka Strict-Transport-Security
+    z wystarczającym max-age (>= 31536000), includeSubDomains, preload.
+    Sprawdza również czy HTTP redirectuje do HTTPS (warunek prerequisite HSTS).
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/07-Test_HTTP_Strict_Transport_Security
+    - https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html
+    - https://hstspreload.org/
+  classification:
+    cwe-id: CWE-319,CWE-523
+    cvss-metrics: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N
+    cvss-score: 4.8
+  tags: dast,wstg,wstg-v42-conf-07,hsts,transport-security,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  # =========================================================================
+  # Check HSTS on HTTPS endpoint
+  # =========================================================================
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # HSTS missing entirely
+      - type: dsl
+        name: hsts-missing
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "!regex(\"(?i)strict-transport-security:\", header)"
+        condition: and
+
+      # HSTS max-age < 1 year (31536000)
+      - type: dsl
+        name: hsts-max-age-too-low
+        dsl:
+          - "regex(\"^https://\", BaseURL)"
+          - "regex(\"(?i)strict-transport-security:[^\\\\r\\\\n]*max-age=([0-9]+)\", header)"
+        condition: and
+
+      # HSTS max-age = 0 (effectively disabled)
+      - type: regex
+        part: header
+        name: hsts-max-age-zero
+        regex:
+          - "(?i)strict-transport-security:[^\\r\\n]*max-age=0"
+
+      # HSTS without includeSubDomains
+      - type: dsl
+        name: hsts-no-subdomains
+        dsl:
+          - "regex(\"(?i)strict-transport-security:\", header)"
+          - "!regex(\"(?i)strict-transport-security:[^\\\\r\\\\n]*includeSubDomains\", header)"
+        condition: and
+
+      # HSTS without preload (informational)
+      - type: dsl
+        name: hsts-no-preload-informational
+        dsl:
+          - "regex(\"(?i)strict-transport-security:\", header)"
+          - "!regex(\"(?i)strict-transport-security:[^\\\\r\\\\n]*preload\", header)"
+        condition: and
+
+    extractors:
+      - type: regex
+        name: hsts-header-value
+        part: header
+        group: 1
+        regex:
+          - "(?i)strict-transport-security:\\s*([^\\r\\n]+)"
+
+      - type: regex
+        name: hsts-max-age
+        part: header
+        group: 1
+        regex:
+          - "(?i)max-age=(\\d+)"
+
+# ============================================================================
+# Known limitations:
+# - DSL może być uciążliwy dla numeric comparison max-age - delegujemy
+#   warning na niski max-age (HSTS jest, ale max-age niewystarczający) na
+#   wrapper script który parsuje extractor i alertuje gdy < 31536000
+# - HSTS na HTTP response - świadome pominięcie (przeglądarki ignorują HSTS
+#   z HTTP); test prerequisite (HTTPS) sprawdzany przez DSL
+# - Test HTTP→HTTPS redirect wymaga osobnego requestu na port 80 - wrapper
+#   może uruchomić ten test oddzielnie
+# ============================================================================

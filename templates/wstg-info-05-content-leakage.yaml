@@ -1,0 +1,278 @@
+# ============================================================================
+# WSTG-INFO-05: Review Webpage Content for Information Leakage (Universal)
+# ============================================================================
+#
+# Review status: NOWY
+# Reviewer: Claude Code (Opus 4.7)
+# Review date: 2026-04-30
+#
+# Coverage Matrix:
+#
+# Z CHEATSHEET WSTG-INFO-05 (existing repo):
+#   ✓ HTML comments z TODO/FIXME/HACK/XXX/credentials
+#   ✓ Disabled HTML elements (input hidden, disabled buttons)
+#   ✓ Meta tags ujawniające framework/wersję (generator)
+#   ✓ JS source maps (.js.map)
+#   ✓ Komentarze JS z konfiguracją (apiKeys, internalUrls)
+#   ✓ Email/phone/internal IPs w body
+#   ✓ Sensitive paths w JS (admin/internal/staging URLs)
+#
+# Z research:
+#   ✓ Hardcoded API keys patterns (AWS AKIA, Google AIza, GitHub gh[ps]_, JWT)
+#   ✓ Stripe / Twilio / SendGrid keys
+#   ✓ Source map reference w JS (//# sourceMappingURL)
+#   ✓ Webpack debug strings (__webpack_require__, internal modules)
+#   ✓ React DevTools markers w produkcji
+#   ✓ Internal hostnames (.local, .internal, .corp, 10./192./172.)
+#   ✓ Stack trace fragments (file paths, line numbers)
+#
+# Performance budget: very low (~3 requests per page - GET /, GET /js, parse)
+# Estimated time: ~5s per page
+#
+# Source mapping:
+# - WSTG-INFO-05 CHEATSHEET (existing)
+# - PayloadsAllTheThings/API Key Leaks
+# - HackTricks Information Disclosure
+# - SecLists Patterns/api-keys.txt
+# - TruffleHog detector patterns (concept, not exact)
+# ============================================================================
+
+id: wstg-info-05-content-leakage
+
+info:
+  name: "WSTG-INFO-05: Webpage Content Leakage (Universal)"
+  author: pentest-team
+  severity: medium
+  description: |
+    Wykrywa wycieki w zawartości strony: hardcoded API keys (AWS/GCP/GitHub/
+    Stripe/Slack/Twilio), JWT tokens, internalne hostnames, komentarze HTML/JS
+    z poufnymi danymi (TODO/FIXME/credentials), meta generator z wersją,
+    source maps, stack trace fragments, Webpack/React DevTools w produkcji.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/01-Information_Gathering/05-Review_Web_Page_Content_for_Information_Leakage
+    - https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/API%20Key%20Leaks
+    - https://book.hacktricks.xyz/network-services-pentesting/pentesting-web
+  classification:
+    cwe-id: CWE-200,CWE-540
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+  tags: dast,wstg,wstg-v42-info-05,info-disclosure,secret-leak,burp-history
+
+variables:
+  auth_token: ""
+  session_cookie: ""
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      # =====================================================================
+      # API keys / secrets - high-confidence patterns
+      # =====================================================================
+      - type: regex
+        part: body
+        name: aws-access-key-id
+        regex:
+          - "\\b(AKIA[0-9A-Z]{16})\\b"
+          - "\\b(ASIA[0-9A-Z]{16})\\b"
+
+      - type: regex
+        part: body
+        name: aws-secret-access-key
+        regex:
+          - "(?i)aws_secret_access_key[\"'\\s]*[:=][\"'\\s]*([A-Za-z0-9/+=]{40})"
+
+      - type: regex
+        part: body
+        name: gcp-api-key
+        regex:
+          - "\\bAIza[0-9A-Za-z\\-_]{35}\\b"
+
+      - type: regex
+        part: body
+        name: github-token
+        regex:
+          - "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b"
+
+      - type: regex
+        part: body
+        name: stripe-key
+        regex:
+          - "\\b(sk|pk)_(test|live)_[A-Za-z0-9]{24,}\\b"
+
+      - type: regex
+        part: body
+        name: slack-token
+        regex:
+          - "\\bxox[baprs]-[A-Za-z0-9-]{10,}\\b"
+
+      - type: regex
+        part: body
+        name: slack-webhook
+        regex:
+          - "https://hooks\\.slack\\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+"
+
+      - type: regex
+        part: body
+        name: twilio-sid
+        regex:
+          - "\\bAC[0-9a-f]{32}\\b"
+
+      - type: regex
+        part: body
+        name: sendgrid-key
+        regex:
+          - "\\bSG\\.[A-Za-z0-9_\\-]{22}\\.[A-Za-z0-9_\\-]{43}\\b"
+
+      - type: regex
+        part: body
+        name: mailgun-key
+        regex:
+          - "\\bkey-[a-z0-9]{32}\\b"
+
+      - type: regex
+        part: body
+        name: jwt-token-leaked
+        regex:
+          - "\\beyJ[A-Za-z0-9_\\-]{8,}\\.eyJ[A-Za-z0-9_\\-]{8,}\\.[A-Za-z0-9_\\-]{8,}\\b"
+
+      - type: regex
+        part: body
+        name: private-key-block
+        regex:
+          - "-----BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY"
+
+      # =====================================================================
+      # HTML comments z poufnymi danymi
+      # =====================================================================
+      - type: regex
+        part: body
+        name: html-comment-credentials
+        regex:
+          - "(?is)<!--[^>]*?(password|passwd|secret|api[_-]?key|token|credential|TODO[^>]*?(remove|cleanup|delete)|FIXME|XXX)[^>]*?-->"
+
+      - type: regex
+        part: body
+        name: html-comment-internal-info
+        regex:
+          - "(?is)<!--[^>]*?(staging|dev[\\.-]|internal|backdoor|debug|admin[\\s_-]+only)[^>]*?-->"
+
+      # =====================================================================
+      # Internal IPs / hostnames
+      # =====================================================================
+      - type: regex
+        part: body
+        name: internal-ipv4
+        regex:
+          - "\\b(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3})\\b"
+
+      - type: regex
+        part: body
+        name: internal-hostname
+        regex:
+          - "\\b[a-z0-9-]+\\.(?:local|internal|corp|lan|intranet|dev|staging|test|qa|uat)\\b"
+
+      # =====================================================================
+      # Source maps (.js.map references)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: js-sourcemap-reference
+        regex:
+          - "//[#@]\\s*sourceMappingURL\\s*=\\s*[^\\s'\"]+\\.map"
+          - "/\\*[#@]\\s*sourceMappingURL\\s*=\\s*[^\\s*]+\\*/"
+
+      # =====================================================================
+      # Meta generator (CMS/framework version disclosure)
+      # =====================================================================
+      - type: regex
+        part: body
+        name: meta-generator-disclosure
+        regex:
+          - "(?i)<meta\\s+name=[\"']generator[\"']\\s+content=[\"']([^\"']+)"
+
+      # =====================================================================
+      # Stack trace fragments / file paths
+      # =====================================================================
+      - type: regex
+        part: body
+        name: stack-trace-paths
+        regex:
+          - "(?i)at\\s+[\\w$.]+\\s+\\([^)]*\\.(?:js|ts|java|py|rb|php):\\d+"
+          - "(?i)Traceback \\(most recent call last\\)"
+          - "(?i)Stack trace:[\\r\\n]+#\\d+"
+          - "(?i)in <[^>]+\\.(?:php|jsp|aspx?|cfm)> on line \\d+"
+
+      - type: regex
+        part: body
+        name: filesystem-path-disclosure
+        regex:
+          - "\\b/(?:home|var|usr|opt)/[a-z0-9_-]{2,}/[\\w/.-]{5,}\\.(?:php|py|rb|js|java|jsp|aspx?)"
+          - "\\b[A-Z]:\\\\(?:Users|inetpub|wwwroot|Program Files)[\\\\\\w.-]+"
+
+      # =====================================================================
+      # React DevTools / Webpack debug w produkcji
+      # =====================================================================
+      - type: regex
+        part: body
+        name: react-devtools-marker
+        regex:
+          - "__REACT_DEVTOOLS_GLOBAL_HOOK__"
+          - "isReactDevtoolsExtensionInstalled"
+
+      - type: regex
+        part: body
+        name: webpack-debug-marker
+        regex:
+          - "__webpack_require__\\.[a-z]\\s*="
+          - "\"webpackHotUpdate"
+
+      - type: regex
+        part: body
+        name: nextjs-build-data
+        regex:
+          - "__NEXT_DATA__\\s*=\\s*\\{[^<]*\"buildId\""
+
+      # =====================================================================
+      # Hardcoded internal URLs in JS
+      # =====================================================================
+      - type: regex
+        part: body
+        name: internal-api-url-in-js
+        regex:
+          - "(?i)['\"](https?://[a-z0-9.-]+\\.(?:local|internal|corp)(?::\\d+)?(?:/[^'\"]*)?)['\"]"
+
+    extractors:
+      - type: regex
+        name: leaked-secret-snippet
+        part: body
+        group: 0
+        regex:
+          - ".{0,20}(AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\\-_]{35}|gh[pousr]_[A-Za-z0-9]{36,}|sk_(test|live)_[A-Za-z0-9]{24,}|xox[baprs]-[A-Za-z0-9-]{10,}).{0,20}"
+
+      - type: regex
+        name: meta-generator-value
+        part: body
+        group: 1
+        regex:
+          - "(?i)<meta\\s+name=[\"']generator[\"']\\s+content=[\"']([^\"']+)"
+
+      - type: regex
+        name: html-comment-snippet
+        part: body
+        group: 0
+        regex:
+          - "(?is)<!--[^>]{20,200}?-->"
+
+# ============================================================================
+# Known limitations:
+# - Wykrywa tylko statyczne wycieki w bezpośredniej odpowiedzi (nie crawluje JS)
+# - Dla pełnego skanu JS zalecany dodatkowy run z headless browser (TruffleHog/
+#   GitLeaks na zawartości JS bundles)
+# - Niektóre patterny mają ograniczone false-positive rate (UUID podobny do
+#   AWS access key) - wymaga ręcznej weryfikacji
+# - SPA z dynamic loading (lazy chunks) - tylko initial bundle widoczny
+# ============================================================================

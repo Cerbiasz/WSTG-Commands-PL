@@ -1,167 +1,101 @@
 # WSTG-BUSL-05 — Test Number of Times a Function Can Be Used Limits
 
-## Cele
+## Cel
 
-- Zidentyfikowac funkcje z limitami uzycia
-- Przetestowac egzekwowanie limitow
+Audyt limitów użycia funkcji: kupony jednorazowe, free trial limits, voting limits, password reset limits. Bypass via case manipulation, encoding, multiple sessions/accounts, IP rotation.
 
-## KOMENDY
+> **Test manual-only**.
 
-### Testowanie ponownego uzycia kuponu
+## Standard pentesterski — jak to robi się wzorowo
 
-```bash
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50"
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50"
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50"
+### Metodologia (5 kroków)
 
-```
+1. **Identify single-use features**: coupons, vouchers, free trials, vote, sample download.
+2. **Reuse test**: użyj raz → próbuj użyć ponownie → blocked?
+3. **Bypass techniques**: case manipulation, encoding, whitespace, Unicode.
+4. **Multi-session bypass**: użyj coupon na sesji A, sesji B (cookie clear).
+5. **Multi-account bypass**: user A i user B - coupon sharing?
 
-### Testowanie limitu proby logowania
+### Co MUSI być sprawdzone (10 punktów)
 
-```bash
-for i in $(seq 1 20); do
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST TARGET/login -d "user=admin&pass=wrong${i}")
-    echo "Attempt $i: HTTP $RESPONSE"
-done
-
-```
-
-### Testowanie limitu resetowania hasla
-
-```bash
-for i in $(seq 1 10); do
-    curl -s -X POST TARGET/api/reset-password -d "email=victim@example.com"
-    echo "Reset attempt $i"
-done
-
-```
-
-### Testowanie limitu glosowan
-
-```bash
-for i in $(seq 1 10); do
-    curl -s -X POST TARGET/api/vote -d "option=A" -H "Cookie: session=SESSION_TOKEN"
-    echo "Vote $i"
-done
-
-```
-
-### Testowanie limitu pobrania darmowego contentu
-
-```bash
-for i in $(seq 1 15); do
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" TARGET/api/free-download?file=ebook.pdf)
-    echo "Download $i: HTTP $RESPONSE"
-done
-
-```
-
-### Testowanie obejscia limitu przez zmiane parametrow
-
-```bash
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50"
-curl -v -X POST TARGET/api/redeem -d "coupon=discount50"
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50 "
-curl -v -X POST TARGET/api/redeem -d "coupon= DISCOUNT50"
-
-```
-
-### Testowanie obejscia limitu przez rozne sesje
-
-```bash
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "Cookie: session=SESSION1"
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "Cookie: session=SESSION2"
-
-```
-
-### Testowanie obejscia limitu przez rozne IP (proxy)
-
-```bash
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "X-Forwarded-For: 1.1.1.1"
-curl -v -X POST TARGET/api/redeem -d "coupon=DISCOUNT50" -H "X-Forwarded-For: 2.2.2.2"
-
-```
-
-### Burp Intruder - powtarzanie funkcji
-
-```bash
-# 1. Przechwytuj request z limitowana funkcja
-# 2. Wyslij do Intruder -> Null Payloads (powtorz N razy)
-# 3. Obserwuj odpowiedzi - kiedy limit zostanie osiagniety?
-
-```
-
-## KOMENDY Z WORDLISTAMI
-
-### Brak dedykowanych wordlist - test oparty na logice limitu
-
-```bash
-
-```
-
-## WERYFIKACJA MANUALNA (Burp Suite / Przegladarka / DevTools)
-
-1. Zidentyfikuj funkcje z limitami: kupony, darmowe proby, glosowania, resetowanie hasla
-2. W Burp Suite -> Intruder: powtarzaj request i monitoruj kiedy limit zadziala
-3. Testuj obejscia: zmiana wielkosci liter, dodanie spacji, encoding
-4. Testuj z roznych sesji/kont uzytkownikow
-5. Testuj z roznych IP (naglosek X-Forwarded-For)
-6. Sprawdz czy limit jest po stronie serwera (nie tylko frontend/cookie)
-7. Testuj race condition na limitach (wiele requestow jednoczesnie)
-
-
----
+- [ ] Coupon reuse same session
+- [ ] Coupon reuse different session
+- [ ] Coupon reuse different account
+- [ ] Case manipulation (`COUPON50` vs `coupon50`)
+- [ ] Whitespace tricks (` COUPON50`, `COUPON50 `)
+- [ ] Unicode confusables (cyrylica `С`)
+- [ ] URL encoding `%43OUPON50`
+- [ ] IP rotation (X-Forwarded-For)
+- [ ] Race condition on redemption (cross WSTG-BUSL-04)
+- [ ] Email aliases (`user+1@gmail.com`, `user+2@gmail.com`)
 
 ## CHEATSHEET OWASP — Kluczowe wskazówki
 
 > Źródło: OWASP CheatSheetSeries — Abuse_Case_Cheat_Sheet.md, Authentication_Cheat_Sheet.md
 
-### Limity uzycia — co ograniczac
+### Limity użycia — co ograniczać
 
-- **Kupony/rabaty**: jednorazowe — per uzytkownik, per konto, per sesje
-- **Darmowe proby**: trial period, free downloads — limit per konto/IP/urzadzenie
-- **Glosowania**: jedna osoba = jeden glos — weryfikacja tozsamosci
-- **Reset hasla**: max. X requestow na godzine — zapobiegaj email bombing
-- **Logowanie**: lockout po N blednych probach
+- **Kupony/rabaty**: jednorazowe — per użytkownik, per konto, per sesję
+- **Darmowe próby**: trial period, free downloads — limit per konto/IP/urządzenie
+- **Głosowania**: jedna osoba = jeden głos — weryfikacja tożsamości
+- **Reset hasła**: max. X requestów na godzinę — zapobiegaj email bombing
+- **Logowanie**: lockout po N błędnych próbach
 - **API calls**: rate limiting per API key/user/IP
 
-### Techniki obejscia limitow — co testowac
+### Techniki obejścia limitów — co testować
 
 | Technika | Opis |
 |----------|------|
 | Case manipulation | `COUPON50` vs `coupon50` vs `Coupon50` |
 | Spacje | `" COUPON50"`, `"COUPON50 "`, `"COUPON 50"` |
 | Encoding | `%43OUPON50` (URL encoded C) |
-| Rozne sesje | Uzyj kuponu z sesji A, potem z sesji B |
-| Rozne konta | Uzyj kuponu na koncie A, potem na koncie B |
-| IP spoofing | `X-Forwarded-For: 1.1.1.1` — obejscie IP-based limitow |
-| Race condition | Wiele requestow jednoczesnie — limit nie zdazyworkowac |
-| Unicode confusables | `СOUPON50` (cyrylica C) vs `COUPON50` (lacinskie C) |
+| Różne sesje | Użyj kuponu z sesji A, potem z sesji B |
+| Różne konta | Użyj kuponu na koncie A, potem na koncie B |
+| IP spoofing | `X-Forwarded-For: 1.1.1.1` — obejście IP-based limitów |
+| Race condition | Wiele requestów jednocześnie — limit nie zdąży zadziałać |
+| Unicode confusables | `СOUPON50` (cyrylica C) vs `COUPON50` (łacińskie C) |
 
 ### Obrona
 
-- Limity po stronie **serwera** — nie w cookie/localStorage
-- Normalizuj dane przed sprawdzeniem: lowercase, trim, strip encoding
-- Uzyj **atomic operations**: `UPDATE coupons SET used = true WHERE code = X AND used = false`
-- Rate limiting per uzytkownik + per IP + per endpoint — warstwowo
-- Loguj i alertuj na przekroczenie limitow — moze wskazywac na atak
+- **Normalizacja inputu**: trim, lowercase, NFC Unicode normalization PRZED comparison
+- **Server-side state**: redemption_count w DB, atomic operation
+- **Multiple identifiers**: limit per user_id + email + IP (defense in depth)
+- **Rate limiting layers**: per IP + per user + globalnie
+- **CAPTCHA na wrażliwych operacjach**: po N próbach
 
-## ROZSZERZENIA BURP SUITE
+## Pentesterskie deep dive
 
-| Rozszerzenie | Opis | Link |
-|---|---|---|
-| Turbo Intruder | Masowe wysylanie requestow do testowania limitow | [BApp Store](https://portswigger.net/bappstore/9abfe09175d74b16842a3bbb0aa6a42c) |
+### Mniej znane techniki
 
----
+- **OAuth multi-account abuse**: jeden numer telefonu, dwa OAuth providers (Google + Facebook) → 2 konta z tym samym phone number.
+- **Mobile app vs web limit różny**: mobile API może mieć inny limit lub żadnego.
+- **Trial reset via account deletion**: usuń account → zarejestruj ponownie → nowy trial.
 
-## Wskazówki ASVS
+### Common pitfalls
 
-Powiązane wymagania z OWASP ASVS 5.0 — dobre praktyki do weryfikacji podczas testu.
+- **Limit IP-based ale za CDN**: wszystkie requesty z tego samego CDN IP - false positive.
+- **Limit per email exact match**: `user@gmail.com` ≠ `User@Gmail.com` w DB.
 
-### L2 (Standardowy)
+### Świeżynki z research
 
-| ID | Sekcja | Wymaganie |
-|---|---|---|
-| V2.3.2 | Business Logic Security | Verify that business logic limits are implemented per the application's documentation to avoid business logic flaws being exploited. |
-| V2.3.4 | Business Logic Security | Verify that business logic level locking mechanisms are used to ensure that limited quantity resources (such as theater seats or delivery slots) cannot be double-booked by manipulating the application's logic. |
-| V2.4.1 | Anti-automation | Verify that anti-automation controls are in place to protect against excessive calls to application functions that could lead to data exfiltration, garbage-data creation, quota exhaustion, rate-limit breaches, denial-of-service, or overuse of costly resources. |
+- **PortSwigger Business Logic labs**: https://portswigger.net/web-security/logic-flaws
+- **HackerOne disclosed coupons abuse**: https://hackerone.com/hacktivity
+
+## Rozszerzenia Burp Suite
+
+| Rozszerzenie | Opis |
+|---|---|
+| Hackvertor | Encoding manipulation |
+| Turbo Intruder | Race + bypass testing |
+
+## Źródła
+
+- WSTG: https://owasp.org/www-project-web-security-testing-guide/v42/4-Web_Application_Security_Testing/10-Business_Logic_Testing/05-Test_Number_of_Times_a_Function_Can_Be_Used_Limits
+- OWASP Abuse Case CS: https://cheatsheetseries.owasp.org/cheatsheets/Abuse_Case_Cheat_Sheet.html
+
+### Wskazówki ASVS
+
+| ID | Wymaganie |
+|---|---|
+| V11.1.4 | Anti-automation controls. |
+| V2.2.2 | Defense against credential stuffing. |
