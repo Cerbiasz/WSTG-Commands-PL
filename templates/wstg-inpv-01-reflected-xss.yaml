@@ -843,6 +843,20 @@ http:
         dsl:
           - 'status_code != 401'
 
+      # Warstwa 3f: Anti-FP - JSON-string reflection
+      # Jeśli odpowiedź to JSON i payload pojawia się TYLKO jako wartość w stringu
+      # (np. echo log API: {"input":"<script>alert(CANARY)</script>"}), to nie jest
+      # XSS - browser nie wyrenderuje JSON jako HTML. Wymagamy żeby kanarek
+      # występował poza JSON-string-value context, lub żeby Content-Type był
+      # html-renderable (text/html, image/svg).
+      # Reguła: jeśli Content-Type to ściśle application/json (nie text/html),
+      # to canary nie może być surrounded przez `"..."` JSON-escape syntax.
+      - type: dsl
+        name: not-json-string-only
+        dsl:
+          # Reguła aktywuje się tylko dla JSON Content-Type
+          - '!regex("(?i)content-type:\\s*application/json", header) || regex("[^\\\\\"]" + canary + "[^\\\\\"]", body)'
+
     # ========================================================================
     # Extractors: dla raportu deweloperzy chcą widzieć dokładny kontekst odbicia
     # ========================================================================

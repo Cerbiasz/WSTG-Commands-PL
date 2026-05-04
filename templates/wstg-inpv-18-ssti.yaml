@@ -223,6 +223,20 @@ http:
           - "contains(body, canary)"
         condition: or
 
+      # Warstwa 1b: ANTI-FP - canary nie może pochodzić z reflected/error payload
+      # Jeśli engine zwraca błąd typu "Template syntax error: {{ ... echo CANARY ... }}"
+      # to body zawiera CANARY ale komenda się nie wykonała. Prawdziwy SSTI->RCE
+      # zwraca samo CANARY. Wykluczamy literalne `echo CANARY` w body.
+      - type: dsl
+        name: canary-not-from-payload-echo
+        dsl:
+          - '!contains(body, "echo " + canary)'
+          - '!contains(body, "echo+" + canary)'
+          - '!contains(body, "echo%20" + canary)'
+          - '!contains(body, "echo\",\"" + canary)'
+          - "!contains(body, \"['echo \" + canary)"
+        condition: and
+
       # Warstwa 2: SECONDARY - response status sane
       - type: dsl
         name: response-meaningful

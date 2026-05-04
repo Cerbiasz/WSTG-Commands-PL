@@ -144,6 +144,18 @@ http:
         dsl:
           - "duration < 30"
 
+      # Warstwa 4: ANTI-FP - error-message reflection
+      # Aplikacja może echo'ować Host header w komunikacie błędu typu
+      # "Invalid host: x...x" lub "Bad Request - host x...x not allowed".
+      # To NIE jest host header injection - to tylko display value w error page.
+      # Wymagamy żeby canary NIE był poprzedzony typowymi error-marker phrases.
+      - type: dsl
+        name: not-error-message-reflection
+        dsl:
+          - '!regex("(?i)(invalid|bad|unknown|unrecognized|unauthorized|forbidden|disallowed|not\\s+allowed|not\\s+permitted|reject(ed)?)\\s+(host|origin|referer|domain)[^a-z0-9]{0,40}" + canary, body)'
+          - '!regex("(?i)(host|origin)\\s+header[^a-z0-9]{0,40}" + canary, body)'
+        condition: and
+
     extractors:
       - type: regex
         name: location-header

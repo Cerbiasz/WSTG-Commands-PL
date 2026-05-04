@@ -163,12 +163,27 @@ http:
           # Python format errors
           - "(?i)IndexError: tuple index out of range"
           - "(?i)KeyError: '\\d+'"
-          - "(?i)__class__"
+          # Python class disclosure - tylko w kontekście rzeczywistego dump'a,
+          # nie jako reflected payload. Wymagamy <class '...'> lub bases tuple.
+          - "<class '[a-zA-Z_][a-zA-Z0-9_.]+'>\\s*[,\\)\\]]"
+          - "\\(<class '[a-zA-Z_]"
           # Generic
           - "(?i)format string vulnerability"
         condition: or
 
-      # Warstwa 2: SECONDARY
+      # Warstwa 2: ANTI-FP - payload nie może być verbatim w body (reflection)
+      # Jeśli URL/body zawiera literał `{0.__class__}` lub URL-encoded wariant,
+      # to znaczy że apka tylko reflected payload, nie zinterpretowała go.
+      - type: dsl
+        name: payload-not-reflected
+        dsl:
+          - '!contains(body, "{0.__class__}")'
+          - '!contains(body, "%7B0.__class__%7D")'
+          - '!contains(body, "%257B0.__class__%257D")'
+          - '!contains(body, "{0.__class__.__bases__}")'
+        condition: and
+
+      # Warstwa 2b: SECONDARY
       - type: dsl
         dsl:
           - "len(body) > 30"

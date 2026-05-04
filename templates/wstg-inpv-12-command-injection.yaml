@@ -218,16 +218,29 @@ http:
         words:
           - "{{canary}}"
 
-      # Warstwa 2: ANTI-FP - canary NIE pochodzi z reflection w error/payload echo
-      # Jeśli odpowiedź zawiera ŻĄDANE wartości (np. URL z canary-jako-paramaru),
-      # to nie jest exec - to reflection. Wymagamy że canary jest w body w
-      # surowej formie (nie zawarte w surowym URL/payload string)
-      # UWAGA: trudne do odróżnienia 100% - zależy od kontekstu odbicia
+      # Warstwa 2: ANTI-FP - canary nie może być częścią reflected/stored payloadu
+      # Prawdziwy exec zwraca SAMO canary. Reflection/storage zwraca pełny string
+      # `echo CANARY` (lub wariant URL-encoded). Jeśli body zawiera literał payloadu
+      # to znaczy że apka tylko echo-uje user input (np. stored review, 404 page,
+      # error message z URL), nie wykonała komendy.
       - type: dsl
-        name: canary-not-only-in-url-reflection
+        name: canary-not-stored-or-reflected
         dsl:
-          # canary w body, ale gdyby tylko jako URL-encoded reflection nie liczy się
-          - "contains(body, canary)"
+          - '!contains(body, "echo " + canary)'
+          - '!contains(body, "echo+" + canary)'
+          - '!contains(body, "echo%20" + canary)'
+          - '!contains(body, "echo%2520" + canary)'
+          - '!contains(body, "echo%0a" + canary)'
+          - '!contains(body, "{echo," + canary + "}")'
+          - '!contains(body, "echo$IFS$9" + canary)'
+          - '!contains(body, "echo${IFS}" + canary)'
+        condition: and
+
+      # Warstwa 2b: ANTI-FP - cały URL z payloadem nie jest w body (reflected URL)
+      - type: dsl
+        name: payload-not-in-reflected-url
+        dsl:
+          - '!regex("(?i)https?://[^\\s\"<>]*" + canary, body)'
 
       # Warstwa 3: SECONDARY - response status sane (nie 502/503 które mogłyby zwracać canary)
       - type: dsl
