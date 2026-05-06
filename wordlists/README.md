@@ -19,6 +19,7 @@ Każdy payload spełnia przynajmniej jedno kryterium:
 wordlists/
 ├── all-payloads.txt              # GŁÓWNY plik — 711 unikalnych, bez komentarzy, gotowy do narzędzi
 ├── all-payloads-annotated.txt    # Ten sam zestaw z komentarzami i sekcjami
+├── all-payloads-safe.txt         # Podzbiór 554 payloadów bez wywoływania zewnętrznych requestów (no SSRF/OOB/RFI/redirect/reverse-shell)
 ├── injection/                    # WSTG-INPV-05..12, 18 (server-side injection)
 ├── xss/                          # WSTG-INPV-01..02, CLNT-01 (XSS)
 ├── traversal/                    # WSTG-INPV-11.1 (LFI/RFI/path traversal)
@@ -81,6 +82,34 @@ wordlists/
 | Canaries | 10 |
 | **TOTAL (raw)** | **748** |
 | **TOTAL (unikalne, po dedup)** | **711** |
+
+## Wariant "safe" (`all-payloads-safe.txt`)
+
+Podzbiór **554 payloadów** wyfiltrowany z `all-payloads.txt` — **żaden payload nie wywołuje requestu zewnętrznego ani nie sygnalizuje na zewnątrz**. Przydatne, gdy:
+- Testujesz w środowisku bez wyjścia do internetu (air-gapped lab)
+- Nie chcesz fałszywych pingów do Burp Collaborator / interactsh
+- Robisz pierwszą "cichą" rundę przed użyciem OOB
+- Klient zabronił komunikacji wychodzącej w ramach engagementu
+
+**Wykluczone**:
+- Cały folder `ssrf/` (z definicji wywołują requesty)
+- `traversal/rfi.txt` (pobiera z atakującego)
+- `client-side/open-redirect.txt` (przekierowuje do externa)
+- Payloady z placeholderami `{{OOB}}`, `{{ATTACKER}}`, `{{TARGET}}`, `{{CALLBACK}}`
+- Reverse shells (`/dev/tcp/`, `mkfifo`, `bash -i`, `nc`)
+- DNS exfil (`UTL_HTTP`, `UTL_INADDR`, `xp_dirtree`, `dblink`, `nslookup`/`curl` z OOB)
+- Cloud metadata IP (`169.254.169.254`, `100.100.100.200`)
+- Wrapped schemes do server-side fetch (`gopher://`, `dict://`, `tftp://`, `sftp://`, `ldap://` z hostem)
+- Localhost SSRF URL-e (`http://127.0.0.1`, `http://localhost`, IPv6 loopback, decimal/hex IP)
+- CSS exfil via `@import` / `@font-face url(//attacker)`
+
+**Zachowane** (lokalne / self-contained):
+- Wszystkie XSS z `alert()` / `confirm()` (lokalne wykonanie w przeglądarce testera)
+- SQLi error/boolean/UNION/time-based (bez OOB)
+- LFI z `file:///` i `php://filter` (lokalny odczyt pliku, bez sieci)
+- Path traversal, command injection bez OOB (`;id`, `;sleep 5`)
+- LDAP, XPath, NoSQL, SSTI, XXE classic file read
+- CRLF, host header (statyczne wartości typu `localhost`), HPP, format string
 
 ## Placeholdery
 
