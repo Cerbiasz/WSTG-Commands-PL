@@ -1,0 +1,20 @@
+# === Standard methods (do testowania ACL) ===
+GET
+POST
+PUT
+DELETE
+PATCH
+OPTIONS
+HEAD
+
+# === WebDAV / rzadkie ===
+PROPFIND
+TRACE
+TRACK
+CONNECT
+DEBUG
+
+# === Method override headers (w nagłówkach, gdy WAF blokuje DELETE/PUT) ===
+X-HTTP-Method-Override: PUT
+X-HTTP-Method: DELETE
+X-Method-Override: PUT

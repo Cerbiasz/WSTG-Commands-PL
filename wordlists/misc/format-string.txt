@@ -1,0 +1,26 @@
+# === Read-leaks ze stosu ===
+%x
+%x.%x.%x.%x
+%s
+%s.%s.%s.%s
+%p
+%p.%p.%p.%p
+AAAA.%p.%p.%p.%p
+
+# === Write-primitives (%n) ===
+%n
+AAAA%n
+%hn
+%hhn
+
+# === Direct param access ===
+%1$x
+%2$x
+%3$x.%4$x.%5$x
+
+# === Wide ===
+%S
+%lx
+
+# === Probe combo ===
+%x%x%x%x%x%x%x%x%x%x

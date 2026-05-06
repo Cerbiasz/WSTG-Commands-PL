@@ -1,0 +1,26 @@
+# === Host header override ===
+# Bezpośrednia wartość Host: header — przy wysyłaniu zmień, nie URL
+evil.com
+{{ATTACKER}}
+localhost
+
+# === Indirect override headers (proxy chain) ===
+X-Forwarded-Host: evil.com
+X-Forwarded-Server: evil.com
+X-Host: evil.com
+X-HTTP-Host-Override: evil.com
+Forwarded: host=evil.com
+X-Original-Host: evil.com
+
+# === Dual host header (parser desync) ===
+# Drugi Host w żądaniu — niektóre frameworki preferują ostatni
+Host: target.com\r\nHost: evil.com
+
+# === Port confusion ===
+evil.com:80
+target.com:443@evil.com
+target.com#@evil.com
+
+# === Cache poisoning probes ===
+target.com.evil.com
+target.com,evil.com

